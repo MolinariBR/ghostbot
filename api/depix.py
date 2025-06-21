@@ -47,13 +47,12 @@ class PixAPI:
         if data is None:
             data = {}
             
-        # Usa a URL base diretamente, sem adicionar caminhos adicionais
         url = self.api_url
         logger.info(f"Fazendo requisição para: {url}")
         logger.info(f"Dados da requisição: {data}")
         
         headers = {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded',
             'Accept': 'application/json',
             'User-Agent': 'GhostBot/1.0'
         }
@@ -65,9 +64,10 @@ class PixAPI:
             import time
             data['timestamp'] = int(time.time())
             
+            # Envia os dados como x-www-form-urlencoded
             response = requests.post(
                 url=url,
-                json=data,
+                data=data,  # Usa data= em vez de json= para enviar como form-urlencoded
                 headers=headers,
                 timeout=30
             )
@@ -86,9 +86,7 @@ class PixAPI:
                 logger.error(error_msg)
                 raise PixAPIError(error_msg) from e
             
-            # A API pode retornar o resultado diretamente ou em um campo 'data'
-            if 'data' in response_data:
-                return response_data['data']
+            # Retorna a resposta completa, incluindo o campo 'data' se existir
             return response_data
             
         except requests.exceptions.RequestException as e:
