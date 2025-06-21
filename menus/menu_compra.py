@@ -114,7 +114,7 @@ def iniciar_compra(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         "💱 *ESCOLHA A MOEDA PARA COMPRA*\n\n"
         "Selecione a criptomoeda que deseja comprar:",
-        reply_markup=ReplyKeyboardMarkup(menu_moedas(), resize_keyboard=True, one_time_keyboard=True),
+        reply_markup=menu_moedas(),
         parse_mode='Markdown'
     )
     return ESCOLHER_MOEDA
@@ -124,7 +124,7 @@ def escolher_moeda(update: Update, context: CallbackContext) -> int:
     if update.message.text == "🔙 Voltar":
         update.message.reply_text(
             "🔙 *Voltando ao menu principal...*",
-            reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None,
+            reply_markup=menu_principal_func() if menu_principal_func else None,
             parse_mode='Markdown'
         )
         return ConversationHandler.END
@@ -135,7 +135,7 @@ def escolher_moeda(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         f"🔗 *Selecione a rede para {moeda}:*\n\n"
         "_Escolha a mesma rede da sua carteira para evitar perda de fundos._",
-        reply_markup=ReplyKeyboardMarkup(menu_redes(moeda), resize_keyboard=True, one_time_keyboard=True),
+        reply_markup=menu_redes(moeda),
         parse_mode='Markdown'
     )
     return ESCOLHER_REDE
@@ -198,9 +198,10 @@ def processar_quantidade(update: Update, context: CallbackContext) -> int:
                 "• 1250,00\n\n"
                 "*Lembre-se:* Valor entre R$ 10,00 e R$ 5.000,00",
                 parse_mode='Markdown',
-                reply_markup=ReplyKeyboardMarkup([
-                    [KeyboardButton("🔙 Voltar")]
-                ], resize_keyboard=True)
+                reply_markup=ReplyKeyboardMarkup(
+                    [[KeyboardButton("🔙 Voltar")]], 
+                    resize_keyboard=True
+                )
             )
             return QUANTIDADE
             
@@ -289,14 +290,20 @@ def processar_quantidade(update: Update, context: CallbackContext) -> int:
             "💡 Você pode digitar qualquer valor entre R$ 10,00 e R$ 5.000,00\n"
             "Exemplos: 75,50 ou 1250,00",
             parse_mode='Markdown',
-            reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True)
+            reply_markup=ReplyKeyboardMarkup(
+                teclado, 
+                resize_keyboard=True
+            )
         )
         return QUANTIDADE
     except Exception as e:
         logger.error(f"Erro ao processar quantidade: {str(e)}")
         update.message.reply_text(
             "❌ Ocorreu um erro ao processar o valor. Por favor, tente novamente.",
-            reply_markup=ReplyKeyboardMarkup([[KeyboardButton("🔙 Voltar")]], resize_keyboard=True)
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton("🔙 Voltar")]], 
+                resize_keyboard=True
+            )
         )
         return QUANTIDADE
 
@@ -333,7 +340,10 @@ def confirmar_compra(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         instrucao,
         parse_mode='Markdown',
-        reply_markup=ReplyKeyboardMarkup([[KeyboardButton("🔙 Voltar")]], resize_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton("🔙 Voltar")]], 
+            resize_keyboard=True
+        )
     )
     return SOLICITAR_ENDERECO
 
@@ -492,7 +502,7 @@ def processar_metodo_pagamento(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         mensagem_final,
         parse_mode='Markdown',
-        reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None
+        reply_markup=menu_principal_func() if menu_principal_func else None
     )
     
     # Aqui você pode adicionar o processamento real da compra
@@ -508,7 +518,7 @@ def cancelar_compra(update: Update, context: CallbackContext) -> int:
     context.user_data.clear()
     update.message.reply_text(
         "❌ Compra cancelada.",
-        reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None
+        reply_markup=menu_principal_func() if menu_principal_func else None
     )
     return ConversationHandler.END
 
