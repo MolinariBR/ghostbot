@@ -42,6 +42,9 @@ from config import BotConfig, LogConfig
 from menus import setup_menus, get_compra_conversation, get_venda_conversation
 from menus.menu_compra import iniciar_compra
 
+# Cria o diretório de logs se não existir
+LogConfig.LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+
 # Configuração do logger
 logging.basicConfig(
     level=getattr(logging, LogConfig.LOG_LEVEL),
