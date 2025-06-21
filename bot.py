@@ -1,7 +1,7 @@
 import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
-    Updater,
+    Application,
     CommandHandler,
     MessageHandler,
     CallbackContext,
@@ -25,9 +25,10 @@ logger = logging.getLogger(__name__)
 # Token do bot
 TOKEN = Config.TELEGRAM_BOT_TOKEN
 
-# Inicializa o updater e dispatcher
-updater = Updater(TOKEN)
-dispatcher = updater.dispatcher
+# Inicializa o bot com Application
+application = Application.builder().token(TOKEN).build()
+dispatcher = application
+
 
 # Estados da conversa
 MENU, COMPRAR, VENDER, SERVICOS, AJUDA, TERMOS = range(6)
@@ -116,8 +117,7 @@ def main():
     dispatcher.add_handler(MessageHandler(filters.Regex('^🔙 Voltar$'), start))
 
     # Inicia o bot
-    updater.start_polling()
-    updater.idle()
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
