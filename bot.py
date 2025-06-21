@@ -85,9 +85,6 @@ def init_bot():
         .build()
     )
     
-    # Configura o número de workers
-    application.job_queue.set_workers(4)
-    
     return application
 
 # Função para criar o teclado do menu
