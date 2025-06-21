@@ -1,0 +1,32 @@
+# Dependências para desenvolvimento e testes
+pytest>=7.0.0
+pytest-cov>=3.0.0
+pytest-mock>=3.10.0
+pytest-asyncio>=0.20.0
+pytest-timeout>=2.1.0
+coverage>=6.0.0
+python-dotenv>=0.19.0
+requests-mock>=1.9.3
+httpx>=0.23.0
+
+# Para testes de integração
+pytest-xdist>=2.5.0  # Para execução paralela de testes
+
+# Para geração de relatórios
+pytest-html>=3.1.1
+pytest-sugar>=0.9.4  # Melhora a saída dos testes
+
+# Para verificação de código
+pylint>=2.12.0
+black>=22.1.0
+isort>=5.10.1
+mypy>=0.931
+flake8>=4.0.1
+
+# Para documentação
+sphinx>=4.4.0
+sphinx-rtd-theme>=1.0.0
+
+# Para análise de segurança
+bandit>=1.7.0
+safety>=1.10.3
