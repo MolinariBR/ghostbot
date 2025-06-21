@@ -4,9 +4,9 @@ from telegram.ext import (
     Updater,
     CommandHandler,
     MessageHandler,
-    Filters,
     CallbackContext,
-    ConversationHandler
+    ConversationHandler,
+    filters
 )
 
 # Importa as configurações do tokens.py
@@ -110,10 +110,10 @@ def main():
     dispatcher.add_handler(get_venda_conversation())
     
     # Adiciona handlers para os outros menus
-    dispatcher.add_handler(MessageHandler(Filters.regex('^🔧 Serviços$'), servicos))
-    dispatcher.add_handler(MessageHandler(Filters.regex('^❓ Ajuda$'), ajuda))
-    dispatcher.add_handler(MessageHandler(Filters.regex('^📜 Termos$'), termos))
-    dispatcher.add_handler(MessageHandler(Filters.regex('^🔙 Voltar$'), start))
+    dispatcher.add_handler(MessageHandler(filters.Regex('^🔧 Serviços$'), servicos))
+    dispatcher.add_handler(MessageHandler(filters.Regex('^❓ Ajuda$'), ajuda))
+    dispatcher.add_handler(MessageHandler(filters.Regex('^📜 Termos$'), termos))
+    dispatcher.add_handler(MessageHandler(filters.Regex('^🔙 Voltar$'), start))
 
     # Inicia o bot
     updater.start_polling()

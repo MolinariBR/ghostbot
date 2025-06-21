@@ -1,5 +1,5 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import CallbackContext, MessageHandler, Filters, ConversationHandler, CommandHandler
+from telegram.ext import CallbackContext, MessageHandler, filters, ConversationHandler, CommandHandler
 
 # Estados do menu de venda
 ESCOLHER_MOEDA, QUANTIDADE, ENDERECO, CONFIRMAR = range(4)
