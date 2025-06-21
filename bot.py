@@ -110,23 +110,15 @@ def init_bot():
             return min(cls.BASE_RETRY_DELAY * (2 ** (attempt - 1)), 600)  # Máximo 10 minutos
 
     # Configuração do cliente HTTP personalizado com opções avançadas
+    # Usando apenas parâmetros suportados e removendo opções de socket problemáticas
     request = HTTPXRequest(
         connection_pool_size=BotConfig.POOL_SIZE,
         read_timeout=BotConfig.READ_TIMEOUT,
         write_timeout=BotConfig.WRITE_TIMEOUT,
         connect_timeout=BotConfig.CONNECTION_TIMEOUT,
         pool_timeout=BotConfig.POOL_TIMEOUT,
-        http_version='1.1',
-        socket_options=[
-            # Habilita keepalive
-            ('keepalive', 1),
-            # Tempo em segundos até enviar a primeira sonda
-            ('tcp_keepidle', 60),
-            # Intervalo entre sondas em segundos
-            ('tcp_keepintvl', 30),
-            # Número de tentativas de sondagem
-            ('tcp_keepcnt', 5)
-        ]
+        http_version='1.1'
+        # Removidas as opções de socket que estavam causando erros
     )
     
     # Cria e configura a aplicação com a instância personalizada de request
