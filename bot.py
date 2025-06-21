@@ -121,14 +121,11 @@ def init_bot():
         pool_timeout=BotConfig.POOL_TIMEOUT
     )
     
-    # Cria e configura a aplicação
+    # Cria e configura a aplicação com a instância personalizada de request
     application = (
         Application.builder()
         .token(Config.TELEGRAM_BOT_TOKEN)
-        .request(request)
-        .connect_timeout(BotConfig.CONNECTION_TIMEOUT)
-        .read_timeout(BotConfig.READ_TIMEOUT)
-        .pool_timeout(BotConfig.POOL_TIMEOUT)
+        .request(request)  # Usa a instância personalizada com timeouts configurados
         .get_updates_http_version('1.1')
         .http_version('1.1')
         .build()
