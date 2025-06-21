@@ -225,12 +225,16 @@ async def main():
             application = init_bot()
             
             # Configura os manipuladores de sinal
-            for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
                 loop = asyncio.get_running_loop()
-                loop.add_signal_handler(
-                    sig,
-                    lambda s=sig: asyncio.create_task(signal_handler(application, s, None))
-                )
+                for sig in (signal.SIGINT, signal.SIGTERM):
+                    loop.add_signal_handler(
+                        sig,
+                        lambda s=sig: asyncio.create_task(signal_handler(application, s, None))
+                    )
+            except RuntimeError:
+                # Se não houver loop em execução, ignora
+                pass
             
             logger.info(f"Iniciando o bot (tentativa {attempt + 1}/{max_retries})...")
             
@@ -242,11 +246,13 @@ async def main():
             logger.info("Bot iniciado com sucesso!")
             
             # Mantém o bot em execução
-            await application.run_polling(
+            await application.updater.start_polling(
                 drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
-                allowed_updates=Update.ALL_TYPES,
-                close_loop=False
+                allowed_updates=Update.ALL_TYPES
             )
+            
+            # Aguarda até que o bot seja interrompido
+            await application.updater.running.wait()
             
             # Se chegou aqui, o bot foi parado normalmente
             logger.info("Bot parado pelo usuário.")
@@ -291,9 +297,10 @@ async def main():
             
         finally:
             # Limpeza em caso de erro ou término normal
-            if application is not None and application.running:
+            if application is not None:
                 try:
-                    await application.stop()
+                    if application.running:
+                        await application.stop()
                     await application.shutdown()
                 except Exception as e:
                     logger.error(f"Erro ao encerrar a aplicação: {e}")
