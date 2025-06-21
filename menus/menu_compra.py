@@ -4,8 +4,8 @@ import requests
 from datetime import datetime, timedelta
 import logging
 
-# Importa a função menu_principal do módulo principal
-from bot import menu_principal
+# Variável para armazenar a função do menu principal
+menu_principal_func = None
 
 # Configuração de logging
 logging.basicConfig(
@@ -124,7 +124,7 @@ def escolher_moeda(update: Update, context: CallbackContext) -> int:
     if update.message.text == "🔙 Voltar":
         update.message.reply_text(
             "🔙 *Voltando ao menu principal...*",
-            reply_markup=menu_principal(),
+            reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None,
             parse_mode='Markdown'
         )
         return ConversationHandler.END
@@ -492,7 +492,7 @@ def processar_metodo_pagamento(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         mensagem_final,
         parse_mode='Markdown',
-        reply_markup=menu_principal()
+        reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None
     )
     
     # Aqui você pode adicionar o processamento real da compra
@@ -508,7 +508,7 @@ def cancelar_compra(update: Update, context: CallbackContext) -> int:
     context.user_data.clear()
     update.message.reply_text(
         "❌ Compra cancelada.",
-        reply_markup=ReplyKeyboardMarkup(menu_principal(), resize_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None
     )
     return ConversationHandler.END
 
@@ -553,5 +553,11 @@ def get_compra_conversation():
 
 # Importação circular resolvida com uma função
 def set_menu_principal(menu_func):
-    global menu_principal
-    menu_principal = menu_func
+    global menu_principal_func
+    menu_principal_func = menu_func
+    
+    # Retorna a função para ser usada localmente
+    def menu_principal():
+        return menu_func()
+    
+    return menu_principal

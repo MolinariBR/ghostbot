@@ -1,8 +1,8 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import CallbackContext, MessageHandler, Filters, ConversationHandler, CommandHandler
 
-# Importa a função menu_principal do módulo principal
-from bot import menu_principal
+# Variável para armazenar a função do menu principal
+menu_principal_func = None
 
 # Estados do menu de venda
 ESCOLHER_MOEDA, QUANTIDADE, ENDERECO, CONFIRMAR = range(4)
@@ -122,7 +122,7 @@ def confirmar_venda(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         mensagem,
         parse_mode='Markdown',
-        reply_markup=ReplyKeyboardMarkup(menu_principal(), resize_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None
     )
     
     # Limpa os dados da conversa
@@ -134,7 +134,7 @@ def cancelar_venda(update: Update, context: CallbackContext) -> int:
     context.user_data.clear()
     update.message.reply_text(
         "❌ Venda cancelada.",
-        reply_markup=ReplyKeyboardMarkup(menu_principal(), resize_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None
     )
     return ConversationHandler.END
 
@@ -169,5 +169,11 @@ def get_venda_conversation():
 
 # Importação circular resolvida com uma função
 def set_menu_principal(menu_func):
-    global menu_principal
-    menu_principal = menu_func
+    global menu_principal_func
+    menu_principal_func = menu_func
+    
+    # Retorna a função para ser usada localmente
+    def menu_principal():
+        return menu_func()
+    
+    return menu_principal
