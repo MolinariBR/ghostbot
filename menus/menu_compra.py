@@ -124,7 +124,7 @@ def escolher_moeda(update: Update, context: CallbackContext) -> int:
     if update.message.text == "🔙 Voltar":
         update.message.reply_text(
             "🔙 *Voltando ao menu principal...*",
-            reply_markup=menu_principal_func() if menu_principal_func else None,
+            reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None,
             parse_mode='Markdown'
         )
         return ConversationHandler.END
@@ -519,7 +519,7 @@ def processar_metodo_pagamento(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         mensagem_final,
         parse_mode='Markdown',
-        reply_markup=menu_principal_func() if menu_principal_func else None
+        reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None
     )
     
     # Aqui você pode adicionar o processamento real da compra
@@ -535,7 +535,7 @@ def cancelar_compra(update: Update, context: CallbackContext) -> int:
     context.user_data.clear()
     update.message.reply_text(
         "❌ Compra cancelada.",
-        reply_markup=menu_principal_func() if menu_principal_func else None
+        reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None
     )
     return ConversationHandler.END
 
