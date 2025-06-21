@@ -1,5 +1,6 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import CallbackContext, MessageHandler, Filters, ConversationHandler, CommandHandler
+from telegram.ext import MessageHandler, Filters, ConversationHandler, CommandHandler
+from telegram.ext import ContextTypes
 import requests
 from datetime import datetime, timedelta
 import logging
@@ -109,7 +110,7 @@ def menu_redes(moeda: str):
         ]
     return ReplyKeyboardMarkup(redes, resize_keyboard=True, one_time_keyboard=False)
 
-def iniciar_compra(update: Update, context: CallbackContext) -> int:
+def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Inicia o fluxo de compra mostrando as moedas disponíveis."""
     update.message.reply_text(
         "💱 *ESCOLHA A MOEDA PARA COMPRA*\n\n"
@@ -119,7 +120,7 @@ def iniciar_compra(update: Update, context: CallbackContext) -> int:
     )
     return ESCOLHER_MOEDA
 
-def escolher_moeda(update: Update, context: CallbackContext) -> int:
+def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa a escolha da moeda e pede para selecionar a rede."""
     if update.message.text == "🔙 Voltar":
         update.message.reply_text(
@@ -140,7 +141,7 @@ def escolher_moeda(update: Update, context: CallbackContext) -> int:
     )
     return ESCOLHER_REDE
 
-def escolher_rede(update: Update, context: CallbackContext) -> int:
+def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa a escolha da rede e pede o valor em BRL."""
     if update.message.text == "🔙 Voltar":
         return iniciar_compra(update, context)
@@ -186,7 +187,7 @@ def escolher_rede(update: Update, context: CallbackContext) -> int:
     )
     return QUANTIDADE
 
-def processar_quantidade(update: Update, context: CallbackContext) -> int:
+def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa a quantidade informada e mostra confirmação."""
     try:
         # Se o usuário clicou em "Digitar valor", pede para digitar
@@ -307,7 +308,7 @@ def processar_quantidade(update: Update, context: CallbackContext) -> int:
         )
         return QUANTIDADE
 
-def confirmar_compra(update: Update, context: CallbackContext) -> int:
+def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Confirma os dados e solicita o endereço de recebimento."""
     # Se o usuário clicou em "Alterar Valor", volta para a tela de quantidade
     if update.message.text == "✏️ Alterar Valor":
@@ -357,7 +358,7 @@ def menu_metodos_pagamento():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
-def processar_endereco(update: Update, context: CallbackContext) -> int:
+def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa o endereço informado e solicita o método de pagamento."""
     if update.message.text == "🔙 Voltar":
         return processar_quantidade(update, context)
@@ -374,7 +375,7 @@ def processar_endereco(update: Update, context: CallbackContext) -> int:
     
     return ESCOLHER_PAGAMENTO
 
-def processar_metodo_pagamento(update: Update, context: CallbackContext) -> int:
+def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa o método de pagamento escolhido e finaliza a compra."""
     if update.message.text == "🔙 Voltar":
         return processar_quantidade(update, context)
@@ -555,7 +556,7 @@ def processar_metodo_pagamento(update: Update, context: CallbackContext) -> int:
     
     return ConversationHandler.END
 
-def cancelar_compra(update: Update, context: CallbackContext) -> int:
+def cancelar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancela a compra e volta ao menu principal."""
     context.user_data.clear()
     update.message.reply_text(

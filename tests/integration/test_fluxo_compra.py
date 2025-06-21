@@ -4,7 +4,7 @@ Testes de integração para o fluxo de compra.
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from telegram import Update, Message, Chat, User, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import CallbackContext, ContextTypes
+from telegram.ext import ContextTypes
 from menus.menu_compra import (
     iniciar_compra, escolher_moeda, escolher_rede, processar_quantidade,
     processar_endereco, processar_metodo_pagamento, get_compra_conversation
@@ -28,7 +28,7 @@ def mock_update():
 
 @pytest.fixture
 def mock_context():
-    """Retorna um mock de CallbackContext."""
+    """Retorna um mock de ContextTypes.DEFAULT_TYPE."""
     context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
     context.bot = MagicMock()
     context.user_data = {}

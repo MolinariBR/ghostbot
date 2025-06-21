@@ -1,5 +1,6 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import CallbackContext, MessageHandler, Filters, ConversationHandler, CommandHandler
+from telegram.ext import MessageHandler, Filters, ConversationHandler, CommandHandler
+from telegram.ext import ContextTypes
 
 # Variável para armazenar a função do menu principal
 menu_principal_func = None
@@ -17,7 +18,7 @@ def menu_moedas_venda():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
-def iniciar_venda(update: Update, context: CallbackContext) -> int:
+def iniciar_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Inicia o fluxo de venda mostrando as moedas disponíveis."""
     update.message.reply_text(
         "💱 *ESCOLHA A MOEDA PARA VENDA*\n\n"
@@ -27,7 +28,7 @@ def iniciar_venda(update: Update, context: CallbackContext) -> int:
     )
     return ESCOLHER_MOEDA
 
-def escolher_moeda_venda(update: Update, context: CallbackContext) -> int:
+def escolher_moeda_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa a escolha da moeda e pede a quantidade."""
     if update.message.text == "🔙 Voltar":
         return cancelar_venda(update, context)
@@ -43,7 +44,7 @@ def escolher_moeda_venda(update: Update, context: CallbackContext) -> int:
     )
     return QUANTIDADE
 
-def processar_quantidade_venda(update: Update, context: CallbackContext) -> int:
+def processar_quantidade_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa a quantidade informada e pede o endereço de saque."""
     if update.message.text == "🔙 Voltar":
         return iniciar_venda(update, context)
@@ -68,7 +69,7 @@ def processar_quantidade_venda(update: Update, context: CallbackContext) -> int:
         )
         return QUANTIDADE
 
-def processar_endereco(update: Update, context: CallbackContext) -> int:
+def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa o endereço e mostra a confirmação."""
     if update.message.text == "🔙 Voltar":
         return iniciar_venda(update, context)
@@ -102,7 +103,7 @@ def processar_endereco(update: Update, context: CallbackContext) -> int:
     )
     return CONFIRMAR
 
-def confirmar_venda(update: Update, context: CallbackContext) -> int:
+def confirmar_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Confirma a venda e finaliza o processo."""
     moeda = context.user_data.get('moeda_venda', 'a moeda selecionada')
     quantidade = context.user_data.get('quantidade', 0)
@@ -129,7 +130,7 @@ def confirmar_venda(update: Update, context: CallbackContext) -> int:
     context.user_data.clear()
     return ConversationHandler.END
 
-def cancelar_venda(update: Update, context: CallbackContext) -> int:
+def cancelar_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancela a venda e volta ao menu principal."""
     context.user_data.clear()
     update.message.reply_text(

@@ -18,7 +18,7 @@ from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     MessageHandler,
-    CallbackContext,
+    ContextTypes,
     ConversationHandler,
     filters
 )
@@ -32,9 +32,9 @@ from telegram.error import (
     Conflict,
     BadRequest,
     Forbidden,
-    Unauthorized,
     BadRequest
 )
+from telegram.request import HTTPXRequest
 
 # Importações locais
 from tokens import Config
@@ -99,7 +99,7 @@ def menu_principal():
 setup_menus(menu_principal)
 
 # Handlers de comando
-def start(update: Update, context: CallbackContext) -> int:
+def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Inicia a conversa e mostra o menu principal."""
     reply_markup = ReplyKeyboardMarkup(menu_principal(), resize_keyboard=True)
     update.message.reply_text(
@@ -109,7 +109,7 @@ def start(update: Update, context: CallbackContext) -> int:
     )
     return MENU
 
-def vender(update: Update, context: CallbackContext) -> int:
+def vender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Lida com a opção de venda."""
     update.message.reply_text(
         "🔹 *VENDER* 🔹\n\n"
@@ -118,7 +118,7 @@ def vender(update: Update, context: CallbackContext) -> int:
     )
     return VENDER
 
-def servicos(update: Update, context: CallbackContext) -> int:
+def servicos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Mostra os serviços disponíveis."""
     update.message.reply_text(
         "🔹 *SERVIÇOS* 🔹\n\n"
@@ -130,7 +130,7 @@ def servicos(update: Update, context: CallbackContext) -> int:
     )
     return SERVICOS
 
-def ajuda(update: Update, context: CallbackContext) -> int:
+def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Mostra a ajuda."""
     update.message.reply_text(
         "🔹 *AJUDA* 🔹\n\n"
@@ -142,7 +142,7 @@ def ajuda(update: Update, context: CallbackContext) -> int:
     )
     return AJUDA
 
-def termos(update: Update, context: CallbackContext) -> int:
+def termos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Mostra os termos de uso."""
     update.message.reply_text(
         "🔹 *TERMOS DE USO* 🔹\n\n"

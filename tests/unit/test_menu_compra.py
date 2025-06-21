@@ -4,7 +4,7 @@ Testes unitários para o módulo menu_compra.py
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from telegram import Update, Message, Chat, User
-from telegram.ext import CallbackContext
+from telegram.ext import ContextTypes
 from menus.menu_compra import (
     obter_cotacao, formatar_brl, formatar_cripto,
     menu_moedas, menu_redes, iniciar_compra, escolher_moeda,
@@ -31,8 +31,8 @@ def mock_update():
 
 @pytest.fixture
 def mock_context():
-    """Retorna um mock de CallbackContext."""
-    context = MagicMock(spec=CallbackContext)
+    """Retorna um mock de ContextTypes.DEFAULT_TYPE."""
+    context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
     context.bot = MagicMock()
     context.user_data = {}
     return context
