@@ -12,15 +12,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 
 # Importações do Telegram
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
-    Updater,
+    Application,
+    ApplicationBuilder,
     CommandHandler,
     MessageHandler,
-    Filters,
     CallbackContext,
-    ConversationHandler
+    ConversationHandler,
+    filters
 )
+from telegram.constants import ParseMode
 from telegram.error import (
     NetworkError, 
     TelegramError, 
@@ -28,6 +30,8 @@ from telegram.error import (
     TimedOut, 
     ChatMigrated, 
     Conflict,
+    BadRequest,
+    Forbidden,
     Unauthorized,
     BadRequest
 )
@@ -59,23 +63,28 @@ MENU, COMPRAR, VENDER, SERVICOS, AJUDA, TERMOS = range(6)
 
 # Inicialização do bot
 def init_bot():
-    """Inicializa e retorna a instância do bot."""
-    # Configurações de conexão
-    request_kwargs = {
-        'connect_timeout': BotConfig.CONNECTION_TIMEOUT,
-        'read_timeout': BotConfig.READ_TIMEOUT,
-        'pool_timeout': BotConfig.POOL_TIMEOUT,
-        'retries': BotConfig.MAX_RETRIES,
-    }
+    """
+    Inicializa e retorna a aplicação do bot.
     
-    # Inicializa o updater e dispatcher com as configurações de conexão
-    updater = Updater(
-        token=Config.TELEGRAM_BOT_TOKEN,
-        use_context=True,
-        request_kwargs=request_kwargs
+    Retorna:
+        Application: Instância da aplicação do bot
+    """
+    # Cria e configura a aplicação
+    application = (
+        Application.builder()
+        .token(Config.TELEGRAM_BOT_TOKEN)
+        .connect_timeout(BotConfig.CONNECTION_TIMEOUT)
+        .read_timeout(BotConfig.READ_TIMEOUT)
+        .pool_timeout(BotConfig.POOL_TIMEOUT)
+        .get_updates_http_version('1.1')
+        .http_version('1.1')
+        .build()
     )
     
-    return updater, updater.dispatcher
+    # Configura o número de workers
+    application.job_queue.set_workers(4)
+    
+    return application
 
 # Função para criar o teclado do menu
 def menu_principal():
@@ -145,66 +154,98 @@ def termos(update: Update, context: CallbackContext) -> int:
     )
     return TERMOS
 
-def setup_handlers(dispatcher):
+def setup_handlers(application):
     """Configura todos os handlers do bot."""
     # Limpa handlers antigos para evitar duplicação
-    dispatcher.handlers = {}
+    application.handlers = {}
     
     # Adiciona os handlers de comando
-    dispatcher.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('start', start))
     
     # Adiciona os handlers de conversação
-    dispatcher.add_handler(get_compra_conversation())
-    dispatcher.add_handler(get_venda_conversation())
+    application.add_handler(get_compra_conversation())
+    application.add_handler(get_venda_conversation())
     
     # Adiciona handlers para os outros menus
-    dispatcher.add_handler(MessageHandler(Filters.regex('^🛒 Comprar$'), iniciar_compra))
-    dispatcher.add_handler(MessageHandler(Filters.regex('^🔧 Serviços$'), servicos))
-    dispatcher.add_handler(MessageHandler(Filters.regex('^❓ Ajuda$'), ajuda))
-    dispatcher.add_handler(MessageHandler(Filters.regex('^📜 Termos$'), termos))
-    dispatcher.add_handler(MessageHandler(Filters.regex('^🔙 Voltar$'), start))
+    application.add_handler(MessageHandler(filters.Regex('^🛒 Comprar$'), iniciar_compra))
+    application.add_handler(MessageHandler(filters.Regex('^🔧 Serviços$'), servicos))
+    application.add_handler(MessageHandler(filters.Regex('^❓ Ajuda$'), ajuda))
+    application.add_handler(MessageHandler(filters.Regex('^📜 Termos$'), termos))
+    application.add_handler(MessageHandler(filters.Regex('^🔙 Voltar$'), start))
 
-def signal_handler(updater, signum, frame):
-    """Manipulador de sinais para encerramento gracioso."""
+async def signal_handler(app, signum, frame):
+    """
+    Manipulador de sinais para encerramento gracioso.
+    
+    Args:
+        app: A instância da aplicação do bot
+        signum: Número do sinal recebido
+        frame: Frame atual da execução
+    """
     logger.info("Recebido sinal de desligamento. Encerrando o bot graciosamente...")
-    updater.stop()
-    updater.is_idle = False
+    
+    try:
+        if app is not None and app.running:
+            await app.stop()
+            await app.shutdown()
+            logger.info("Aplicação do bot encerrada com sucesso.")
+    except Exception as e:
+        logger.error(f"Erro ao encerrar a aplicação: {e}")
+    finally:
+        # Garante que o loop de eventos seja parado
+        import asyncio
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.stop()
 
-def main():
-    """Inicia o bot com tratamento de erros e reconexão automática."""
+async def main():
+    """
+    Inicia o bot com tratamento de erros e reconexão automática.
+    
+    Retorna:
+        int: Código de saída (0 para sucesso, 1 para erro)
+    """
     import time
     
     # Configurações de reconexão
     max_retries = BotConfig.MAX_RETRIES
     base_retry_delay = BotConfig.BASE_RETRY_DELAY
     
-    # Inicializa o bot
-    updater, dispatcher = init_bot()
-    
-    # Configura os handlers de sinal para um encerramento limpo
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        signal.signal(sig, lambda s, f: signal_handler(updater, s, f))
-    
     attempt = 0
+    application = None
+    
+    # Configura os manipuladores de sinal
+    import signal
+    import functools
+    
     while attempt < max_retries:
         try:
-            # Configura os handlers
-            setup_handlers(dispatcher)
+            # Inicializa a aplicação do bot
+            application = init_bot()
+            
+            # Configura os manipuladores de sinal
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                loop = asyncio.get_running_loop()
+                loop.add_signal_handler(
+                    sig,
+                    lambda s=sig: asyncio.create_task(signal_handler(application, s, None))
+                )
             
             logger.info(f"Iniciando o bot (tentativa {attempt + 1}/{max_retries})...")
             
             # Inicia o bot com polling
-            updater.start_polling(
-                drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
-                timeout=BotConfig.POLLING_TIMEOUT,
-                read_latency=BotConfig.READ_LATENCY,
-                bootstrap_retries=BotConfig.BOOTSTRAP_RETRIES
-            )
+            await application.initialize()
+            await application.start()
+            await application.bot.delete_webhook(drop_pending_updates=BotConfig.DROP_PENDING_UPDATES)
             
             logger.info("Bot iniciado com sucesso!")
             
             # Mantém o bot em execução
-            updater.idle()
+            await application.run_polling(
+                drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
+                allowed_updates=Update.ALL_TYPES,
+                close_loop=False
+            )
             
             # Se chegou aqui, o bot foi parado normalmente
             logger.info("Bot parado pelo usuário.")
@@ -214,7 +255,7 @@ def main():
             # O Telegram está pedindo para esperar
             wait_time = e.retry_after + 5  # Adiciona 5 segundos de margem
             logger.warning(f"Rate limit atingido. Esperando {wait_time} segundos...")
-            time.sleep(wait_time)
+            await asyncio.sleep(wait_time)
             continue
             
         except (NetworkError, TimedOut) as e:
@@ -224,15 +265,19 @@ def main():
                 # Espera um tempo exponencial com jitter antes de tentar novamente
                 wait_time = base_retry_delay * (2 ** (attempt - 1)) + random.uniform(0, 5)
                 logger.info(f"Tentando reconectar em {wait_time:.1f} segundos...")
-                time.sleep(wait_time)
+                await asyncio.sleep(wait_time)
             continue
             
         except (TelegramError, ConnectionError) as e:
             attempt += 1
             logger.error(f"Erro do Telegram (tentativa {attempt}/{max_retries}): {str(e)}")
             if attempt < max_retries:
-                time.sleep(base_retry_delay)
+                await asyncio.sleep(base_retry_delay)
             continue
+            
+        except asyncio.CancelledError:
+            logger.info("Operação cancelada pelo usuário.")
+            return 0
             
         except Exception as e:
             attempt += 1
@@ -240,21 +285,65 @@ def main():
             if attempt >= max_retries:
                 logger.critical("Número máximo de tentativas atingido. Encerrando...")
                 return 1
-            time.sleep(base_retry_delay)
+            await asyncio.sleep(base_retry_delay)
             continue
+            
+        finally:
+            # Limpeza em caso de erro ou término normal
+            if application is not None and application.running:
+                try:
+                    await application.stop()
+                    await application.shutdown()
+                except Exception as e:
+                    logger.error(f"Erro ao encerrar a aplicação: {e}")
     
     logger.critical("Não foi possível conectar ao Telegram após várias tentativas. Encerrando...")
     return 1
 
-if __name__ == '__main__':
+def run_bot():
+    """Função de entrada principal para executar o bot."""
     try:
+        # Configura o loop de eventos
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
         # Executa o bot e captura o código de saída
-        exit_code = main()
+        exit_code = loop.run_until_complete(main())
+        
         # Encerra o programa com o código de saída apropriado
-        sys.exit(exit_code if exit_code is not None else 0)
+        return exit_code
+        
     except KeyboardInterrupt:
         logger.info("Bot interrompido pelo usuário.")
-        sys.exit(0)
+        return 0
     except Exception as e:
-        logger.critical(f"Erro crítico não tratado: {str(e)}", exc_info=True)
-        sys.exit(1)
+        logger.critical(f"Erro fatal: {str(e)}", exc_info=True)
+        return 1
+    finally:
+        # Garante que o loop de eventos seja fechado corretamente
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.stop()
+            
+            # Cancela todas as tarefas pendentes
+            pending = asyncio.all_tasks(loop=loop)
+            for task in pending:
+                task.cancel()
+            
+            # Executa o loop novamente para processar os cancelamentos
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            
+            # Fecha o loop
+            loop.close()
+        except Exception as e:
+            logger.error(f"Erro ao fechar o loop de eventos: {e}")
+
+if __name__ == '__main__':
+    # Configura o manipulador de sinais para o processo principal
+    import signal
+    signal.signal(signal.SIGINT, lambda s, f: sys.exit(0))
+    
+    # Executa o bot e sai com o código de status apropriado
+    sys.exit(run_bot())
