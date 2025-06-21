@@ -118,9 +118,7 @@ def init_bot():
         read_timeout=BotConfig.READ_TIMEOUT,
         write_timeout=BotConfig.READ_TIMEOUT,
         connect_timeout=BotConfig.CONNECTION_TIMEOUT,
-        pool_timeout=BotConfig.POOL_TIMEOUT,
-        proxy_url=os.environ.get('HTTPS_PROXY') or os.environ.get('HTTP_PROXY'),
-        retries=BotConfig.MAX_RETRY_ATTEMPTS,
+        pool_timeout=BotConfig.POOL_TIMEOUT
     )
     
     # Cria e configura a aplicação
