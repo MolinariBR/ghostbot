@@ -129,11 +129,10 @@ class PixAPI:
         
         try:
             # Prepara os dados para a API
+            # A API espera amount_in_cents (em centavos) e address (chave PIX)
             data = {
-                'action': 'create_payment',
-                'amount': valor_centavos / 100,  # Converte para reais
-                'pix_key': chave_pix,
-                'description': f'Pagamento via GhostBot - {valor_centavos/100:.2f}'
+                'amount_in_cents': valor_centavos,  # Já está em centavos
+                'address': chave_pix
             }
             
             logger.info(f"Dados do pagamento: {data}")
@@ -144,20 +143,23 @@ class PixAPI:
             logger.info(f"Resposta da API: {response}")
             
             # Verifica se a resposta contém os campos esperados
-            required_fields = ['qr_code', 'pix_copy_paste', 'payment_id']
-            missing_fields = [field for field in required_fields if field not in response]
+            # A API pode retornar os dados em response['data'] ou diretamente no response
+            response_data = response.get('data', response)
+            
+            required_fields = ['qr_image_url', 'qr_copy_paste', 'transaction_id']
+            missing_fields = [field for field in required_fields if field not in response_data]
             
             if missing_fields:
                 error_msg = f"Resposta da API incompleta. Campos faltando: {', '.join(missing_fields)}"
                 logger.error(error_msg)
-                logger.error(f"Campos recebidos: {list(response.keys())}")
+                logger.error(f"Campos recebidos: {list(response_data.keys())}")
                 raise PixAPIError("Resposta da API incompleta")
             
             # Formata a resposta no formato esperado pelo código existente
             result = {
-                'qr_image_url': str(response['qr_code']),
-                'qr_copy_paste': str(response['pix_copy_paste']),
-                'transaction_id': str(response['payment_id'])
+                'qr_image_url': str(response_data['qr_image_url']),
+                'qr_copy_paste': str(response_data['qr_copy_paste']),
+                'transaction_id': str(response_data['transaction_id'])
             }
             
             logger.info("Pagamento PIX criado com sucesso")
