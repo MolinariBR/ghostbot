@@ -25,7 +25,7 @@ class PixAPI:
         Args:
             api_url: URL base da API (opcional, busca do ambiente)
         """
-        self.api_url = (api_url or os.getenv('PIX_API_URL', 'https://basetria.xyz/bot_deposit')).rstrip('/')
+        self.api_url = (api_url or os.getenv('PIX_API_URL', 'https://ghostp2p.squareweb.app/api/bot_deposit.php')).rstrip('/')
         
         if not self.api_url:
             raise PixAPIError("URL da API PIX não configurada. Defina a variável de ambiente PIX_API_URL")
@@ -47,17 +47,24 @@ class PixAPI:
         if data is None:
             data = {}
             
-        url = f"{self.api_url}/{path.lstrip('/')}" if path else self.api_url
+        # Usa a URL base diretamente, sem adicionar caminhos adicionais
+        url = self.api_url
         logger.info(f"Fazendo requisição para: {url}")
         logger.info(f"Dados da requisição: {data}")
         
         headers = {
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'User-Agent': 'GhostBot/1.0'
         }
         
         try:
             logger.info(f"Enviando requisição POST para {url}")
+            
+            # Adiciona timestamp à requisição
+            import time
+            data['timestamp'] = int(time.time())
+            
             response = requests.post(
                 url=url,
                 json=data,
@@ -79,12 +86,10 @@ class PixAPI:
                 logger.error(error_msg)
                 raise PixAPIError(error_msg) from e
             
-            # Verifica se houve erro na resposta
-            if not response_data.get('success', False):
-                error_msg = response_data.get('error', 'Erro desconhecido')
-                raise PixAPIError(f"Erro na API: {error_msg}")
-            
-            return response_data.get('data', {})
+            # A API pode retornar o resultado diretamente ou em um campo 'data'
+            if 'data' in response_data:
+                return response_data['data']
+            return response_data
             
         except requests.exceptions.RequestException as e:
             error_msg = f"Erro na requisição para {url}: {str(e)}"
@@ -123,20 +128,23 @@ class PixAPI:
             raise PixAPIError("Chave PIX inválida")
         
         try:
+            # Prepara os dados para a API
             data = {
-                'amount_in_cents': valor_centavos,
-                'address': chave_pix
+                'action': 'create_payment',
+                'amount': valor_centavos / 100,  # Converte para reais
+                'pix_key': chave_pix,
+                'description': f'Pagamento via GhostBot - {valor_centavos/100:.2f}'
             }
             
             logger.info(f"Dados do pagamento: {data}")
             
-            # Usa o endpoint raiz diretamente, sem o sufixo 'pix/create'
+            # Chama a API
             logger.info("Chamando _make_request...")
-            response = self._make_request('', data)
+            response = self._make_request(data=data)
             logger.info(f"Resposta da API: {response}")
             
-            # Verifica se todos os campos necessários estão presentes
-            required_fields = ['qr_image_url', 'qr_copy_paste', 'transaction_id']
+            # Verifica se a resposta contém os campos esperados
+            required_fields = ['qr_code', 'pix_copy_paste', 'payment_id']
             missing_fields = [field for field in required_fields if field not in response]
             
             if missing_fields:
@@ -145,10 +153,11 @@ class PixAPI:
                 logger.error(f"Campos recebidos: {list(response.keys())}")
                 raise PixAPIError("Resposta da API incompleta")
             
+            # Formata a resposta no formato esperado pelo código existente
             result = {
-                'qr_image_url': str(response['qr_image_url']),
-                'qr_copy_paste': str(response['qr_copy_paste']),
-                'transaction_id': str(response['transaction_id'])
+                'qr_image_url': str(response['qr_code']),
+                'qr_copy_paste': str(response['pix_copy_paste']),
+                'transaction_id': str(response['payment_id'])
             }
             
             logger.info("Pagamento PIX criado com sucesso")
