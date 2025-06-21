@@ -245,14 +245,30 @@ async def main():
             
             logger.info("Bot iniciado com sucesso!")
             
-            # Mantém o bot em execução
+            # Inicia o polling
             await application.updater.start_polling(
                 drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
                 allowed_updates=Update.ALL_TYPES
             )
             
-            # Aguarda até que o bot seja interrompido
-            await application.updater.running.wait()
+            # Mantém o bot em execução até receber um sinal de parada
+            stop_event = asyncio.Event()
+            
+            # Configura os manipuladores de sinal para parar o bot corretamente
+            def signal_handler(signum, frame):
+                logger.info(f"Recebido sinal {signum}, encerrando o bot...")
+                stop_event.set()
+                
+            # Configura os sinais para parar o bot
+            loop = asyncio.get_running_loop()
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                loop.add_signal_handler(sig, signal_handler, sig, None)
+            
+            # Aguarda até que o evento de parada seja definido
+            await stop_event.wait()
+            
+            # Para o updater
+            await application.updater.stop()
             
             # Se chegou aqui, o bot foi parado normalmente
             logger.info("Bot parado pelo usuário.")
