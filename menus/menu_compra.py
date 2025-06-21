@@ -115,7 +115,7 @@ async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(
         "💱 *ESCOLHA A MOEDA PARA COMPRA*\n\n"
         "Selecione a criptomoeda que deseja comprar:",
-        reply_markup=await menu_moedas(),
+        reply_markup=menu_moedas(),
         parse_mode='Markdown'
     )
     return ESCOLHER_MOEDA
@@ -123,9 +123,11 @@ async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa a escolha da moeda e pede para selecionar a rede."""
     if update.message.text == "🔙 Voltar":
+        # Get the main menu keyboard (synchronous call)
+        main_menu = menu_principal_func()
         await update.message.reply_text(
             "Operação cancelada.",
-            reply_markup=ReplyKeyboardMarkup(await menu_principal_func(), resize_keyboard=True)
+            reply_markup=ReplyKeyboardMarkup(main_menu, resize_keyboard=True)
         )
         return ConversationHandler.END
         
@@ -135,7 +137,7 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(
         f"🔄 *Rede de {moeda_escolhida}*\n\n"
         "Selecione a rede que deseja utilizar:",
-        reply_markup=await menu_redes(moeda_escolhida),
+        reply_markup=menu_redes(moeda_escolhida),
         parse_mode='Markdown'
     )
     return ESCOLHER_REDE
@@ -146,7 +148,10 @@ async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         return await iniciar_compra(update, context)
         
     rede = update.message.text
-    context.user_data['rede_escolhida'] = rede
+    context.user_data['rede'] = rede
+    
+    # Get the selected coin
+    moeda = context.user_data.get('moeda', 'a moeda selecionada')
     
     # Formata os valores para exibição
     min_valor = "10,00"
@@ -154,7 +159,7 @@ async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     
     # Mensagem inicial
     mensagem = (
-        f"💎 *{context.user_data['moeda_escolhida']} - {rede}*\n\n"
+        f"💎 *{moeda} - {rede}*\n\n"
         f"💰 *Valor de Investimento*\n"
         f"• Mínimo: R$ {min_valor}\n"
         f"• Máximo: R$ {max_valor}\n\n"
@@ -179,7 +184,7 @@ async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         ]
     ]
     
-    update.message.reply_text(
+    await update.message.reply_text(
         mensagem,
         parse_mode='Markdown',
         reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True)
@@ -357,16 +362,16 @@ def menu_metodos_pagamento():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
-def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa o endereço informado e solicita o método de pagamento."""
     if update.message.text == "🔙 Voltar":
-        return processar_quantidade(update, context)
+        return await processar_quantidade(update, context)
     
     endereco = update.message.text
     context.user_data['endereco_recebimento'] = endereco
     
     # Mostra opções de pagamento
-    update.message.reply_text(
+    await update.message.reply_text(
         "💳 *Escolha a forma de pagamento:*",
         parse_mode='Markdown',
         reply_markup=menu_metodos_pagamento()
@@ -374,17 +379,17 @@ def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     
     return ESCOLHER_PAGAMENTO
 
-def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa o método de pagamento escolhido e finaliza a compra."""
     if update.message.text == "🔙 Voltar":
-        return processar_quantidade(update, context)
+        return await processar_quantidade(update, context)
     
     metodo_pagamento = update.message.text
     context.user_data['metodo_pagamento'] = metodo_pagamento
     
     # Dados da compra
-    moeda = context.user_data.get('moeda_escolhida', 'a moeda selecionada')
-    rede = context.user_data.get('rede_escolhida', 'a rede selecionada')
+    moeda = context.user_data.get('moeda', 'a moeda selecionada')
+    rede = context.user_data.get('rede', 'a rede selecionada')
     valor_brl = context.user_data.get('valor_brl', 0)
     endereco = context.user_data.get('endereco_recebimento', '')
     
@@ -558,9 +563,14 @@ def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAULT_TYP
 async def cancelar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancela a compra e volta ao menu principal."""
     context.user_data.clear()
+    
+    # Get the main menu keyboard (synchronous call)
+    main_menu = menu_principal_func()
+    reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
+    
     await update.message.reply_text(
         "❌ Compra cancelada.",
-        reply_markup=ReplyKeyboardMarkup(await menu_principal_func(), resize_keyboard=True) if menu_principal_func else None
+        reply_markup=reply_markup
     )
     return ConversationHandler.END
 
