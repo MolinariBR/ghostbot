@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 TOKEN = Config.TELEGRAM_BOT_TOKEN
 
 # Inicializa o updater e dispatcher
-updater = Updater(TOKEN, use_context=True)
+updater = Updater(TOKEN)
 dispatcher = updater.dispatcher
 
 # Estados da conversa
