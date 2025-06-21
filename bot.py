@@ -2,6 +2,7 @@
 """
 Bot principal do Ghost Bot - Assistente de Criptomoedas
 """
+import asyncio
 import logging
 import signal
 import random
