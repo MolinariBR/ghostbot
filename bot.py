@@ -281,6 +281,10 @@ async def main():
             await application.start()
             await application.bot.delete_webhook(drop_pending_updates=BotConfig.DROP_PENDING_UPDATES)
             
+            # Configura os handlers do bot
+            setup_handlers(application)
+            logger.info("Handlers configurados com sucesso!")
+            
             logger.info("Bot iniciado com sucesso!")
             
             # Configura o updater
