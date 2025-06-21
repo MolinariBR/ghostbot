@@ -1,6 +1,9 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import CallbackContext, MessageHandler, Filters, ConversationHandler, CommandHandler
 
+# Importa a função menu_principal do módulo principal
+from bot import menu_principal
+
 # Estados do menu de venda
 ESCOLHER_MOEDA, QUANTIDADE, ENDERECO, CONFIRMAR = range(4)
 
@@ -119,7 +122,7 @@ def confirmar_venda(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         mensagem,
         parse_mode='Markdown',
-        reply_markup=menu_principal()
+        reply_markup=ReplyKeyboardMarkup(menu_principal(), resize_keyboard=True)
     )
     
     # Limpa os dados da conversa
@@ -131,7 +134,7 @@ def cancelar_venda(update: Update, context: CallbackContext) -> int:
     context.user_data.clear()
     update.message.reply_text(
         "❌ Venda cancelada.",
-        reply_markup=menu_principal()
+        reply_markup=ReplyKeyboardMarkup(menu_principal(), resize_keyboard=True)
     )
     return ConversationHandler.END
 

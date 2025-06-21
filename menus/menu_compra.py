@@ -4,6 +4,9 @@ import requests
 from datetime import datetime, timedelta
 import logging
 
+# Importa a função menu_principal do módulo principal
+from bot import menu_principal
+
 # Configuração de logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -505,7 +508,7 @@ def cancelar_compra(update: Update, context: CallbackContext) -> int:
     context.user_data.clear()
     update.message.reply_text(
         "❌ Compra cancelada.",
-        reply_markup=menu_principal()
+        reply_markup=ReplyKeyboardMarkup(menu_principal(), resize_keyboard=True)
     )
     return ConversationHandler.END
 
