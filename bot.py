@@ -1,5 +1,4 @@
 import logging
-import os
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     Application,
@@ -9,7 +8,9 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler
 )
-from dotenv import load_dotenv
+
+# Importa as configurações do tokens.py
+from tokens import Config
 
 # Importa os menus
 from menus import setup_menus, get_compra_conversation, get_venda_conversation
@@ -21,13 +22,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Carrega as variáveis de ambiente
-env_path = os.path.join(os.path.dirname(__file__), '.env')
-load_dotenv(env_path)
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-
-if not TOKEN:
-    raise ValueError("Token do Telegram não encontrado. Verifique o arquivo .env")
+# Token do bot
+TOKEN = Config.TELEGRAM_BOT_TOKEN
 
 # Estados da conversa
 MENU, COMPRAR, VENDER, SERVICOS, AJUDA, TERMOS = range(6)
