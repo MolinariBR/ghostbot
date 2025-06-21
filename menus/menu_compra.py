@@ -110,41 +110,40 @@ def menu_redes(moeda: str):
         ]
     return ReplyKeyboardMarkup(redes, resize_keyboard=True, one_time_keyboard=False)
 
-def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Inicia o fluxo de compra mostrando as moedas disponíveis."""
-    update.message.reply_text(
+    await update.message.reply_text(
         "💱 *ESCOLHA A MOEDA PARA COMPRA*\n\n"
         "Selecione a criptomoeda que deseja comprar:",
-        reply_markup=menu_moedas(),
+        reply_markup=await menu_moedas(),
         parse_mode='Markdown'
     )
     return ESCOLHER_MOEDA
 
-def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa a escolha da moeda e pede para selecionar a rede."""
     if update.message.text == "🔙 Voltar":
-        update.message.reply_text(
-            "🔙 *Voltando ao menu principal...*",
-            reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None,
-            parse_mode='Markdown'
+        await update.message.reply_text(
+            "Operação cancelada.",
+            reply_markup=ReplyKeyboardMarkup(await menu_principal_func(), resize_keyboard=True)
         )
         return ConversationHandler.END
         
-    moeda = update.message.text
-    context.user_data['moeda_escolhida'] = moeda
+    moeda_escolhida = update.message.text
+    context.user_data['moeda'] = moeda_escolhida
     
-    update.message.reply_text(
-        f"🔗 *Selecione a rede para {moeda}:*\n\n"
-        "_Escolha a mesma rede da sua carteira para evitar perda de fundos._",
-        reply_markup=menu_redes(moeda),
+    await update.message.reply_text(
+        f"🔄 *Rede de {moeda_escolhida}*\n\n"
+        "Selecione a rede que deseja utilizar:",
+        reply_markup=await menu_redes(moeda_escolhida),
         parse_mode='Markdown'
     )
     return ESCOLHER_REDE
 
-def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa a escolha da rede e pede o valor em BRL."""
     if update.message.text == "🔙 Voltar":
-        return iniciar_compra(update, context)
+        return await iniciar_compra(update, context)
         
     rede = update.message.text
     context.user_data['rede_escolhida'] = rede
@@ -187,12 +186,12 @@ def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
     return QUANTIDADE
 
-def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa a quantidade informada e mostra confirmação."""
     try:
         # Se o usuário clicou em "Digitar valor", pede para digitar
         if update.message.text == "Digitar valor":
-            update.message.reply_text(
+            await update.message.reply_text(
                 "💵 *Digite o valor desejado*\n\n"
                 "Exemplos:\n"
                 "• 150,50\n"
@@ -220,8 +219,8 @@ def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         valor_brl = round(valor_brl, 2)
         context.user_data['valor_brl'] = valor_brl
         
-        moeda = context.user_data.get('moeda_escolhida', 'a moeda selecionada')
-        rede = context.user_data.get('rede_escolhida', '')
+        moeda = context.user_data.get('moeda', 'a moeda selecionada')
+        rede = context.user_data.get('rede', 'a rede selecionada')
         
         # Obtém a cotação e calcula o valor a receber
         cotacao = obter_cotacao(moeda)
@@ -256,7 +255,7 @@ def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "Confirma os dados da compra?"
         )
         
-        update.message.reply_text(
+        await update.message.reply_text(
             mensagem,
             parse_mode='Markdown',
             reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -286,7 +285,7 @@ def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             ]
         ]
         
-        update.message.reply_text(
+        await update.message.reply_text(
             f"{mensagem_erro}\n\n"
             "💡 Você pode digitar qualquer valor entre R$ 10,00 e R$ 5.000,00\n"
             "Exemplos: 75,50 ou 1250,00",
@@ -299,7 +298,7 @@ def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return QUANTIDADE
     except Exception as e:
         logger.error(f"Erro ao processar quantidade: {str(e)}")
-        update.message.reply_text(
+        await update.message.reply_text(
             "❌ Ocorreu um erro ao processar o valor. Por favor, tente novamente.",
             reply_markup=ReplyKeyboardMarkup(
                 [[KeyboardButton("🔙 Voltar")]], 
@@ -308,18 +307,18 @@ def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
         return QUANTIDADE
 
-def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Confirma os dados e solicita o endereço de recebimento."""
     # Se o usuário clicou em "Alterar Valor", volta para a tela de quantidade
     if update.message.text == "✏️ Alterar Valor":
-        return escolher_rede(update, context)
+        return await escolher_rede(update, context)
     # Se clicou em "Mudar Moeda", volta para o início
     elif update.message.text == "🔙 Mudar Moeda":
-        return iniciar_compra(update, context)
+        return await iniciar_compra(update, context)
     
     # Se confirmou, pede o endereço
-    moeda = context.user_data.get('moeda_escolhida', '')
-    rede = context.user_data.get('rede_escolhida', '')
+    moeda = context.user_data.get('moeda', '')
+    rede = context.user_data.get('rede', '')
     
     # Mensagem de instrução baseada no tipo de rede
     if "Lightning" in rede:
@@ -333,12 +332,12 @@ def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     elif "Liquid" in rede or "On-chain" in rede or "Polygon" in rede:
         instrucao = (
             "📬 *Informe o endereço de recebimento*\n\n"
-            "Certifique-se de que o endereço é compatível com a rede *{rede}*."
+            f"Certifique-se de que o endereço é compatível com a rede *{rede}*."
         )
     else:
         instrucao = "📬 Informe o endereço de recebimento:"
     
-    update.message.reply_text(
+    await update.message.reply_text(
         instrucao,
         parse_mode='Markdown',
         reply_markup=ReplyKeyboardMarkup(
@@ -556,12 +555,12 @@ def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAULT_TYP
     
     return ConversationHandler.END
 
-def cancelar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def cancelar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancela a compra e volta ao menu principal."""
     context.user_data.clear()
-    update.message.reply_text(
+    await update.message.reply_text(
         "❌ Compra cancelada.",
-        reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None
+        reply_markup=ReplyKeyboardMarkup(await menu_principal_func(), resize_keyboard=True) if menu_principal_func else None
     )
     return ConversationHandler.END
 

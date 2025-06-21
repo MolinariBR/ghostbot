@@ -138,56 +138,60 @@ def menu_principal():
 setup_menus(menu_principal)
 
 # Handlers de comando
-def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Inicia a conversa e mostra o menu principal."""
     reply_markup = ReplyKeyboardMarkup(menu_principal(), resize_keyboard=True)
-    update.message.reply_text(
+    await update.message.reply_text(
         '👋 Olá! Eu sou o Ghost Bot, seu assistente de criptomoedas.\n\n'
         'Escolha uma opção abaixo:',
         reply_markup=reply_markup
     )
     return MENU
 
-def vender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def vender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Lida com a opção de venda."""
-    update.message.reply_text(
+    await update.message.reply_text(
         "🔹 *VENDER* 🔹\n\n"
         "Por favor, informe o valor em Bitcoin que deseja vender.",
         parse_mode='Markdown'
     )
     return VENDER
 
-def servicos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def servicos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Mostra os serviços disponíveis."""
-    update.message.reply_text(
-        "🔹 *SERVIÇOS* 🔹\n\n"
-        "• Compra e venda de Bitcoin\n"
+    await update.message.reply_text(
+        "🔧 *SERVIÇOS* 🔧\n\n"
+        "Aqui estão os serviços disponíveis:\n\n"
+        "• Compra e venda de criptomoedas\n"
         "• Carteira digital segura\n"
-        "• Suporte 24/7\n\n"
+        "• Conversão entre criptomoedas\n\n"
         "Voltar ao menu: /start",
         parse_mode='Markdown'
     )
     return SERVICOS
 
-def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Mostra a ajuda."""
-    update.message.reply_text(
-        "🔹 *AJUDA* 🔹\n\n"
-        "Precisa de ajuda? Entre em contato com nosso suporte:\n"
-        "📧 suporte@ghostbot.com\n"
-        "📞 (11) 99999-9999\n\n"
+    await update.message.reply_text(
+        "❓ *AJUDA* ❓\n\n"
+        "Como posso te ajudar?\n\n"
+        "• Para começar, use /start\n"
+        "• Para comprar criptomoedas, toque em *Comprar*\n"
+        "• Para vender criptomoedas, toque em *Vender*\n"
+        "• Dúvidas? Entre em contato com nosso suporte\n\n"
         "Voltar ao menu: /start",
         parse_mode='Markdown'
     )
     return AJUDA
 
-def termos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def termos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Mostra os termos de uso."""
-    update.message.reply_text(
-        "🔹 *TERMOS DE USO* 🔹\n\n"
-        "1. O usuário é responsável por suas transações.\n"
-        "2. As taxas são informadas no momento da operação.\n"
-        "3. Não nos responsabilizamos por erros em endereços.\n\n"
+    await update.message.reply_text(
+        "📜 *TERMOS DE USO* 📜\n\n"
+        "Ao usar este bot, você concorda com nossos termos de uso:\n\n"
+        "1. Não use para atividades ilegais\n"
+        "2. Mantenha suas credenciais em segredo\n"
+        "3. Esteja ciente dos riscos do mercado de criptomoedas\n\n"
         "Voltar ao menu: /start",
         parse_mode='Markdown'
     )
@@ -198,15 +202,26 @@ def setup_handlers(application):
     # Limpa handlers antigos para evitar duplicação
     application.handlers = {}
     
+    # Importa os handlers de conversação aqui para evitar importação circular
+    from menus.menu_compra import get_compra_conversation, iniciar_compra
+    from menus.menu_venda import get_venda_conversation
+    
     # Adiciona os handlers de comando
     application.add_handler(CommandHandler('start', start))
     
     # Adiciona os handlers de conversação
-    application.add_handler(get_compra_conversation())
-    application.add_handler(get_venda_conversation())
+    compra_conv = get_compra_conversation()
+    venda_conv = get_venda_conversation()
+    
+    # Configura os handlers de conversação
+    if compra_conv:
+        application.add_handler(compra_conv)
+    if venda_conv:
+        application.add_handler(venda_conv)
     
     # Adiciona handlers para os outros menus
     application.add_handler(MessageHandler(filters.Regex('^🛒 Comprar$'), iniciar_compra))
+    application.add_handler(MessageHandler(filters.Regex('^💰 Vender$'), vender))
     application.add_handler(MessageHandler(filters.Regex('^🔧 Serviços$'), servicos))
     application.add_handler(MessageHandler(filters.Regex('^❓ Ajuda$'), ajuda))
     application.add_handler(MessageHandler(filters.Regex('^📜 Termos$'), termos))
