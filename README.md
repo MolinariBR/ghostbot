@@ -1,12 +1,25 @@
 # Ghost Bot - Bot de Negociação de Criptomoedas
 
-Bot do Telegram para compra e venda de criptomoedas com interface amigável.
+Bot do Telegram para compra e venda de criptomoedas com interface amigável e integração PIX.
+
+## ✨ Melhorias Recentes
+
+- **Maior estabilidade**: Implementação de reconexão automática e tratamento de erros robusto
+- **Desempenho aprimorado**: Timeouts configuráveis e gerenciamento de conexão otimizado
+- **Logs detalhados**: Sistema de logging aprimorado com rotação de arquivos
+- **Segurança**: Atualização das dependências para as versões mais recentes e seguras
+- **Manutenção**: Código mais organizado e fácil de manter
 
 ## 🚀 Pré-requisitos
 
-- Python 3.8 (recomendado) ou superior
+- Python 3.8 ou superior (recomendado Python 3.9+)
 - Conta no Telegram e token do BotFather
-- Conta no Square Cloud (para deploy)
+- Dependências do sistema (se necessário):
+  ```bash
+  # Ubuntu/Debian
+  sudo apt-get update
+  sudo apt-get install python3-dev python3-pip python3-venv
+  ```
 
 ## 🛠️ Instalação Local
 
@@ -24,31 +37,57 @@ Bot do Telegram para compra e venda de criptomoedas com interface amigável.
    
    # Windows
    # python -m venv venv
-   # venv\Scripts\activate
+   # .\venv\Scripts\activate
    ```
 
-3. **Instale as dependências**
+3. **Atualize o pip e instale as dependências**
    ```bash
-   # Método recomendado (usando setup.py)
-   pip install -e .
-   
-   # Ou instale diretamente do requirements.txt
-   # pip install -r requirements.txt
+   pip install --upgrade pip
+   pip install -r requirements.txt
    ```
 
-4. **Configure o ambiente**
-   - Crie um arquivo `.env` na raiz do projeto
-   - Adicione suas variáveis de ambiente (veja `.env.example`)
+4. **Configure o bot**
+   - Edite o arquivo `tokens.py` e adicione suas credenciais necessárias
 
 ## 🚀 Executando o Bot
 
+### Modo Desenvolvimento
 ```bash
 # Ative o ambiente virtual se ainda não estiver ativado
 source venv/bin/activate  # Linux/MacOS
-# venv\Scripts\activate  # Windows
+# .\venv\Scripts\activate  # Windows
 
-# Execute o bot
+# Execute o bot em modo de desenvolvimento
 python bot.py
+```
+
+### Em Produção
+Recomenda-se o uso de um gerenciador de processos como o PM2 para manter o bot em execução:
+
+```bash
+# Instale o PM2 globalmente (se ainda não tiver)
+npm install -g pm2
+
+# Inicie o bot com PM2
+pm2 start bot.py --name "ghost-bot" --interpreter python3 --restart-delay=3000
+
+# Monitore os logs
+pm2 logs ghost-bot
+```
+
+## 🔍 Solução de Problemas
+
+### Erros de Conexão
+Se encontrar erros de conexão, verifique:
+1. Seu token do bot está correto
+2. Sua conexão com a internet está estável
+3. Seu firewall não está bloqueando as conexões de saída
+
+### Logs
+Os logs são salvos em `logs/bot.log` e incluem informações detalhadas sobre o funcionamento do bot.
+
+## 🤝 Contribuindo
+Contribuições são bem-vindas! Sinta-se à vontade para abrir issues e enviar pull requests.
 ```
 
 ## ☁️ Deploy no Square Cloud

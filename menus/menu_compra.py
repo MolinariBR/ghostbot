@@ -411,20 +411,45 @@ def processar_metodo_pagamento(update: Update, context: CallbackContext) -> int:
             valor_centavos = int(valor_brl * 100)
             logger.info(f"Valor convertido para centavos: {valor_centavos}")
             
-            # Cria o pagamento PIX
+            # Obtém a chave PIX da loja a partir das configurações
+            from tokens import Config
+            chave_pix_loja = getattr(Config, 'PIX_KEY', 'sua_chave_pix_aqui@exemplo.com')
+            
+            # 1. Primeiro, armazena a transação no banco de dados
+            # Aqui você deve implementar a lógica para salvar a transação
+            # com o endereço de destino da criptomoeda
+            transaction_data = {
+                'user_id': update.effective_user.id,
+                'amount_brl': valor_brl,
+                'amount_crypto': valor_recebido,
+                'crypto_currency': moeda,
+                'crypto_address': endereco,  # Endereço de destino da criptomoeda
+                'status': 'pending',
+                'payment_method': 'pix',
+                'created_at': datetime.now().isoformat()
+            }
+            
+            # TODO: Implementar salvamento no banco de dados
+            # Exemplo: db.save_transaction(transaction_data)
+            logger.info(f"Transação armazenada: {transaction_data}")
+            
+            # 2. Cria o pagamento PIX (apenas com o valor)
             logger.info("Chamando pix_api.criar_pagamento...")
             pagamento = pix_api.criar_pagamento(
-                valor_centavos=valor_centavos,
-                chave_pix=endereco
+                valor_centavos=valor_centavos
             )
             logger.info("Pagamento PIX criado com sucesso")
+            
+            # 3. Associa o transaction_id do PIX à transação no banco
+            # TODO: Atualizar a transação com o transaction_id retornado
+            transaction_id = pagamento.get('transaction_id')
+            logger.info(f"Transação PIX {transaction_id} associada ao endereço {endereco}")
             
             # Monta a mensagem com o QR Code
             mensagem = (
                 "🔘 *PAGAMENTO VIA PIX*\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
-                f"• *Valor:* {valor_formatado}\n"
-                f"• *Chave PIX:* `{endereco}`\n\n"
+                f"• *Valor:* {valor_formatado}\n\n"
                 "Escaneie o QR Code abaixo ou copie o código PIX para efetuar o pagamento.\n"
                 "O pagamento é válido por 1 hora."
             )

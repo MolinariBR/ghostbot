@@ -1,14 +1,17 @@
-# Importa o módulo de compatibilidade primeiro
-import compat  # noqa: F401
-
+#!/usr/bin/env python3
+"""
+Bot principal do Ghost Bot - Assistente de Criptomoedas
+"""
 import logging
+import signal
+import random
+import sys
+from pathlib import Path
 
-# Configura o logger
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+# Configura o path para incluir o diretório raiz
+sys.path.insert(0, str(Path(__file__).parent.resolve()))
+
+# Importações do Telegram
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     Updater,
@@ -18,31 +21,61 @@ from telegram.ext import (
     CallbackContext,
     ConversationHandler
 )
+from telegram.error import (
+    NetworkError, 
+    TelegramError, 
+    RetryAfter, 
+    TimedOut, 
+    ChatMigrated, 
+    Conflict,
+    Unauthorized,
+    BadRequest
+)
 
-# Importa as configurações do tokens.py
+# Importações locais
 from tokens import Config
-
-# Importa os menus
+from config import BotConfig, LogConfig
 from menus import setup_menus, get_compra_conversation, get_venda_conversation
 from menus.menu_compra import iniciar_compra
 
 # Configuração do logger
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=getattr(logging, LogConfig.LOG_LEVEL),
+    format=LogConfig.LOG_FORMAT,
+    handlers=[
+        logging.StreamHandler(),
+        logging.handlers.RotatingFileHandler(
+            LogConfig.LOG_FILE,
+            maxBytes=LogConfig.MAX_BYTES,
+            backupCount=LogConfig.BACKUP_COUNT,
+            encoding='utf-8'
+        )
+    ]
 )
 logger = logging.getLogger(__name__)
 
-# Token do bot
-TOKEN = Config.TELEGRAM_BOT_TOKEN
-
-# Inicializa o updater e dispatcher
-updater = Updater(TOKEN, use_context=True)
-dispatcher = updater.dispatcher
-
-
 # Estados da conversa
 MENU, COMPRAR, VENDER, SERVICOS, AJUDA, TERMOS = range(6)
+
+# Inicialização do bot
+def init_bot():
+    """Inicializa e retorna a instância do bot."""
+    # Configurações de conexão
+    request_kwargs = {
+        'connect_timeout': BotConfig.CONNECTION_TIMEOUT,
+        'read_timeout': BotConfig.READ_TIMEOUT,
+        'pool_timeout': BotConfig.POOL_TIMEOUT,
+        'retries': BotConfig.MAX_RETRIES,
+    }
+    
+    # Inicializa o updater e dispatcher com as configurações de conexão
+    updater = Updater(
+        token=Config.TELEGRAM_BOT_TOKEN,
+        use_context=True,
+        request_kwargs=request_kwargs
+    )
+    
+    return updater, updater.dispatcher
 
 # Função para criar o teclado do menu
 def menu_principal():
@@ -112,62 +145,116 @@ def termos(update: Update, context: CallbackContext) -> int:
     )
     return TERMOS
 
+def setup_handlers(dispatcher):
+    """Configura todos os handlers do bot."""
+    # Limpa handlers antigos para evitar duplicação
+    dispatcher.handlers = {}
+    
+    # Adiciona os handlers de comando
+    dispatcher.add_handler(CommandHandler('start', start))
+    
+    # Adiciona os handlers de conversação
+    dispatcher.add_handler(get_compra_conversation())
+    dispatcher.add_handler(get_venda_conversation())
+    
+    # Adiciona handlers para os outros menus
+    dispatcher.add_handler(MessageHandler(Filters.regex('^🛒 Comprar$'), iniciar_compra))
+    dispatcher.add_handler(MessageHandler(Filters.regex('^🔧 Serviços$'), servicos))
+    dispatcher.add_handler(MessageHandler(Filters.regex('^❓ Ajuda$'), ajuda))
+    dispatcher.add_handler(MessageHandler(Filters.regex('^📜 Termos$'), termos))
+    dispatcher.add_handler(MessageHandler(Filters.regex('^🔙 Voltar$'), start))
+
+def signal_handler(updater, signum, frame):
+    """Manipulador de sinais para encerramento gracioso."""
+    logger.info("Recebido sinal de desligamento. Encerrando o bot graciosamente...")
+    updater.stop()
+    updater.is_idle = False
+
 def main():
     """Inicia o bot com tratamento de erros e reconexão automática."""
     import time
-    import random
-    from telegram.error import NetworkError, TelegramError
     
-    max_retries = 5
-    retry_delay = 5  # segundos
+    # Configurações de reconexão
+    max_retries = BotConfig.MAX_RETRIES
+    base_retry_delay = BotConfig.BASE_RETRY_DELAY
     
-    for attempt in range(max_retries):
+    # Inicializa o bot
+    updater, dispatcher = init_bot()
+    
+    # Configura os handlers de sinal para um encerramento limpo
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, lambda s, f: signal_handler(updater, s, f))
+    
+    attempt = 0
+    while attempt < max_retries:
         try:
-            # Adiciona os handlers de comando
-            dispatcher.add_handler(CommandHandler('start', start))
+            # Configura os handlers
+            setup_handlers(dispatcher)
             
-            # Adiciona os handlers de conversação
-            dispatcher.add_handler(get_compra_conversation())
-            dispatcher.add_handler(get_venda_conversation())
+            logger.info(f"Iniciando o bot (tentativa {attempt + 1}/{max_retries})...")
             
-            # Adiciona handlers para os outros menus
-            dispatcher.add_handler(MessageHandler(Filters.regex('^🛒 Comprar$'), iniciar_compra))
-            dispatcher.add_handler(MessageHandler(Filters.regex('^🔧 Serviços$'), servicos))
-            dispatcher.add_handler(MessageHandler(Filters.regex('^❓ Ajuda$'), ajuda))
-            dispatcher.add_handler(MessageHandler(Filters.regex('^📜 Termos$'), termos))
-            dispatcher.add_handler(MessageHandler(Filters.regex('^🔙 Voltar$'), start))
+            # Inicia o bot com polling
+            updater.start_polling(
+                drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
+                timeout=BotConfig.POLLING_TIMEOUT,
+                read_latency=BotConfig.READ_LATENCY,
+                bootstrap_retries=BotConfig.BOOTSTRAP_RETRIES
+            )
             
-            logger.info("Iniciando o bot...")
-            
-            # Inicia o bot
-            updater.start_polling()
             logger.info("Bot iniciado com sucesso!")
             
             # Mantém o bot em execução
             updater.idle()
-            break
             
-        except NetworkError as e:
-            logger.error(f"Erro de rede (tentativa {attempt + 1}/{max_retries}): {e}")
-            if attempt < max_retries - 1:
+            # Se chegou aqui, o bot foi parado normalmente
+            logger.info("Bot parado pelo usuário.")
+            return 0
+            
+        except RetryAfter as e:
+            # O Telegram está pedindo para esperar
+            wait_time = e.retry_after + 5  # Adiciona 5 segundos de margem
+            logger.warning(f"Rate limit atingido. Esperando {wait_time} segundos...")
+            time.sleep(wait_time)
+            continue
+            
+        except (NetworkError, TimedOut) as e:
+            attempt += 1
+            logger.error(f"Erro de rede/timeout (tentativa {attempt}/{max_retries}): {str(e)}")
+            if attempt < max_retries:
                 # Espera um tempo exponencial com jitter antes de tentar novamente
-                wait_time = retry_delay * (2 ** attempt) + random.uniform(0, 1)
-                logger.info(f"Tentando novamente em {wait_time:.1f} segundos...")
+                wait_time = base_retry_delay * (2 ** (attempt - 1)) + random.uniform(0, 5)
+                logger.info(f"Tentando reconectar em {wait_time:.1f} segundos...")
                 time.sleep(wait_time)
-            else:
-                logger.error("Número máximo de tentativas atingido. Encerrando...")
-                raise
-                
-        except TelegramError as e:
-            logger.error(f"Erro do Telegram: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(retry_delay)
-            else:
-                raise
-                
+            continue
+            
+        except (TelegramError, ConnectionError) as e:
+            attempt += 1
+            logger.error(f"Erro do Telegram (tentativa {attempt}/{max_retries}): {str(e)}")
+            if attempt < max_retries:
+                time.sleep(base_retry_delay)
+            continue
+            
         except Exception as e:
-            logger.error(f"Erro inesperado: {e}")
-            raise
+            attempt += 1
+            logger.exception(f"Erro inesperado (tentativa {attempt}/{max_retries}): {str(e)}")
+            if attempt >= max_retries:
+                logger.critical("Número máximo de tentativas atingido. Encerrando...")
+                return 1
+            time.sleep(base_retry_delay)
+            continue
+    
+    logger.critical("Não foi possível conectar ao Telegram após várias tentativas. Encerrando...")
+    return 1
 
 if __name__ == '__main__':
-    main()
+    try:
+        # Executa o bot e captura o código de saída
+        exit_code = main()
+        # Encerra o programa com o código de saída apropriado
+        sys.exit(exit_code if exit_code is not None else 0)
+    except KeyboardInterrupt:
+        logger.info("Bot interrompido pelo usuário.")
+        sys.exit(0)
+    except Exception as e:
+        logger.critical(f"Erro crítico não tratado: {str(e)}", exc_info=True)
+        sys.exit(1)
