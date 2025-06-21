@@ -140,12 +140,13 @@ class PixAPI:
             logger.error(error_msg)
             raise PixAPIError(error_msg) from e
     
-    def criar_pagamento(self, valor_centavos: int) -> Dict[str, str]:
+    def criar_pagamento(self, valor_centavos: int, endereco: str = None) -> Dict[str, str]:
         """
         Cria um novo pagamento PIX.
         
         Args:
             valor_centavos: Valor do pagamento em centavos
+            endereco: Endereço de destino do PIX (obrigatório)
             
         Returns:
             Dicionário com os dados do pagamento incluindo QR Code e transaction_id
@@ -153,7 +154,7 @@ class PixAPI:
         Raises:
             PixAPIError: Em caso de erro na criação do pagamento
         """
-        logger.info(f"Iniciando criação de pagamento PIX - Valor: {valor_centavos} centavos")
+        logger.info(f"Iniciando criação de pagamento PIX - Valor: {valor_centavos} centavos, Endereço: {endereco}")
         
         if not self.api_url:
             error_msg = "URL da API PIX não configurada"
@@ -165,38 +166,98 @@ class PixAPI:
             logger.error(error_msg)
             raise PixAPIError("Valor deve ser um número inteiro positivo de centavos")
         
+        if not endereco:
+            error_msg = "Endereço de destino não fornecido"
+            logger.error(error_msg)
+            raise PixAPIError("Endereço de destino é obrigatório")
+        
         try:
             # Prepara os dados para a API
-            # A API espera apenas o amount_in_cents (em centavos)
+            # O endpoint espera os seguintes campos:
+            # - amount: valor em centavos
+            # - address: endereço de destino
+            # - api_key: chave de API para autenticação
             data = {
-                'amount_in_cents': valor_centavos  # Já está em centavos
+                'amount': valor_centavos,  # Valor em centavos
+                'address': endereco,       # Endereço de destino
+                'api_key': self.api_key    # Chave de API para autenticação
             }
             
             logger.info(f"Dados do pagamento: {data}")
             
             # Chama a API
-            logger.info("Chamando _make_request...")
-            response = self._make_request('POST', '/deposit', data)
-            logger.info(f"Resposta da API: {response}")
+            logger.info(f"Chamando API PIX em: {self.api_url}")
             
-            # Verifica se a resposta contém os campos esperados
-            # A API retorna os dados em response['body']['response']
-            response_data = response.get('body', {}).get('response', {})
+            # Faz a requisição para o endpoint do backend
+            headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
             
-            required_fields = ['qr_image_url', 'qr_copy_paste', 'transaction_id']
-            missing_fields = [field for field in required_fields if field not in response_data]
+            logger.info(f"Headers da requisição: {headers}")
+            
+            response = requests.post(
+                self.api_url,
+                json=data,
+                headers=headers,
+                timeout=30
+            )
+            
+            logger.info(f"Resposta da API - Status: {response.status_code}")
+            logger.info(f"Conteúdo da resposta: {response.text}")
+            
+            # Verifica se houve erro na requisição
+            response.raise_for_status()
+            
+            # Tenta decodificar a resposta JSON
+            try:
+                response_data = response.json()
+                logger.info(f"Resposta JSON decodificada: {response_data}")
+            except ValueError as e:
+                error_msg = f"Erro ao decodificar resposta JSON: {e}"
+                logger.error(error_msg)
+                raise PixAPIError("Resposta inválida da API")
+            
+            # Verifica se a resposta contém o campo 'success'
+            if 'success' not in response_data:
+                error_msg = "Resposta da API inválida: campo 'success' não encontrado"
+                logger.error(error_msg)
+                raise PixAPIError("Resposta da API inválida")
+            
+            # Verifica se a requisição foi bem-sucedida
+            if not response_data['success']:
+                error_msg = response_data.get('error', 'Erro desconhecido na API')
+                logger.error(f"Erro na API: {error_msg}")
+                
+                # Tenta obter mais detalhes do erro, se disponíveis
+                if 'message' in response_data and response_data['message'] != error_msg:
+                    error_msg += f" - {response_data['message']}"
+                
+                raise PixAPIError(f"Erro na API: {error_msg}")
+            
+            # Extrai os dados da resposta
+            payment_data = response_data.get('data', {})
+            if not payment_data:
+                error_msg = "Resposta da API sem dados de pagamento"
+                logger.error(error_msg)
+                raise PixAPIError(error_msg)
+            
+            # Verifica os campos obrigatórios na resposta
+            required_fields = ['qr_code', 'qr_code_text', 'transaction_id']
+            missing_fields = [field for field in required_fields if field not in payment_data]
             
             if missing_fields:
                 error_msg = f"Resposta da API incompleta. Campos faltando: {', '.join(missing_fields)}"
                 logger.error(error_msg)
-                logger.error(f"Campos recebidos: {list(response_data.keys())}")
+                logger.error(f"Campos recebidos: {list(payment_data.keys())}")
+                logger.error(f"Conteúdo completo da resposta: {response_data}")
                 raise PixAPIError("Resposta da API incompleta")
             
             # Formata a resposta no formato esperado pelo código existente
             result = {
-                'qr_image_url': str(response_data['qr_image_url']),
-                'qr_copy_paste': str(response_data['qr_copy_paste']),
-                'transaction_id': str(response_data['transaction_id'])
+                'qr_image_url': str(payment_data['qr_code']),      # URL do QR Code
+                'qr_copy_paste': str(payment_data['qr_code_text']), # Código PIX copia e cola
+                'transaction_id': str(payment_data['transaction_id']) # ID da transação
             }
             
             logger.info("Pagamento PIX criado com sucesso")

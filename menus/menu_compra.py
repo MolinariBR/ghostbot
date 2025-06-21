@@ -438,10 +438,11 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
             # Exemplo: db.save_transaction(transaction_data)
             logger.info(f"Transação armazenada: {transaction_data}")
             
-            # 2. Cria o pagamento PIX (apenas com o valor)
+            # 2. Cria o pagamento PIX com valor e endereço
             logger.info("Chamando pix_api.criar_pagamento...")
             pagamento = pix_api.criar_pagamento(
-                valor_centavos=valor_centavos
+                valor_centavos=valor_centavos,
+                endereco=endereco  # Envia o endereço para a API
             )
             logger.info("Pagamento PIX criado com sucesso")
             
@@ -460,13 +461,13 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
             )
             
             # Envia a mensagem com o QR Code
-            update.message.reply_text(
+            await update.message.reply_text(
                 mensagem,
                 parse_mode='Markdown'
             )
             
             # Envia o código copia e cola
-            update.message.reply_text(
+            await update.message.reply_text(
                 f"📋 *Código PIX (copiar e colar):*\n`{pagamento['qr_copy_paste']}`",
                 parse_mode='Markdown'
             )
@@ -484,7 +485,7 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
                 f"Erro: {str(e)}"
             )
             
-            update.message.reply_text(
+            await update.message.reply_text(
                 mensagem_erro,
                 parse_mode='Markdown',
                 reply_markup=menu_metodos_pagamento()
