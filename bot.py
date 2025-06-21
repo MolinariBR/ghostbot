@@ -17,6 +17,7 @@ from tokens import Config
 
 # Importa os menus
 from menus import setup_menus, get_compra_conversation, get_venda_conversation
+from menus.menu_compra import iniciar_compra
 
 # Configuração do logger
 logging.basicConfig(
@@ -114,6 +115,7 @@ def main():
     dispatcher.add_handler(get_venda_conversation())
     
     # Adiciona handlers para os outros menus
+    dispatcher.add_handler(MessageHandler(Filters.regex('^🛒 Comprar$'), iniciar_compra))
     dispatcher.add_handler(MessageHandler(Filters.regex('^🔧 Serviços$'), servicos))
     dispatcher.add_handler(MessageHandler(Filters.regex('^❓ Ajuda$'), ajuda))
     dispatcher.add_handler(MessageHandler(Filters.regex('^📜 Termos$'), termos))
