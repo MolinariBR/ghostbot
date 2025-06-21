@@ -86,20 +86,14 @@ def init_bot():
         BASE_RETRY_DELAY = 5  # segundos
         
         # Configurações de polling
-        POLLING_TIMEOUT = 30  # segundos
+        POLLING_TIMEOUT = 30.0  # segundos (float para compatibilidade)
         READ_LATENCY = 2.0  # segundos
-        BOOTSTRAP_RETRIES = 3
         
         # Configurações de conexão
         CONNECTION_TIMEOUT = 60.0  # Aumentado para 60 segundos
         READ_TIMEOUT = 60.0  # Aumentado para 60 segundos
         POOL_TIMEOUT = 60.0  # Aumentado para 60 segundos
         MAX_RETRY_ATTEMPTS = 5  # Número de tentativas de reconexão
-        
-        # Configurações de polling
-        POLL_INTERVAL = 0.1  # Intervalo entre verificações de atualização
-        POLL_CLEAN = True  # Limpar fila de atualizações em caso de erro
-        POLL_BOOTSTRAP_RETRIES = 5  # Tentativas de inicialização
         
         # Tamanho do pool de conexões
         POOL_SIZE = 8
@@ -294,12 +288,10 @@ async def main():
             
             # Inicia o polling com tratamento de erros
             try:
+                # Configuração simplificada do polling
                 await updater.start_polling(
                     drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
                     allowed_updates=Update.ALL_TYPES,
-                    poll_interval=BotConfig.POLL_INTERVAL,
-                    bootstrap_retries=BotConfig.POLL_BOOTSTRAP_RETRIES,
-                    clean=BotConfig.POLL_CLEAN,
                     timeout=BotConfig.POLLING_TIMEOUT
                 )
                 
