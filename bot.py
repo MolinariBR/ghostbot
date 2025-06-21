@@ -102,9 +102,7 @@ def init_bot():
         # Outras configurações
         DROP_PENDING_UPDATES = True
         
-        # Configurações de keepalive
-        KEEP_ALIVE = True
-        KEEP_ALIVE_INTERVAL = 30.0  # segundos
+        # Configurações adicionais
         
         @classmethod
         def get_retry_delay(cls, attempt: int) -> float:
@@ -119,8 +117,6 @@ def init_bot():
         connect_timeout=BotConfig.CONNECTION_TIMEOUT,
         pool_timeout=BotConfig.POOL_TIMEOUT,
         http_version='1.1',
-        keep_alive=BotConfig.KEEP_ALIVE,
-        keep_alive_timeout=BotConfig.KEEP_ALIVE_INTERVAL,
         socket_options=[
             # Habilita keepalive
             ('keepalive', 1),
