@@ -1,3 +1,6 @@
+# Importa o módulo de compatibilidade primeiro
+import compat  # noqa: F401
+
 import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
