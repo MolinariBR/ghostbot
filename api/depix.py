@@ -25,8 +25,8 @@ class PixAPI:
         Args:
             api_url: URL base da API (opcional, busca do ambiente)
         """
-        # URL temporária para testes - TODO: Alterar para URL de produção quando estiver pronto
-        self.api_url = (api_url or os.getenv('PIX_API_URL', 'https://basetria.xyz/api/bot_deposit.php')).rstrip('/')
+        # Endpoint da API PIX
+        self.api_url = (api_url or os.getenv('PIX_API_URL', 'https://basetria.xyz/bot_deposit')).rstrip('/')
         
         if not self.api_url:
             raise PixAPIError("URL da API PIX não configurada. Defina a variável de ambiente PIX_API_URL")
@@ -53,7 +53,7 @@ class PixAPI:
         logger.info(f"Dados da requisição: {data}")
         
         headers = {
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Type': 'application/json',
             'Accept': 'application/json',
             'User-Agent': 'GhostBot/1.0'
         }
@@ -65,30 +65,51 @@ class PixAPI:
             import time
             data['timestamp'] = int(time.time())
             
-            # Envia os dados como x-www-form-urlencoded
+            # Log dos dados que serão enviados
+            logger.info(f"Dados completos a serem enviados: {json.dumps(data, indent=2)}")
+            
+            # Envia os dados como JSON
             response = requests.post(
                 url=url,
-                data=data,  # Usa data= em vez de json= para enviar como form-urlencoded
+                json=data,  # Usa json= para enviar como application/json
                 headers=headers,
                 timeout=30
             )
             
             logger.info(f"Resposta recebida - Status: {response.status_code}")
-            logger.info(f"Conteúdo da resposta: {response.text[:500]}...")  # Limita o log aos primeiros 500 caracteres
+            logger.info(f"Cabeçalhos da resposta: {response.headers}")
+            logger.info(f"Conteúdo da resposta: {response.text}")
             
             response.raise_for_status()  # Levanta exceção para códigos de erro HTTP
             
             # Verifica se a resposta é um JSON válido
             try:
                 response_data = response.json()
-                logger.info(f"Resposta JSON decodificada: {response_data}")
+                logger.info(f"Resposta JSON decodificada: {json.dumps(response_data, indent=2)}")
             except ValueError as e:
                 error_msg = f"Resposta inválida do servidor: {response.text}"
                 logger.error(error_msg)
                 raise PixAPIError(error_msg) from e
             
+            # Verifica se há erros na resposta
+            if not response_data.get('success', False):
+                error_msg = response_data.get('error', 'Erro desconhecido na API')
+                logger.error(f"Erro na API: {error_msg}")
+                raise PixAPIError(f"Erro na API: {error_msg}")
+            
             # Retorna a resposta completa, incluindo o campo 'data' se existir
             return response_data
+            
+        except requests.exceptions.HTTPError as e:
+            error_msg = f"Erro HTTP {e.response.status_code} na requisição para {url}: {str(e)}"
+            if e.response.content:
+                try:
+                    error_data = e.response.json()
+                    error_msg += f" - {json.dumps(error_data, indent=2)}"
+                except:
+                    error_msg += f" - {e.response.text}"
+            logger.error(error_msg)
+            raise PixAPIError(error_msg) from e
             
         except requests.exceptions.RequestException as e:
             error_msg = f"Erro na requisição para {url}: {str(e)}"
