@@ -1,12 +1,12 @@
 import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
-    Application,
+    Updater,
     CommandHandler,
     MessageHandler,
+    Filters,
     CallbackContext,
-    ConversationHandler,
-    filters
+    ConversationHandler
 )
 
 # Importa as configurações do tokens.py
@@ -25,9 +25,9 @@ logger = logging.getLogger(__name__)
 # Token do bot
 TOKEN = Config.TELEGRAM_BOT_TOKEN
 
-# Inicializa o bot com Application
-application = Application.builder().token(TOKEN).build()
-dispatcher = application
+# Inicializa o updater e dispatcher
+updater = Updater(TOKEN, use_context=True)
+dispatcher = updater.dispatcher
 
 
 # Estados da conversa
@@ -111,13 +111,14 @@ def main():
     dispatcher.add_handler(get_venda_conversation())
     
     # Adiciona handlers para os outros menus
-    dispatcher.add_handler(MessageHandler(filters.Regex('^🔧 Serviços$'), servicos))
-    dispatcher.add_handler(MessageHandler(filters.Regex('^❓ Ajuda$'), ajuda))
-    dispatcher.add_handler(MessageHandler(filters.Regex('^📜 Termos$'), termos))
-    dispatcher.add_handler(MessageHandler(filters.Regex('^🔙 Voltar$'), start))
+    dispatcher.add_handler(MessageHandler(Filters.regex('^🔧 Serviços$'), servicos))
+    dispatcher.add_handler(MessageHandler(Filters.regex('^❓ Ajuda$'), ajuda))
+    dispatcher.add_handler(MessageHandler(Filters.regex('^📜 Termos$'), termos))
+    dispatcher.add_handler(MessageHandler(Filters.regex('^🔙 Voltar$'), start))
 
     # Inicia o bot
-    application.run_polling()
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == '__main__':
     main()

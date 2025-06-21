@@ -1,5 +1,5 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import CallbackContext, MessageHandler, filters, ConversationHandler, CommandHandler
+from telegram.ext import CallbackContext, MessageHandler, Filters, ConversationHandler, CommandHandler
 
 # Estados do menu de venda
 ESCOLHER_MOEDA, QUANTIDADE, ENDERECO, CONFIRMAR = range(4)
@@ -138,28 +138,28 @@ def cancelar_venda(update: Update, context: CallbackContext) -> int:
 def get_venda_conversation():
     """Retorna o ConversationHandler para o fluxo de venda."""
     return ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex('^💰 Vender$'), iniciar_venda)],
+        entry_points=[MessageHandler(Filters.regex('^💰 Vender$'), iniciar_venda)],
         states={
             ESCOLHER_MOEDA: [
-                MessageHandler(filters.Regex('^🔙 Voltar$'), cancelar_venda),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_moeda_venda)
+                MessageHandler(Filters.regex('^🔙 Voltar$'), cancelar_venda),
+                MessageHandler(Filters.text & ~Filters.command, escolher_moeda_venda)
             ],
             QUANTIDADE: [
-                MessageHandler(filters.Regex('^🔙 Voltar$'), iniciar_venda),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, processar_quantidade_venda)
+                MessageHandler(Filters.regex('^🔙 Voltar$'), iniciar_venda),
+                MessageHandler(Filters.text & ~Filters.command, processar_quantidade_venda)
             ],
             ENDERECO: [
-                MessageHandler(filters.Regex('^🔙 Voltar$'), iniciar_venda),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, processar_endereco)
+                MessageHandler(Filters.regex('^🔙 Voltar$'), iniciar_venda),
+                MessageHandler(Filters.text & ~Filters.command, processar_endereco)
             ],
             CONFIRMAR: [
-                MessageHandler(filters.Regex('^✅ Confirmar Venda$'), confirmar_venda),
-                MessageHandler(filters.Regex('^🔙 Cancelar$'), cancelar_venda)
+                MessageHandler(Filters.regex('^✅ Confirmar Venda$'), confirmar_venda),
+                MessageHandler(Filters.regex('^🔙 Cancelar$'), cancelar_venda)
             ]
         },
         fallbacks=[
             CommandHandler('start', cancelar_venda),
-            MessageHandler(filters.Regex('^/cancelar$'), cancelar_venda)
+            MessageHandler(Filters.regex('^/cancelar$'), cancelar_venda)
         ],
         name="venda_conversation"
     )

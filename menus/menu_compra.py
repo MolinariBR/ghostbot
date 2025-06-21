@@ -1,5 +1,5 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import CallbackContext, MessageHandler, filters, ConversationHandler, CommandHandler
+from telegram.ext import CallbackContext, MessageHandler, Filters, ConversationHandler, CommandHandler
 import requests
 from datetime import datetime, timedelta
 import logging
@@ -512,38 +512,38 @@ def cancelar_compra(update: Update, context: CallbackContext) -> int:
 def get_compra_conversation():
     """Retorna o ConversationHandler para o fluxo de compra."""
     return ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex('^🛒 Comprar$'), iniciar_compra)],
+        entry_points=[MessageHandler(Filters.regex('^🛒 Comprar$'), iniciar_compra)],
         states={
             ESCOLHER_MOEDA: [
-                MessageHandler(filters.Regex('^🔙 Voltar$'), cancelar_compra),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_moeda)
+                MessageHandler(Filters.regex('^🔙 Voltar$'), cancelar_compra),
+                MessageHandler(Filters.text & ~Filters.command, escolher_moeda)
             ],
             ESCOLHER_REDE: [
-                MessageHandler(filters.Regex('^🔙 Voltar$'), iniciar_compra),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_rede)
+                MessageHandler(Filters.regex('^🔙 Voltar$'), iniciar_compra),
+                MessageHandler(Filters.text & ~Filters.command, escolher_rede)
             ],
             QUANTIDADE: [
-                MessageHandler(filters.Regex('^🔙 Voltar$'), lambda u, c: escolher_moeda(u, c)),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, processar_quantidade)
+                MessageHandler(Filters.regex('^🔙 Voltar$'), lambda u, c: escolher_moeda(u, c)),
+                MessageHandler(Filters.text & ~Filters.command, processar_quantidade)
             ],
             CONFIRMAR: [
-                MessageHandler(filters.Regex('^✅ Confirmar Compra$'), confirmar_compra),
-                MessageHandler(filters.Regex('^✏️ Alterar Valor$'), confirmar_compra),
-                MessageHandler(filters.Regex('^🔙 Mudar Moeda$'), confirmar_compra),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, confirmar_compra)
+                MessageHandler(Filters.regex('^✅ Confirmar Compra$'), confirmar_compra),
+                MessageHandler(Filters.regex('^✏️ Alterar Valor$'), confirmar_compra),
+                MessageHandler(Filters.regex('^🔙 Mudar Moeda$'), confirmar_compra),
+                MessageHandler(Filters.text & ~Filters.command, confirmar_compra)
             ],
             SOLICITAR_ENDERECO: [
-                MessageHandler(filters.Regex('^🔙 Voltar$'), processar_quantidade),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, processar_endereco)
+                MessageHandler(Filters.regex('^🔙 Voltar$'), processar_quantidade),
+                MessageHandler(Filters.text & ~Filters.command, processar_endereco)
             ],
             ESCOLHER_PAGAMENTO: [
-                MessageHandler(filters.Regex('^🔙 Voltar$'), processar_quantidade),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, processar_metodo_pagamento)
+                MessageHandler(Filters.regex('^🔙 Voltar$'), processar_quantidade),
+                MessageHandler(Filters.text & ~Filters.command, processar_metodo_pagamento)
             ]
         },
         fallbacks=[
             CommandHandler('start', cancelar_compra),
-            MessageHandler(filters.Regex('^/cancelar$'), cancelar_compra)
+            MessageHandler(Filters.regex('^/cancelar$'), cancelar_compra)
         ],
         name="compra_conversation"
     )
