@@ -125,9 +125,7 @@ def init_bot():
     application = (
         Application.builder()
         .token(Config.TELEGRAM_BOT_TOKEN)
-        .request(request)  # Usa a instância personalizada com timeouts configurados
-        .get_updates_http_version('1.1')
-        .http_version('1.1')
+        .request(request)  # Usa a instância personalizada com configurações
         .build()
     )
     
