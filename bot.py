@@ -4,13 +4,18 @@ Bot principal do Ghost Bot - Assistente de Criptomoedas
 """
 import asyncio
 import logging
-import signal
+import os
 import random
 import sys
+import signal
+from datetime import datetime
 from pathlib import Path
 
 # Configura o path para incluir o diretório raiz
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
+
+# Configuração de logging
+from logging.handlers import RotatingFileHandler
 
 # Importações do Telegram
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
@@ -23,6 +28,7 @@ from telegram.ext import (
     ConversationHandler,
     filters
 )
+from telegram.request import HTTPXRequest
 from telegram.constants import ParseMode
 from telegram.error import (
     NetworkError, 
@@ -35,7 +41,6 @@ from telegram.error import (
     Forbidden,
     BadRequest
 )
-from telegram.request import HTTPXRequest
 
 # Importações locais
 from tokens import Config
@@ -73,10 +78,56 @@ def init_bot():
     Retorna:
         Application: Instância da aplicação do bot
     """
+    # Configurações do bot
+    class BotConfig:
+        # Timeouts e tentativas
+        REQUEST_TIMEOUT = 30.0  # segundos
+        MAX_RETRIES = 5
+        BASE_RETRY_DELAY = 5  # segundos
+        
+        # Configurações de polling
+        POLLING_TIMEOUT = 30  # segundos
+        READ_LATENCY = 2.0  # segundos
+        BOOTSTRAP_RETRIES = 3
+        
+        # Configurações de conexão
+        CONNECTION_TIMEOUT = 60.0  # Aumentado para 60 segundos
+        READ_TIMEOUT = 60.0  # Aumentado para 60 segundos
+        POOL_TIMEOUT = 60.0  # Aumentado para 60 segundos
+        MAX_RETRY_ATTEMPTS = 5  # Número de tentativas de reconexão
+        
+        # Configurações de polling
+        POLL_INTERVAL = 0.1  # Intervalo entre verificações de atualização
+        POLL_CLEAN = True  # Limpar fila de atualizações em caso de erro
+        POLL_BOOTSTRAP_RETRIES = 5  # Tentativas de inicialização
+        
+        # Tamanho do pool de conexões
+        POOL_SIZE = 8
+        
+        # Outras configurações
+        DROP_PENDING_UPDATES = True
+        
+        @classmethod
+        def get_retry_delay(cls, attempt: int) -> float:
+            """Calcula o tempo de espera para reconexão com backoff exponencial."""
+            return min(cls.BASE_RETRY_DELAY * (2 ** (attempt - 1)), 300)  # Máximo 5 minutos
+
+    # Configuração do cliente HTTP personalizado
+    request = HTTPXRequest(
+        connection_pool_size=BotConfig.POOL_SIZE,
+        read_timeout=BotConfig.READ_TIMEOUT,
+        write_timeout=BotConfig.READ_TIMEOUT,
+        connect_timeout=BotConfig.CONNECTION_TIMEOUT,
+        pool_timeout=BotConfig.POOL_TIMEOUT,
+        proxy_url=os.environ.get('HTTPS_PROXY') or os.environ.get('HTTP_PROXY'),
+        retries=BotConfig.MAX_RETRY_ATTEMPTS,
+    )
+    
     # Cria e configura a aplicação
     application = (
         Application.builder()
         .token(Config.TELEGRAM_BOT_TOKEN)
+        .request(request)
         .connect_timeout(BotConfig.CONNECTION_TIMEOUT)
         .read_timeout(BotConfig.READ_TIMEOUT)
         .pool_timeout(BotConfig.POOL_TIMEOUT)
@@ -245,30 +296,52 @@ async def main():
             
             logger.info("Bot iniciado com sucesso!")
             
-            # Inicia o polling
-            await application.updater.start_polling(
-                drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
-                allowed_updates=Update.ALL_TYPES
-            )
+            # Configura o updater
+            updater = application.updater
             
-            # Mantém o bot em execução até receber um sinal de parada
-            stop_event = asyncio.Event()
-            
-            # Configura os manipuladores de sinal para parar o bot corretamente
-            def signal_handler(signum, frame):
-                logger.info(f"Recebido sinal {signum}, encerrando o bot...")
-                stop_event.set()
+            # Inicia o polling com tratamento de erros
+            try:
+                await updater.start_polling(
+                    drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
+                    allowed_updates=Update.ALL_TYPES,
+                    poll_interval=BotConfig.POLL_INTERVAL,
+                    bootstrap_retries=BotConfig.POLL_BOOTSTRAP_RETRIES,
+                    clean=BotConfig.POLL_CLEAN,
+                    timeout=BotConfig.POLLING_TIMEOUT
+                )
                 
-            # Configura os sinais para parar o bot
-            loop = asyncio.get_running_loop()
-            for sig in (signal.SIGINT, signal.SIGTERM):
-                loop.add_signal_handler(sig, signal_handler, sig, None)
-            
-            # Aguarda até que o evento de parada seja definido
-            await stop_event.wait()
-            
-            # Para o updater
-            await application.updater.stop()
+                logger.info("Polling iniciado com sucesso!")
+                
+                # Mantém o bot em execução até receber um sinal de parada
+                stop_event = asyncio.Event()
+                
+                # Configura os manipuladores de sinal para parar o bot corretamente
+                def signal_handler(signum, frame):
+                    logger.info(f"Recebido sinal {signum}, encerrando o bot...")
+                    stop_event.set()
+                    
+                # Configura os sinais para parar o bot
+                loop = asyncio.get_running_loop()
+                for sig in (signal.SIGINT, signal.SIGTERM):
+                    try:
+                        loop.add_signal_handler(sig, signal_handler, sig, None)
+                    except (NotImplementedError, RuntimeError) as e:
+                        logger.warning(f"Não foi possível adicionar manipulador para sinal {sig}: {e}")
+                
+                # Aguarda até que o evento de parada seja definido
+                await stop_event.wait()
+                
+            except Exception as e:
+                logger.error(f"Erro durante o polling: {e}")
+                raise
+                
+            finally:
+                # Para o updater de forma segura
+                try:
+                    if updater.running:
+                        await updater.stop()
+                except Exception as e:
+                    logger.error(f"Erro ao parar o updater: {e}")
             
             # Se chegou aqui, o bot foi parado normalmente
             logger.info("Bot parado pelo usuário.")
