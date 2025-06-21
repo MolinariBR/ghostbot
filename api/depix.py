@@ -25,7 +25,8 @@ class PixAPI:
         Args:
             api_url: URL base da API (opcional, busca do ambiente)
         """
-        self.api_url = (api_url or os.getenv('PIX_API_URL', 'https://ghostp2p.squareweb.app/api/bot_deposit.php')).rstrip('/')
+        # URL temporária para testes - TODO: Alterar para URL de produção quando estiver pronto
+        self.api_url = (api_url or os.getenv('PIX_API_URL', 'https://basetria.xyz/api/bot_deposit.php')).rstrip('/')
         
         if not self.api_url:
             raise PixAPIError("URL da API PIX não configurada. Defina a variável de ambiente PIX_API_URL")
