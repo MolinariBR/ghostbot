@@ -1,5 +1,5 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import ContextTypes, MessageHandler, filters, ConversationHandler, CommandHandler
+from telegram.ext import CallbackContext, MessageHandler, Filters, ConversationHandler, CommandHandler
 
 # Estados do menu de venda
 ESCOLHER_MOEDA, QUANTIDADE, ENDERECO, CONFIRMAR = range(4)
@@ -14,9 +14,9 @@ def menu_moedas_venda():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
-async def iniciar_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def iniciar_venda(update: Update, context: CallbackContext) -> int:
     """Inicia o fluxo de venda mostrando as moedas disponíveis."""
-    await update.message.reply_text(
+    update.message.reply_text(
         "💱 *ESCOLHA A MOEDA PARA VENDA*\n\n"
         "Selecione uma das opções abaixo:",
         reply_markup=menu_moedas_venda(),
@@ -24,15 +24,15 @@ async def iniciar_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     )
     return ESCOLHER_MOEDA
 
-async def escolher_moeda_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def escolher_moeda_venda(update: Update, context: CallbackContext) -> int:
     """Processa a escolha da moeda e pede a quantidade."""
     if update.message.text == "🔙 Voltar":
-        return await cancelar_venda(update, context)
+        return cancelar_venda(update, context)
         
     moeda = update.message.text
     context.user_data['moeda_venda'] = moeda
     
-    await update.message.reply_text(
+    update.message.reply_text(
         f"💵 *{moeda}*\n\n"
         "💰 Digite a quantidade que deseja vender:",
         parse_mode='Markdown',
@@ -40,10 +40,10 @@ async def escolher_moeda_venda(update: Update, context: ContextTypes.DEFAULT_TYP
     )
     return QUANTIDADE
 
-async def processar_quantidade_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def processar_quantidade_venda(update: Update, context: CallbackContext) -> int:
     """Processa a quantidade informada e pede o endereço de saque."""
     if update.message.text == "🔙 Voltar":
-        return await iniciar_venda(update, context)
+        return iniciar_venda(update, context)
         
     try:
         quantidade = float(update.message.text.replace(',', '.'))
@@ -52,24 +52,23 @@ async def processar_quantidade_venda(update: Update, context: ContextTypes.DEFAU
             
         context.user_data['quantidade'] = quantidade
         
-        await update.message.reply_text(
-            "📤 *ENDEREÇO DE SAQUE*\n\n"
-            "Por favor, informe o endereço para onde deseja receber os fundos:",
-            parse_mode='Markdown',
+        update.message.reply_text(
+            "📭 Agora, envie o endereço da carteira para receber os fundos:",
             reply_markup=ReplyKeyboardMarkup([[KeyboardButton("🔙 Voltar")]], resize_keyboard=True)
         )
         return ENDERECO
         
-    except (ValueError, TypeError):
-        await update.message.reply_text(
-            "❌ Quantidade inválida. Por favor, digite um número válido maior que zero."
+    except ValueError:
+        update.message.reply_text(
+            "⚠️ Quantidade inválida! Por favor, digite um valor numérico maior que zero.",
+            reply_markup=ReplyKeyboardMarkup([[KeyboardButton("🔙 Voltar")]], resize_keyboard=True)
         )
         return QUANTIDADE
 
-async def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def processar_endereco(update: Update, context: CallbackContext) -> int:
     """Processa o endereço e mostra a confirmação."""
     if update.message.text == "🔙 Voltar":
-        return await iniciar_venda(update, context)
+        return iniciar_venda(update, context)
         
     endereco = update.message.text
     context.user_data['endereco'] = endereco
@@ -77,53 +76,60 @@ async def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE)
     moeda = context.user_data.get('moeda_venda', 'a moeda selecionada')
     quantidade = context.user_data.get('quantidade', 0)
     
-    # Aqui você pode adicionar a lógica para calcular o valor em BRL
-    # Por enquanto, vamos apenas mostrar os dados informados
+    # Aqui você pode adicionar lógica para calcular o valor em BRL baseado na cotação
+    # Por enquanto, vamos apenas mostrar a quantidade
+    
+    mensagem = (
+        f"📝 *Confirme os dados da venda:*\n\n"
+        f"• *Moeda:* {moeda}\n"
+        f"• *Quantidade:* {quantidade}\n"
+        f"• *Endereço:* `{endereco}`\n\n"
+        "Deseja confirmar a venda?"
+    )
     
     keyboard = [
-        [KeyboardButton("✅ Confirmar Venda")],
-        [KeyboardButton("🔙 Cancelar")]
+        [KeyboardButton("✅ Confirmar"), KeyboardButton("❌ Cancelar")],
+        [KeyboardButton("🔙 Voltar")]
     ]
     
-    await update.message.reply_text(
-        "📋 *RESUMO DA VENDA*\n\n"
-        f"• Moeda: {moeda}\n"
-        f"• Quantidade: {quantidade:.8f}\n"
-        f"• Endereço: `{endereco}`\n\n"
-        "Confirma a venda?",
+    update.message.reply_text(
+        mensagem,
         parse_mode='Markdown',
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
     return CONFIRMAR
 
-async def confirmar_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def confirmar_venda(update: Update, context: CallbackContext) -> int:
     """Confirma a venda e finaliza o processo."""
     moeda = context.user_data.get('moeda_venda', 'a moeda selecionada')
     quantidade = context.user_data.get('quantidade', 0)
     endereco = context.user_data.get('endereco', 'não informado')
     
     # Aqui você pode adicionar a lógica para processar a venda
-    # Por enquanto, apenas confirmamos
+    # Por exemplo, enviar para uma API, salvar no banco de dados, etc.
     
-    await update.message.reply_text(
-        "✅ *VENDA REALIZADA COM SUCESSO!*\n\n"
-        f"• Moeda: {moeda}\n"
-        f"• Quantidade: {quantidade:.8f}\n"
-        f"• Endereço: `{endereco}`\n\n"
-        "Os fundos serão processados e enviados em breve.\n"
-        "Obrigado por utilizar nossos serviços!",
+    mensagem = (
+        "✅ *Venda processada com sucesso!*\n\n"
+        f"• *Moeda:* {moeda}\n"
+        f"• *Quantidade:* {quantidade}\n"
+        f"• *Endereço:* `{endereco}`\n\n"
+        "Obrigado por utilizar nossos serviços!"
+    )
+    
+    update.message.reply_text(
+        mensagem,
         parse_mode='Markdown',
         reply_markup=menu_principal()
     )
     
-    # Limpa os dados temporários
+    # Limpa os dados da conversa
     context.user_data.clear()
     return ConversationHandler.END
 
-async def cancelar_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def cancelar_venda(update: Update, context: CallbackContext) -> int:
     """Cancela a venda e volta ao menu principal."""
     context.user_data.clear()
-    await update.message.reply_text(
+    update.message.reply_text(
         "❌ Venda cancelada.",
         reply_markup=menu_principal()
     )

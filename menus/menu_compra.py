@@ -1,5 +1,5 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import ContextTypes, MessageHandler, filters, ConversationHandler, CommandHandler
+from telegram.ext import CallbackContext, MessageHandler, Filters, ConversationHandler, CommandHandler
 import requests
 from datetime import datetime, timedelta
 import logging
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # Importa as funções de cotação
 from api.cotacao import get_btc_price_brl, get_usdt_price_brl, get_depix_price_brl
 
-async def obter_cotacao(moeda: str) -> float:
+def obter_cotacao(moeda: str) -> float:
     """
     Obtém a cotação atual da moeda em BRL com margem de 2%.
     
@@ -106,40 +106,41 @@ def menu_redes(moeda: str):
         ]
     return ReplyKeyboardMarkup(redes, resize_keyboard=True, one_time_keyboard=False)
 
-async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def iniciar_compra(update: Update, context: CallbackContext) -> int:
     """Inicia o fluxo de compra mostrando as moedas disponíveis."""
-    await update.message.reply_text(
+    update.message.reply_text(
         "💱 *ESCOLHA A MOEDA PARA COMPRA*\n\n"
-        "Selecione uma das opções abaixo:",
-        reply_markup=menu_moedas(),
+        "Selecione a criptomoeda que deseja comprar:",
+        reply_markup=ReplyKeyboardMarkup(menu_moedas(), resize_keyboard=True, one_time_keyboard=True),
         parse_mode='Markdown'
     )
     return ESCOLHER_MOEDA
 
-async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def escolher_moeda(update: Update, context: CallbackContext) -> int:
     """Processa a escolha da moeda e pede para selecionar a rede."""
     if update.message.text == "🔙 Voltar":
-        await update.message.reply_text(
-            "🔙 Retornando ao menu principal...",
-            reply_markup=menu_principal()
+        update.message.reply_text(
+            "🔙 *Voltando ao menu principal...*",
+            reply_markup=menu_principal(),
+            parse_mode='Markdown'
         )
         return ConversationHandler.END
         
     moeda = update.message.text
     context.user_data['moeda_escolhida'] = moeda
     
-    await update.message.reply_text(
-        f"🌐 *Selecione a rede para {moeda}*\n\n"
-        "Escolha a rede de sua preferência:",
-        reply_markup=menu_redes(moeda),
+    update.message.reply_text(
+        f"🔗 *Selecione a rede para {moeda}:*\n\n"
+        "_Escolha a mesma rede da sua carteira para evitar perda de fundos._",
+        reply_markup=ReplyKeyboardMarkup(menu_redes(moeda), resize_keyboard=True, one_time_keyboard=True),
         parse_mode='Markdown'
     )
     return ESCOLHER_REDE
 
-async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def escolher_rede(update: Update, context: CallbackContext) -> int:
     """Processa a escolha da rede e pede o valor em BRL."""
     if update.message.text == "🔙 Voltar":
-        return await iniciar_compra(update, context)
+        return iniciar_compra(update, context)
         
     rede = update.message.text
     context.user_data['rede_escolhida'] = rede
@@ -175,19 +176,19 @@ async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         ]
     ]
     
-    await update.message.reply_text(
+    update.message.reply_text(
         mensagem,
         parse_mode='Markdown',
         reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True)
     )
     return QUANTIDADE
 
-async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def processar_quantidade(update: Update, context: CallbackContext) -> int:
     """Processa a quantidade informada e mostra confirmação."""
     try:
         # Se o usuário clicou em "Digitar valor", pede para digitar
         if update.message.text == "Digitar valor":
-            await update.message.reply_text(
+            update.message.reply_text(
                 "💵 *Digite o valor desejado*\n\n"
                 "Exemplos:\n"
                 "• 150,50\n"
@@ -218,7 +219,7 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
         rede = context.user_data.get('rede_escolhida', '')
         
         # Obtém a cotação e calcula o valor a receber
-        cotacao = await obter_cotacao(moeda)
+        cotacao = obter_cotacao(moeda)
         taxa = 0.01  # 1% de taxa de exemplo
         valor_taxa = valor_brl * taxa
         valor_liquido = valor_brl - valor_taxa
@@ -250,7 +251,7 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
             "Confirma os dados da compra?"
         )
         
-        await update.message.reply_text(
+        update.message.reply_text(
             mensagem,
             parse_mode='Markdown',
             reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -280,7 +281,7 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
             ]
         ]
         
-        await update.message.reply_text(
+        update.message.reply_text(
             f"{mensagem_erro}\n\n"
             "💡 Você pode digitar qualquer valor entre R$ 10,00 e R$ 5.000,00\n"
             "Exemplos: 75,50 ou 1250,00",
@@ -290,20 +291,20 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
         return QUANTIDADE
     except Exception as e:
         logger.error(f"Erro ao processar quantidade: {str(e)}")
-        await update.message.reply_text(
+        update.message.reply_text(
             "❌ Ocorreu um erro ao processar o valor. Por favor, tente novamente.",
             reply_markup=ReplyKeyboardMarkup([[KeyboardButton("🔙 Voltar")]], resize_keyboard=True)
         )
         return QUANTIDADE
 
-async def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def confirmar_compra(update: Update, context: CallbackContext) -> int:
     """Confirma os dados e solicita o endereço de recebimento."""
     # Se o usuário clicou em "Alterar Valor", volta para a tela de quantidade
     if update.message.text == "✏️ Alterar Valor":
-        return await escolher_rede(update, context)
+        return escolher_rede(update, context)
     # Se clicou em "Mudar Moeda", volta para o início
     elif update.message.text == "🔙 Mudar Moeda":
-        return await iniciar_compra(update, context)
+        return iniciar_compra(update, context)
     
     # Se confirmou, pede o endereço
     moeda = context.user_data.get('moeda_escolhida', '')
@@ -326,7 +327,7 @@ async def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     else:
         instrucao = "📬 Informe o endereço de recebimento:"
     
-    await update.message.reply_text(
+    update.message.reply_text(
         instrucao,
         parse_mode='Markdown',
         reply_markup=ReplyKeyboardMarkup([[KeyboardButton("🔙 Voltar")]], resize_keyboard=True)
@@ -343,16 +344,16 @@ def menu_metodos_pagamento():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
-async def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def processar_endereco(update: Update, context: CallbackContext) -> int:
     """Processa o endereço informado e solicita o método de pagamento."""
     if update.message.text == "🔙 Voltar":
-        return await processar_quantidade(update, context)
+        return processar_quantidade(update, context)
     
     endereco = update.message.text
     context.user_data['endereco_recebimento'] = endereco
     
     # Mostra opções de pagamento
-    await update.message.reply_text(
+    update.message.reply_text(
         "💳 *Escolha a forma de pagamento:*",
         parse_mode='Markdown',
         reply_markup=menu_metodos_pagamento()
@@ -360,10 +361,10 @@ async def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     return ESCOLHER_PAGAMENTO
 
-async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def processar_metodo_pagamento(update: Update, context: CallbackContext) -> int:
     """Processa o método de pagamento escolhido e finaliza a compra."""
     if update.message.text == "🔙 Voltar":
-        return await processar_quantidade(update, context)
+        return processar_quantidade(update, context)
     
     metodo_pagamento = update.message.text
     context.user_data['metodo_pagamento'] = metodo_pagamento
@@ -378,7 +379,7 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
     valor_formatado = formatar_brl(valor_brl)
     
     # Obtém a cotação e calcula o valor a receber
-    cotacao = await obter_cotacao(moeda)
+    cotacao = obter_cotacao(moeda)
     taxa = 0.01  # 1% de taxa de exemplo
     valor_taxa = valor_brl * taxa
     valor_liquido = valor_brl - valor_taxa
@@ -411,21 +412,20 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
             )
             
             # Envia a mensagem com o QR Code
-            await update.message.reply_photo(
-                photo=pagamento['qr_image_url'],
-                caption=mensagem,
+            update.message.reply_text(
+                mensagem,
                 parse_mode='Markdown'
             )
             
             # Envia o código copia e cola
-            await update.message.reply_text(
+            update.message.reply_text(
                 f"📋 *Código PIX (copiar e colar):*\n`{pagamento['qr_copy_paste']}`",
                 parse_mode='Markdown'
             )
             
         except Exception as e:
             logger.error(f"Erro ao processar PIX: {e}")
-            await update.message.reply_text(
+            update.message.reply_text(
                 "❌ Ocorreu um erro ao processar o pagamento PIX. Por favor, tente novamente ou escolha outro método de pagamento.",
                 reply_markup=menu_metodos_pagamento()
             )
@@ -451,7 +451,7 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
             "\nApós o pagamento, envie o comprovante para @triacorelabs"
         )
         
-        await update.message.reply_text(
+        update.message.reply_text(
             mensagem,
             parse_mode='Markdown'
         )
@@ -467,7 +467,7 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
             f"Para gerar o boleto, envie uma mensagem para {obter_chat_boleto()} com o valor de {valor_formatado}."
         )
         
-        await update.message.reply_text(
+        update.message.reply_text(
             mensagem,
             parse_mode='Markdown'
         )
@@ -486,7 +486,7 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
         "Obrigado por utilizar nossos serviços!"
     )
     
-    await update.message.reply_text(
+    update.message.reply_text(
         mensagem_final,
         parse_mode='Markdown',
         reply_markup=menu_principal()
@@ -500,10 +500,10 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
     
     return ConversationHandler.END
 
-async def cancelar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def cancelar_compra(update: Update, context: CallbackContext) -> int:
     """Cancela a compra e volta ao menu principal."""
     context.user_data.clear()
-    await update.message.reply_text(
+    update.message.reply_text(
         "❌ Compra cancelada.",
         reply_markup=menu_principal()
     )

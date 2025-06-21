@@ -1,11 +1,11 @@
 import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
-    Application,
+    Updater,
     CommandHandler,
     MessageHandler,
-    filters,
-    ContextTypes,
+    Filters,
+    CallbackContext,
     ConversationHandler
 )
 
@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 # Token do bot
 TOKEN = Config.TELEGRAM_BOT_TOKEN
 
+# Inicializa o updater e dispatcher
+updater = Updater(TOKEN, use_context=True)
+dispatcher = updater.dispatcher
+
 # Estados da conversa
 MENU, COMPRAR, VENDER, SERVICOS, AJUDA, TERMOS = range(6)
 
@@ -35,35 +39,34 @@ def menu_principal():
         [KeyboardButton("🔧 Serviços"), KeyboardButton("❓ Ajuda")],
         [KeyboardButton("📜 Termos")]
     ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+    return keyboard
 
 # Configura os menus principais
 setup_menus(menu_principal)
 
 # Handlers de comando
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def start(update: Update, context: CallbackContext) -> int:
     """Inicia a conversa e mostra o menu principal."""
-    user = update.effective_user
-    await update.message.reply_text(
-        f"👋 Olá {user.first_name}!\n"
-        "Bem-vindo ao Ghost Bot - Seu assistente de negociação de criptomoedas.\n\n"
-        "Selecione uma opção abaixo:",
-        reply_markup=menu_principal()
+    reply_markup = ReplyKeyboardMarkup(menu_principal(), resize_keyboard=True)
+    update.message.reply_text(
+        '👋 Olá! Eu sou o Ghost Bot, seu assistente de criptomoedas.\n\n'
+        'Escolha uma opção abaixo:',
+        reply_markup=reply_markup
     )
     return MENU
 
-async def vender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def vender(update: Update, context: CallbackContext) -> int:
     """Lida com a opção de venda."""
-    await update.message.reply_text(
+    update.message.reply_text(
         "🔹 *VENDER* 🔹\n\n"
         "Por favor, informe o valor em Bitcoin que deseja vender.",
         parse_mode='Markdown'
     )
     return VENDER
 
-async def servicos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def servicos(update: Update, context: CallbackContext) -> int:
     """Mostra os serviços disponíveis."""
-    await update.message.reply_text(
+    update.message.reply_text(
         "🔹 *SERVIÇOS* 🔹\n\n"
         "• Compra e venda de Bitcoin\n"
         "• Carteira digital segura\n"
@@ -73,9 +76,9 @@ async def servicos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
     return SERVICOS
 
-async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def ajuda(update: Update, context: CallbackContext) -> int:
     """Mostra a ajuda."""
-    await update.message.reply_text(
+    update.message.reply_text(
         "🔹 *AJUDA* 🔹\n\n"
         "Precisa de ajuda? Entre em contato com nosso suporte:\n"
         "📧 suporte@ghostbot.com\n"
@@ -85,9 +88,9 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
     return AJUDA
 
-async def termos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def termos(update: Update, context: CallbackContext) -> int:
     """Mostra os termos de uso."""
-    await update.message.reply_text(
+    update.message.reply_text(
         "🔹 *TERMOS DE USO* 🔹\n\n"
         "1. O usuário é responsável por suas transações.\n"
         "2. As taxas são informadas no momento da operação.\n"
@@ -97,26 +100,24 @@ async def termos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
     return TERMOS
 
-def main() -> None:
+def main():
     """Inicia o bot."""
-    # Cria a aplicação
-    application = Application.builder().token(TOKEN).build()
-
-    # Adiciona os handlers de conversação
-    application.add_handler(CommandHandler('start', start))
+    # Adiciona os handlers de comando
+    dispatcher.add_handler(CommandHandler('start', start))
     
     # Adiciona os handlers de conversação
-    application.add_handler(get_compra_conversation())
-    application.add_handler(get_venda_conversation())
+    dispatcher.add_handler(get_compra_conversation())
+    dispatcher.add_handler(get_venda_conversation())
     
     # Adiciona handlers para os outros menus
-    application.add_handler(MessageHandler(filters.Regex('^🔧 Serviços$'), servicos))
-    application.add_handler(MessageHandler(filters.Regex('^❓ Ajuda$'), ajuda))
-    application.add_handler(MessageHandler(filters.Regex('^📜 Termos$'), termos))
-    application.add_handler(MessageHandler(filters.Regex('^🔙 Voltar$'), start))
+    dispatcher.add_handler(MessageHandler(Filters.regex('^🔧 Serviços$'), servicos))
+    dispatcher.add_handler(MessageHandler(Filters.regex('^❓ Ajuda$'), ajuda))
+    dispatcher.add_handler(MessageHandler(Filters.regex('^📜 Termos$'), termos))
+    dispatcher.add_handler(MessageHandler(Filters.regex('^🔙 Voltar$'), start))
 
     # Inicia o bot
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == '__main__':
     main()
