@@ -89,24 +89,22 @@ def init_bot():
         POLLING_TIMEOUT = 45.0  # Aumentado para 45 segundos
         READ_LATENCY = 5.0  # Aumentado para 5 segundos
         
-        # Configurações de conexão
-        CONNECTION_TIMEOUT = 90.0  # Aumentado para 90 segundos
-        READ_TIMEOUT = 90.0  # Aumentado para 90 segundos
-        WRITE_TIMEOUT = 90.0  # Adicionado timeout para escrita
-        POOL_TIMEOUT = 90.0  # Aumentado para 90 segundos
-        MAX_RETRY_ATTEMPTS = 10  # Aumentado o número de tentativas
-        
         # Tamanho do pool de conexões
         POOL_SIZE = 16  # Aumentado o tamanho do pool
         
         # Outras configurações
         DROP_PENDING_UPDATES = True
         
-        # Configurações adicionais
+        # Configurações de conexão
+        CONNECTION_TIMEOUT = 90.0  # Aumentado para 90 segundos
+        READ_TIMEOUT = 90.0  # Aumentado para 90 segundos
+        WRITE_TIMEOUT = 90.0  # Timeout para escrita
+        POOL_TIMEOUT = 90.0  # Aumentado para 90 segundos
+        MAX_RETRY_ATTEMPTS = 10  # Aumentado o número de tentativas
         
         @classmethod
         def get_retry_delay(cls, attempt: int) -> float:
-            """Calcula o tempo de espera para reconexão com backoff exponencial."""
+            """Retorna o tempo de espera para reconexão com backoff exponencial."""
             return min(cls.BASE_RETRY_DELAY * (2 ** (attempt - 1)), 600)  # Máximo 10 minutos
 
     # Configuração do cliente HTTP personalizado com opções avançadas
@@ -114,11 +112,9 @@ def init_bot():
     request = HTTPXRequest(
         connection_pool_size=BotConfig.POOL_SIZE,
         read_timeout=BotConfig.READ_TIMEOUT,
-        write_timeout=BotConfig.WRITE_TIMEOUT,
         connect_timeout=BotConfig.CONNECTION_TIMEOUT,
         pool_timeout=BotConfig.POOL_TIMEOUT,
         http_version='1.1'
-        # Removidas as opções de socket que estavam causando erros
     )
     
     # Cria e configura a aplicação com a instância personalizada de request
@@ -328,12 +324,7 @@ async def main():
                         timeout=BotConfig.POLLING_TIMEOUT,
                         read_latency=BotConfig.READ_LATENCY,
                         bootstrap_retries=3,  # Reduzido para evitar tentativas muito longas
-                        close_loop=False,  # Impede que o loop seja fechado em caso de erro
-                        http_version='1.1',
-                        pool_timeout=BotConfig.POOL_TIMEOUT,
-                        connect_timeout=BotConfig.CONNECTION_TIMEOUT,
-                        read_timeout=BotConfig.READ_TIMEOUT,
-                        write_timeout=BotConfig.WRITE_TIMEOUT
+                        close_loop=False  # Impede que o loop seja fechado em caso de erro
                     )
                     
                     logger.info("Polling iniciado com sucesso!")
