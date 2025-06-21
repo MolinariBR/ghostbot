@@ -405,14 +405,19 @@ def processar_metodo_pagamento(update: Update, context: CallbackContext) -> int:
         from api.depix import pix_api
         
         try:
+            logger.info(f"Iniciando processamento de PIX - Valor: {valor_brl}, Endereço: {endereco}")
+            
             # Converte o valor para centavos
             valor_centavos = int(valor_brl * 100)
+            logger.info(f"Valor convertido para centavos: {valor_centavos}")
             
             # Cria o pagamento PIX
+            logger.info("Chamando pix_api.criar_pagamento...")
             pagamento = pix_api.criar_pagamento(
                 valor_centavos=valor_centavos,
                 chave_pix=endereco
             )
+            logger.info("Pagamento PIX criado com sucesso")
             
             # Monta a mensagem com o QR Code
             mensagem = (
@@ -437,9 +442,21 @@ def processar_metodo_pagamento(update: Update, context: CallbackContext) -> int:
             )
             
         except Exception as e:
-            logger.error(f"Erro ao processar PIX: {e}")
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"Erro ao processar PIX: {e}\n{error_details}")
+            
+            # Mensagem de erro mais detalhada para o usuário
+            mensagem_erro = (
+                "❌ *Erro ao processar pagamento PIX*\n\n"
+                "Por favor, tente novamente ou escolha outro método de pagamento.\n\n"
+                "Se o problema persistir, entre em contato com o suporte.\n"
+                f"Erro: {str(e)}"
+            )
+            
             update.message.reply_text(
-                "❌ Ocorreu um erro ao processar o pagamento PIX. Por favor, tente novamente ou escolha outro método de pagamento.",
+                mensagem_erro,
+                parse_mode='Markdown',
                 reply_markup=menu_metodos_pagamento()
             )
             return ESCOLHER_PAGAMENTO

@@ -48,25 +48,36 @@ class PixAPI:
             data = {}
             
         url = f"{self.api_url}/{path.lstrip('/')}" if path else self.api_url
+        logger.info(f"Fazendo requisição para: {url}")
+        logger.info(f"Dados da requisição: {data}")
+        
         headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         }
         
         try:
+            logger.info(f"Enviando requisição POST para {url}")
             response = requests.post(
                 url=url,
                 json=data,
                 headers=headers,
                 timeout=30
             )
+            
+            logger.info(f"Resposta recebida - Status: {response.status_code}")
+            logger.info(f"Conteúdo da resposta: {response.text[:500]}...")  # Limita o log aos primeiros 500 caracteres
+            
             response.raise_for_status()  # Levanta exceção para códigos de erro HTTP
             
             # Verifica se a resposta é um JSON válido
             try:
                 response_data = response.json()
+                logger.info(f"Resposta JSON decodificada: {response_data}")
             except ValueError as e:
-                raise PixAPIError(f"Resposta inválida do servidor: {response.text}") from e
+                error_msg = f"Resposta inválida do servidor: {response.text}"
+                logger.error(error_msg)
+                raise PixAPIError(error_msg) from e
             
             # Verifica se houve erro na resposta
             if not response_data.get('success', False):
@@ -94,34 +105,57 @@ class PixAPI:
         Raises:
             PixAPIError: Em caso de erro na criação do pagamento
         """
+        logger.info(f"Iniciando criação de pagamento PIX - Valor: {valor_centavos} centavos, Chave: {chave_pix}")
+        
         if not self.api_url:
-            raise PixAPIError("URL da API PIX não configurada")
+            error_msg = "URL da API PIX não configurada"
+            logger.error(error_msg)
+            raise PixAPIError(error_msg)
         
         if not isinstance(valor_centavos, int) or valor_centavos <= 0:
+            error_msg = f"Valor inválido: {valor_centavos} (deve ser um número inteiro positivo de centavos)"
+            logger.error(error_msg)
             raise PixAPIError("Valor deve ser um número inteiro positivo de centavos")
             
         if not chave_pix or not isinstance(chave_pix, str):
+            error_msg = f"Chave PIX inválida: {chave_pix}"
+            logger.error(error_msg)
             raise PixAPIError("Chave PIX inválida")
         
-        data = {
-            'amount_in_cents': valor_centavos,
-            'address': chave_pix
-        }
-        
         try:
+            data = {
+                'amount_in_cents': valor_centavos,
+                'address': chave_pix
+            }
+            
+            logger.info(f"Dados do pagamento: {data}")
+            
             # Usa o endpoint raiz diretamente, sem o sufixo 'pix/create'
+            logger.info("Chamando _make_request...")
             response = self._make_request('', data)
+            logger.info(f"Resposta da API: {response}")
             
             # Verifica se todos os campos necessários estão presentes
             required_fields = ['qr_image_url', 'qr_copy_paste', 'transaction_id']
-            if not all(field in response for field in required_fields):
+            missing_fields = [field for field in required_fields if field not in response]
+            
+            if missing_fields:
+                error_msg = f"Resposta da API incompleta. Campos faltando: {', '.join(missing_fields)}"
+                logger.error(error_msg)
+                logger.error(f"Campos recebidos: {list(response.keys())}")
                 raise PixAPIError("Resposta da API incompleta")
             
-            return {
+            result = {
                 'qr_image_url': str(response['qr_image_url']),
                 'qr_copy_paste': str(response['qr_copy_paste']),
                 'transaction_id': str(response['transaction_id'])
             }
+            
+            logger.info("Pagamento PIX criado com sucesso")
+            logger.info(f"QR Code URL: {result['qr_image_url']}")
+            logger.info(f"Transaction ID: {result['transaction_id']}")
+            
+            return result
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Erro na requisição: {e}")
