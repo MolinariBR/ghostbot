@@ -602,8 +602,9 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
     valor_recebido_formatado = formatar_cripto(valor_recebido, moeda)
     
     # Processa de acordo com o método de pagamento
-    if "Lightning" in rede and metodo_pagamento in ["💠 PIX", "🏦 TED", "📄 Boleto"]:
-        # Processa pagamento via Lightning Network usando a API Voltz
+    # Se o pagamento é TED/Boleto na rede Lightning, gera saque via Voltz
+    if "Lightning" in rede and metodo_pagamento in ["🏦 TED", "📄 Boleto"]:
+        # Processa saque via Lightning Network usando a API Voltz
         logger.info(f"Iniciando processamento via Lightning Network - Valor: {valor_brl}, Endereço: {endereco}")
         
         try:
@@ -672,174 +673,44 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
             return ESCOLHER_PAGAMENTO
             
     elif metodo_pagamento == "💠 PIX":
-        # Processa pagamento via PIX usando a API do servidor
+        # Processa pagamento via PIX usando a API Depix (cliente paga em BRL)
         from api.depix import pix_api
-        
-        # Processa o pagamento via PIX
         logger.info(f"Iniciando processamento de PIX - Valor: {valor_brl}, Endereço: {endereco}")
-        
         try:
-            # Converte o valor para centavos
-            valor_centavos = int(round(valor_brl * 100))
-            logger.info(f"Valor convertido para centavos: {valor_centavos}")
-            
-            # Prepara os dados da transação para registro
-            transaction_data = {
-                'user_id': update.effective_user.id,
-                'amount_brl': valor_brl,
-                'amount_crypto': valor_recebido,
-                'crypto_currency': moeda.lower(),
-                'crypto_address': endereco,
-                'status': 'pending',
-                'payment_method': 'pix',
-                'created_at': datetime.now().isoformat(),
-                'type': 'deposit'
-            }
-            
-            logger.info(f"Preparando solicitação de depósito: {transaction_data}")
-            
-            # Chama a API para criar o pagamento PIX
-            logger.info("Chamando pix_api.criar_pagamento...")
-            resposta = pix_api.criar_pagamento(
-                valor_centavos=valor_centavos,
-                endereco=endereco
+            # Cria cobrança PIX via Depix
+            cobranca = pix_api.criar_cobranca(valor=valor_brl, descricao=f"Compra de {moeda} via Ghost Bot")
+            qr_code = cobranca['qr_code']
+            txid = cobranca['txid']
+
+            await update.message.reply_photo(photo=qr_code, caption=(
+                f"💠 *Pagamento PIX Gerado*\n\n"
+                f"Valor: {valor_formatado}\n"
+                f"TxID: `{txid}`\n\n"
+                "Escaneie o QR code acima ou copie o código para efetuar o pagamento."
+            ), parse_mode='Markdown')
+
+            await update.message.reply_text(
+                f"🔗 *Copia e Cola:*\n`{cobranca['copia_e_cola']}`",
+                parse_mode='Markdown'
             )
             
-            logger.info(f"Resposta do backend: {resposta}")
+            # Retorna para o menu principal após gerar PIX
+            main_menu = menu_principal_func() if menu_principal_func else None
+            reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
             
-            # Verifica se a resposta contém os dados necessários
-            if not resposta:
-                error_msg = 'Resposta vazia da API'
-                logger.error(f"{error_msg}")
-                raise Exception(f"Erro no processamento do pagamento: {error_msg}")
-            
-            logger.info(f"Tipo da resposta: {type(resposta)}")
-            logger.info(f"Conteúdo da resposta: {resposta}")
-            
-            # Tenta determinar a estrutura da resposta
-            pagamento = {}
-            
-            # Se a resposta já contém os campos diretamente (formato mais simples)
-            if all(field in resposta for field in ['qr_image_url', 'qr_code_text', 'transaction_id']):
-                logger.info("Resposta no formato direto (campos no nível raiz)")
-                pagamento = resposta
-            # Se a resposta segue o formato {success: bool, data: {...}}
-            elif isinstance(resposta, dict) and 'data' in resposta and 'success' in resposta:
-                logger.info("Resposta no formato {success, data}")
-                if resposta['success'] and isinstance(resposta.get('data'), dict):
-                    pagamento = resposta['data']
-                else:
-                    error_msg = resposta.get('error', 'Erro desconhecido na API')
-                    logger.error(f"Erro na API: {error_msg}")
-                    raise Exception(f"Erro no processamento do pagamento: {error_msg}")
-            # Se a resposta tem um campo 'data' no nível raiz (formato alternativo)
-            elif 'data' in resposta and isinstance(resposta['data'], dict):
-                logger.info("Resposta com campo 'data' no nível raiz")
-                pagamento = resposta['data']
-            else:
-                error_msg = 'Resposta da API em formato inválido ou inesperado'
-                logger.error(f"{error_msg}. Estrutura: {json.dumps(resposta, indent=2) if isinstance(resposta, dict) else resposta}")
-                raise Exception(f"Erro no processamento do pagamento: {error_msg}")
-            
-            # Verifica se todos os campos necessários estão presentes
-            required_fields = ['qr_image_url', 'qr_code_text', 'transaction_id']
-            missing_fields = [field for field in required_fields if field not in pagamento]
-            
-            if missing_fields:
-                error_msg = f'Resposta da API incompleta. Campos faltando: {", ".join(missing_fields)}'
-                logger.error(f"{error_msg}. Resposta: {resposta}")
-                raise Exception(f"Erro no processamento do pagamento: {error_msg}")
-            
-            transaction_id = pagamento.get('transaction_id', 'N/A')
-            
-            logger.info(f"Depósito PIX processado com sucesso. Transaction ID: {transaction_id}")
-            
-            # Obtém a URL do QR code e o código PIX da resposta
-            qr_code_url = pagamento.get('qr_image_url', '')
-            # Usa qr_code_text se existir, senão usa qr_copy_paste
-            qr_code_text = pagamento.get('qr_code_text', pagamento.get('qr_copy_paste', ''))
-            
-            # Monta a mensagem de confirmação do depósito
-            mensagem = (
-                "✅ *SOLICITAÇÃO DE DEPÓSITO RECEBIDA!*\n"
-                "━━━━━━━━━━━━━━━━━━━━\n"
-                f"• *Valor:* {valor_formatado}\n"
-                f"• *Criptomoeda:* {moeda.upper()}\n"
-                f"• *Endereço de destino:* `{endereco}`\n"
-                f"• *ID da transação:* `{transaction_id}`\n\n"
-                "📱 *Pague o PIX usando o QR Code abaixo ou o código copia e cola:*\n\n"
-                f"`{qr_code_text}`\n\n"
-                "Após o pagamento, aguarde alguns instantes para a confirmação.\n"
-                "Obrigado pela preferência!"
+            await update.message.reply_text(
+                "✅ *Pedido de compra realizado com sucesso!*\n\n"
+                "Acompanhe o status do seu pedido no menu principal.",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
             )
             
-            try:
-                # Se houver URL do QR code, envia a imagem separadamente
-                if qr_code_url:
-                    try:
-                        await update.message.reply_photo(
-                            photo=qr_code_url,
-                            caption="📱 *QR Code para pagamento*\n\nAponte a câmera do seu app de pagamento para escanear o QR Code acima.",
-                            parse_mode='Markdown'
-                        )
-                    except Exception as e:
-                        logger.error(f"Erro ao enviar QR code: {str(e)}")
-                        # Continua mesmo se não conseguir enviar a imagem
-                
-                # Envia a mensagem de confirmação
-                try:
-                    # Obtém o menu principal
-                    main_menu = menu_principal_func()
-                    # Cria o ReplyKeyboardMarkup a partir da lista de opções
-                    reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
-                    
-                    await update.message.reply_text(
-                        mensagem,
-                        parse_mode='Markdown',
-                        reply_markup=reply_markup
-                    )
-                except Exception as e:
-                    logger.error(f"Erro ao exibir menu principal após confirmação: {str(e)}")
-                    # Tenta enviar sem teclado em caso de erro
-                    await update.message.reply_text(
-                        mensagem,
-                        parse_mode='Markdown'
-                    )
-                
-                # Registra a conclusão da transação
-                logger.info(f"Depósito PIX finalizado para o usuário {update.effective_user.id}")
-                
-            except Exception as e:
-                logger.error(f"Erro ao enviar mensagem de confirmação: {str(e)}")
-                # Tenta enviar uma mensagem de erro mais simples
-                try:
-                    from telegram import ReplyKeyboardMarkup
-                    main_menu = menu_principal()
-                    reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
-                    
-                    await update.message.reply_text(
-                        "✅ Pagamento processado com sucesso! Por favor, verifique sua conta bancária para o QR Code.",
-                        parse_mode='Markdown',
-                        reply_markup=reply_markup
-                    )
-                except Exception as e2:
-                    logger.error(f"Erro ao enviar mensagem de fallback: {str(e2)}")
-                    # Tenta enviar sem o reply_markup em caso de falha
-                    try:
-                        await update.message.reply_text(
-                            "✅ Pagamento processado com sucesso! Por favor, verifique sua conta bancária para o QR Code.",
-                            parse_mode='Markdown'
-                        )
-                    except Exception as e3:
-                        logger.error(f"Falha ao enviar mensagem de fallback alternativa: {str(e3)}")
-            
-            # Retorna para o menu principal em qualquer caso
             return ConversationHandler.END
             
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
-            logger.error(f"Erro ao processar PIX: {e}\n{error_details}")
+            logger.error(f"Erro ao processar pagamento PIX: {e}\n{error_details}")
             
             # Mensagem de erro mais detalhada para o usuário
             mensagem_erro = (
@@ -849,7 +720,6 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
                 f"Erro: {str(e)}"
             )
             
-            from telegram import ReplyKeyboardMarkup
             try:
                 metodos_menu = menu_metodos_pagamento()
                 reply_markup = ReplyKeyboardMarkup(metodos_menu, resize_keyboard=True) if metodos_menu else None
@@ -859,8 +729,8 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
                     parse_mode='Markdown',
                     reply_markup=reply_markup
                 )
-            except Exception as e:
-                logger.error(f"Erro ao enviar menu de métodos de pagamento: {str(e)}")
+            except Exception as e2:
+                logger.error(f"Erro ao enviar menu de métodos de pagamento: {str(e2)}")
                 await update.message.reply_text(
                     mensagem_erro,
                     parse_mode='Markdown'
