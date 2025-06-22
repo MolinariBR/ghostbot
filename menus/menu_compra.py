@@ -458,16 +458,31 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
             
             logger.info(f"Depósito PIX processado com sucesso. Transaction ID: {transaction_id}")
             
+            # Obtém a URL do QR code e o código PIX da resposta
+            qr_code_url = pagamento.get('qr_image_url', '')
+            qr_code_text = pagamento.get('qr_code_text', '')
+            
             # Monta a mensagem de confirmação do depósito
             mensagem = (
                 "✅ *SOLICITAÇÃO DE DEPÓSITO RECEBIDA!*\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
                 f"• *Valor:* {valor_formatado}\n"
                 f"• *Criptomoeda:* {moeda.upper()}\n"
-                f"• *Endereço de destino:* `{endereco}`\n\n"
-                "Seu depósito está sendo processado. Você receberá uma confirmação assim que for concluído.\n"
-                "ID da transação: `{transaction_id}`"
+                f"• *Endereço de destino:* `{endereco}`\n"
+                f"• *ID da transação:* `{transaction_id}`\n\n"
+                "📱 *Pague o PIX usando o QR Code abaixo ou o código copia e cola:*\n\n"
+                f"`{qr_code_text}`\n\n"
+                "Após o pagamento, aguarde alguns instantes para a confirmação.\n"
+                "Obrigado pela preferência!"
             )
+            
+            # Se houver URL do QR code, envia a imagem separadamente
+            if qr_code_url:
+                await update.message.reply_photo(
+                    photo=qr_code_url,
+                    caption="📱 *QR Code para pagamento*\n\nAponte a câmera do seu app de pagamento para escanear o QR Code acima.",
+                    parse_mode='Markdown'
+                )
             
             # Envia a mensagem de confirmação
             await update.message.reply_text(
