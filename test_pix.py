@@ -106,8 +106,10 @@ def testar_criacao_pagamento():
         if 'qr_image_url' in resultado:
             print(f"🖼️  URL do QR Code: {resultado['qr_image_url']}")
         
-        if 'qr_copy_paste' in resultado:
-            print(f"📋 Código PIX (copia e cola):\n{resultado['qr_copy_paste']}")
+        # Usa qr_code_text se existir, senão usa qr_copy_paste
+        qr_code = resultado.get('qr_code_text', resultado.get('qr_copy_paste', ''))
+        if qr_code:
+            print(f"📋 Código PIX (copia e cola):\n{qr_code}")
         
         return True
         

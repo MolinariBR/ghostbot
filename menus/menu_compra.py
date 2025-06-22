@@ -3,7 +3,9 @@ from telegram.ext import MessageHandler, ConversationHandler, CommandHandler, fi
 from telegram.ext import ContextTypes
 import requests
 from datetime import datetime, timedelta
+import json
 import logging
+from typing import Dict, Any, Optional
 
 # Variável para armazenar a função do menu principal
 menu_principal_func = None
@@ -449,44 +451,81 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
         # Processa pagamento via PIX usando a API do servidor
         from api.depix import pix_api
         
+        # Processa o pagamento via PIX
+        logger.info(f"Iniciando processamento de PIX - Valor: {valor_brl}, Endereço: {endereco}")
+        
         try:
-            logger.info(f"Iniciando processamento de PIX - Valor: {valor_brl}, Endereço: {endereco}")
-            
             # Converte o valor para centavos
-            valor_centavos = int(valor_brl * 100)
+            valor_centavos = int(round(valor_brl * 100))
             logger.info(f"Valor convertido para centavos: {valor_centavos}")
             
-            # Prepara os dados da transação para envio ao backend
+            # Prepara os dados da transação para registro
             transaction_data = {
                 'user_id': update.effective_user.id,
                 'amount_brl': valor_brl,
                 'amount_crypto': valor_recebido,
-                'crypto_currency': moeda.lower(),  # Converte para minúsculas para padronização
-                'crypto_address': endereco,  # Endereço de destino da criptomoeda
+                'crypto_currency': moeda.lower(),
+                'crypto_address': endereco,
                 'status': 'pending',
                 'payment_method': 'pix',
                 'created_at': datetime.now().isoformat(),
-                'type': 'deposit'  # Indica que é um depósito
+                'type': 'deposit'
             }
             
-            logger.info(f"Enviando solicitação de depósito para o backend: {transaction_data}")
+            logger.info(f"Preparando solicitação de depósito: {transaction_data}")
             
-            # Envia a solicitação de depósito para o backend
+            # Chama a API para criar o pagamento PIX
             logger.info("Chamando pix_api.criar_pagamento...")
             resposta = pix_api.criar_pagamento(
                 valor_centavos=valor_centavos,
-                endereco=endereco  # Envia o endereço da criptomoeda para o backend
+                endereco=endereco
             )
             
             logger.info(f"Resposta do backend: {resposta}")
             
             # Verifica se a resposta contém os dados necessários
-            if not resposta or 'success' not in resposta or not resposta['success']:
-                error_msg = resposta.get('error', 'Erro desconhecido ao processar o pagamento')
+            if not resposta:
+                error_msg = 'Resposta vazia da API'
+                logger.error(f"{error_msg}")
                 raise Exception(f"Erro no processamento do pagamento: {error_msg}")
             
-            # Obtém os dados do pagamento da resposta
-            pagamento = resposta.get('data', {})
+            logger.info(f"Tipo da resposta: {type(resposta)}")
+            logger.info(f"Conteúdo da resposta: {resposta}")
+            
+            # Tenta determinar a estrutura da resposta
+            pagamento = {}
+            
+            # Se a resposta já contém os campos diretamente (formato mais simples)
+            if all(field in resposta for field in ['qr_image_url', 'qr_code_text', 'transaction_id']):
+                logger.info("Resposta no formato direto (campos no nível raiz)")
+                pagamento = resposta
+            # Se a resposta segue o formato {success: bool, data: {...}}
+            elif isinstance(resposta, dict) and 'data' in resposta and 'success' in resposta:
+                logger.info("Resposta no formato {success, data}")
+                if resposta['success'] and isinstance(resposta.get('data'), dict):
+                    pagamento = resposta['data']
+                else:
+                    error_msg = resposta.get('error', 'Erro desconhecido na API')
+                    logger.error(f"Erro na API: {error_msg}")
+                    raise Exception(f"Erro no processamento do pagamento: {error_msg}")
+            # Se a resposta tem um campo 'data' no nível raiz (formato alternativo)
+            elif 'data' in resposta and isinstance(resposta['data'], dict):
+                logger.info("Resposta com campo 'data' no nível raiz")
+                pagamento = resposta['data']
+            else:
+                error_msg = 'Resposta da API em formato inválido ou inesperado'
+                logger.error(f"{error_msg}. Estrutura: {json.dumps(resposta, indent=2) if isinstance(resposta, dict) else resposta}")
+                raise Exception(f"Erro no processamento do pagamento: {error_msg}")
+            
+            # Verifica se todos os campos necessários estão presentes
+            required_fields = ['qr_image_url', 'qr_code_text', 'transaction_id']
+            missing_fields = [field for field in required_fields if field not in pagamento]
+            
+            if missing_fields:
+                error_msg = f'Resposta da API incompleta. Campos faltando: {", ".join(missing_fields)}'
+                logger.error(f"{error_msg}. Resposta: {resposta}")
+                raise Exception(f"Erro no processamento do pagamento: {error_msg}")
+            
             transaction_id = pagamento.get('transaction_id', 'N/A')
             
             logger.info(f"Depósito PIX processado com sucesso. Transaction ID: {transaction_id}")
@@ -510,25 +549,41 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
                 "Obrigado pela preferência!"
             )
             
-            # Se houver URL do QR code, envia a imagem separadamente
-            if qr_code_url:
-                await update.message.reply_photo(
-                    photo=qr_code_url,
-                    caption="📱 *QR Code para pagamento*\n\nAponte a câmera do seu app de pagamento para escanear o QR Code acima.",
-                    parse_mode='Markdown'
+            try:
+                # Se houver URL do QR code, envia a imagem separadamente
+                if qr_code_url:
+                    try:
+                        await update.message.reply_photo(
+                            photo=qr_code_url,
+                            caption="📱 *QR Code para pagamento*\n\nAponte a câmera do seu app de pagamento para escanear o QR Code acima.",
+                            parse_mode='Markdown'
+                        )
+                    except Exception as e:
+                        logger.error(f"Erro ao enviar QR code: {str(e)}")
+                        # Continua mesmo se não conseguir enviar a imagem
+                
+                # Envia a mensagem de confirmação
+                await update.message.reply_text(
+                    mensagem,
+                    parse_mode='Markdown',
+                    reply_markup=menu_principal()
                 )
+                
+                # Registra a conclusão da transação
+                logger.info(f"Depósito PIX finalizado para o usuário {update.effective_user.id}")
+                
+            except Exception as e:
+                logger.error(f"Erro ao enviar mensagem de confirmação: {str(e)}")
+                # Tenta enviar uma mensagem de erro mais simples
+                try:
+                    await update.message.reply_text(
+                        "✅ Pagamento processado com sucesso! Por favor, verifique sua conta bancária para o QR Code.",
+                        reply_markup=menu_principal()
+                    )
+                except Exception as e2:
+                    logger.error(f"Erro ao enviar mensagem de fallback: {str(e2)}")
             
-            # Envia a mensagem de confirmação
-            await update.message.reply_text(
-                mensagem,
-                parse_mode='Markdown',
-                reply_markup=menu_principal()
-            )
-            
-            # Registra a conclusão da transação
-            logger.info(f"Depósito PIX finalizado para o usuário {update.effective_user.id}")
-            
-            # Retorna para o menu principal
+            # Retorna para o menu principal em qualquer caso
             return ConversationHandler.END
             
         except Exception as e:
@@ -552,46 +607,109 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
             return ESCOLHER_PAGAMENTO
             
     elif metodo_pagamento == "🏦 TED":
-        from api.depix import obter_dados_ted
+        try:
+            from api.depix import obter_dados_ted
+            
+            logger.info(f"Processando pagamento via TED - Valor: {valor_brl}, Endereço: {endereco}")
+            
+            # Obtém os dados para TED
+            dados_ted = obter_dados_ted()
+            
+            if not dados_ted or not all(key in dados_ted for key in ['banco', 'agencia', 'conta', 'tipo_conta', 'favorecido', 'cpf_cnpj']):
+                raise Exception("Dados bancários incompletos ou inválidos")
+            
+            # Monta a mensagem com os dados bancários
+            mensagem = (
+                "🏦 *DADOS PARA TRANSFERÊNCIA BANCÁRIA*\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                f"• *Banco:* {dados_ted['banco']}\n"
+                f"• *Agência:* {dados_ted['agencia']}\n"
+                f"• *Conta:* {dados_ted['conta']}\n"
+                f"• *Tipo de Conta:* {dados_ted['tipo_conta']}\n"
+                f"• *Favorecido:* {dados_ted['favorecido']}\n"
+                f"• *CPF/CNPJ:* {dados_ted['cpf_cnpj']}\n\n"
+                f"• *Valor:* {valor_formatado}\n"
+                f"• *Criptomoeda:* {moeda.upper()}\n"
+                f"• *Endereço de destino:* `{endereco}`\n\n"
+                "Após o pagamento, envie o comprovante para o suporte.\n"
+                "Obrigado pela preferência!"
+            )
+            
+            await update.message.reply_text(
+                mensagem,
+                parse_mode='Markdown',
+                reply_markup=menu_principal()
+            )
+            
+            logger.info(f"Dados de TED enviados para o usuário {update.effective_user.id}")
+            
+        except Exception as e:
+            logger.error(f"Erro ao processar TED: {str(e)}")
+            
+            mensagem_erro = (
+                "❌ *Erro ao processar transferência bancária*\n\n"
+                "Por favor, tente novamente ou escolha outro método de pagamento.\n"
+                "Se o problema persistir, entre em contato com o suporte."
+            )
+            
+            await update.message.reply_text(
+                mensagem_erro,
+                parse_mode='Markdown',
+                reply_markup=menu_metodos_pagamento()
+            )
+            return ESCOLHER_PAGAMENTO
         
-        # Obtém os dados para TED
-        dados_ted = obter_dados_ted()
-        
-        # Monta a mensagem com os dados bancários
-        mensagem = (
-            "🏦 *DADOS PARA TRANSFERÊNCIA BANCÁRIA*\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"• *Banco:* {dados_ted['banco']}\n"
-            f"• *Agência:* {dados_ted['agencia']}\n"
-            f"• *Conta:* {dados_ted['conta']}\n"
-            f"• *Tipo de Conta:* {dados_ted['tipo_conta']}\n"
-            f"• *Favorecido:* {dados_ted['favorecido']}\n"
-            f"• *CPF/CNPJ:* {dados_ted['cpf_cnpj']}\n\n"
-            f"*Valor a transferir:* {valor_formatado}\n"
-            "\nApós o pagamento, envie o comprovante para @triacorelabs"
-        )
-        
-        update.message.reply_text(
-            mensagem,
-            parse_mode='Markdown'
-        )
+        return ConversationHandler.END
         
     elif metodo_pagamento == "📄 Boleto":
-        from api.depix import obter_chat_boleto
+        try:
+            from api.depix import obter_chat_boleto
+            
+            logger.info(f"Processando pagamento via Boleto - Valor: {valor_brl}, Endereço: {endereco}")
+            
+            # Obtém o chat para envio do boleto
+            chat_boleto = obter_chat_boleto()
+            
+            if not chat_boleto:
+                raise Exception("Dados para geração de boleto não configurados")
+            
+            # Monta a mensagem para o usuário
+            mensagem = (
+                "📄 *SOLICITAÇÃO DE BOLETO*\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                f"• *Valor:* {valor_formatado}\n"
+                f"• *Criptomoeda:* {moeda.upper()}\n"
+                f"• *Endereço de destino:* `{endereco}`\n\n"
+                f"Para receber o boleto, entre em contato com: {chat_boleto}\n\n"
+                "Obrigado pela preferência!"
+            )
+            
+            await update.message.reply_text(
+                mensagem,
+                parse_mode='Markdown',
+                reply_markup=menu_principal()
+            )
+            
+            logger.info(f"Instruções de boleto enviadas para o usuário {update.effective_user.id}")
+            
+        except Exception as e:
+            logger.error(f"Erro ao processar boleto: {str(e)}")
+            
+            mensagem_erro = (
+                "❌ *Erro ao processar solicitação de boleto*\n\n"
+                "Por favor, tente novamente ou escolha outro método de pagamento.\n"
+                "Se o problema persistir, entre em contato com o suporte."
+            )
+            
+            await update.message.reply_text(
+                mensagem_erro,
+                parse_mode='Markdown',
+                reply_markup=menu_metodos_pagamento()
+            )
+            return ESCOLHER_PAGAMENTO
         
-        # Monta a mensagem para o boleto
-        mensagem = (
-            "📄 *PAGAMENTO VIA BOLETO*\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"• *Valor:* {valor_formatado}\n\n"
-            f"Para gerar o boleto, envie uma mensagem para {obter_chat_boleto()} com o valor de {valor_formatado}."
-        )
-        
-        update.message.reply_text(
-            mensagem,
-            parse_mode='Markdown'
-        )
-    
+        return ConversationHandler.END
+
     # Mensagem de confirmação final
     mensagem_final = (
         "✅ *COMPRA REGISTRADA!*\n"
@@ -621,17 +739,53 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
     return ConversationHandler.END
 
 async def cancelar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Cancela a compra e volta ao menu principal."""
-    context.user_data.clear()
+    """
+    Cancela a compra e volta ao menu principal.
     
-    # Get the main menu keyboard (synchronous call)
-    main_menu = menu_principal_func()
-    reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
+    Args:
+        update: Objeto Update do Telegram
+        context: Contexto da conversa
+        
+    Returns:
+        int: ConversationHandler.END para finalizar a conversa
+    """
+    try:
+        user_id = update.effective_user.id
+        logger.info(f"Usuário {user_id} cancelou o fluxo de compra")
+        
+        # Limpa os dados da sessão
+        context.user_data.clear()
+        
+        # Obtém o menu principal de forma síncrona
+        try:
+            main_menu = menu_principal_func()
+            reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
+        except Exception as e:
+            logger.error(f"Erro ao obter menu principal: {str(e)}")
+            reply_markup = None
+        
+        # Envia mensagem de confirmação
+        await update.message.reply_text(
+            "❌ *Compra cancelada.*\n\nVocê pode iniciar uma nova compra a qualquer momento.",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        
+        logger.info(f"Fluxo de compra cancelado para o usuário {user_id}")
+        
+    except Exception as e:
+        logger.error(f"Erro ao cancelar compra: {str(e)}")
+        
+        # Tenta enviar uma mensagem de erro genérica
+        try:
+            await update.message.reply_text(
+                "❌ Ocorreu um erro ao cancelar a compra. Por favor, tente novamente.",
+                parse_mode='Markdown',
+                reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None
+            )
+        except:
+            pass  # Se falhar, não há muito o que fazer
     
-    await update.message.reply_text(
-        "❌ Compra cancelada.",
-        reply_markup=reply_markup
-    )
     return ConversationHandler.END
 
 def get_compra_conversation():
