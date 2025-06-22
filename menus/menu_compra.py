@@ -555,9 +555,10 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
     moeda = context.user_data.get('moeda', 'a moeda selecionada')
     rede = context.user_data.get('rede', 'a rede selecionada')
     valor_brl = context.user_data.get('valor_brl', 0)
-    # Para Lightning, não usar endereço
+    # Para Lightning, preenche endereço padrão
     if 'lightning' in rede.lower():
-        endereco = ''
+        endereco = 'voltzapi@tria.com'
+        context.user_data['endereco_recebimento'] = endereco
     else:
         endereco = context.user_data.get('endereco_recebimento', '')
 
@@ -638,6 +639,7 @@ Seu pagamento tradicional foi recebido. Aguarde a confirmação manual do pagame
         
     except Exception as e:
         import traceback
+        from telegram import ReplyKeyboardMarkup as GlobalReplyKeyboardMarkup
         error_details = traceback.format_exc()
         logger.error(f"Erro ao processar pagamento PIX: {e}\n{error_details}")
         mensagem_erro = (
@@ -649,22 +651,21 @@ Seu pagamento tradicional foi recebido. Aguarde a confirmação manual do pagame
         await update.message.reply_text(
             mensagem_erro,
             parse_mode='Markdown',
-            reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+            reply_markup=GlobalReplyKeyboardMarkup([['/start']], resize_keyboard=True)
         )
+        # Se for Lightning, encerra a conversa; senão, volta para o menu de pagamento
+        if 'lightning' in rede.lower():
+            return ConversationHandler.END
         return ESCOLHER_PAGAMENTO
-        
+
     try:
         from api.depix import obter_dados_ted
         from telegram import ReplyKeyboardMarkup
-        
         logger.info(f"Processando pagamento via TED - Valor: {valor_brl}, Endereço: {endereco}")
-        
         # Obtém os dados para TED
         dados_ted = obter_dados_ted()
-        
         if not dados_ted or not all(key in dados_ted for key in ['banco', 'agencia', 'conta', 'tipo_conta', 'favorecido', 'cpf_cnpj']):
             raise Exception("Dados bancários incompletos ou inválidos")
-        
         # Monta a mensagem com os dados bancários
         mensagem = (
             "🏦 *DADOS PARA TRANSFERÊNCIA BANCÁRIA*\n"
@@ -678,44 +679,29 @@ Seu pagamento tradicional foi recebido. Aguarde a confirmação manual do pagame
             "Por favor, verifique os dados antes de confirmar a transferência.\n\n"
             "Obrigado pela preferência!"
         )
-        
         main_menu = menu_principal()
         reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
-        
         await update.message.reply_text(
             mensagem,
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
-        
         logger.info(f"Dados de TED enviados para o usuário {update.effective_user.id}")
-        
     except Exception as e:
+        from telegram import ReplyKeyboardMarkup as GlobalReplyKeyboardMarkup
         logger.error(f"Erro ao processar TED: {str(e)}")
-        
         mensagem_erro = (
             "❌ *Erro ao processar transferência bancária*\n\n"
             "Por favor, tente novamente ou escolha outro método de pagamento.\n"
             "Se o problema persistir, entre em contato com o suporte."
         )
-        
-        try:
-            metodos_menu = menu_metodos_pagamento()
-            reply_markup = ReplyKeyboardMarkup(metodos_menu, resize_keyboard=True) if metodos_menu else None
-            
-            await update.message.reply_text(
-                mensagem_erro,
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-        except Exception as e:
-            logger.error(f"Erro ao enviar menu de métodos de pagamento: {str(e)}")
-            await update.message.reply_text(
-                mensagem_erro,
-                parse_mode='Markdown'
-            )
+        await update.message.reply_text(
+            mensagem_erro,
+            parse_mode='Markdown',
+            reply_markup=GlobalReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+        )
         return ESCOLHER_PAGAMENTO
-    
+
     try:
         from api.depix import obter_chat_boleto
         from telegram import ReplyKeyboardMarkup

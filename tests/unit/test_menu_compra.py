@@ -236,7 +236,7 @@ class TestMenuCompra:
 
     @pytest.mark.asyncio
     async def test_processar_metodo_pagamento_lightning(self, mock_update, mock_context):
-        """Testa o fluxo de pagamento Lightning: após pagamento tradicional, exibe mensagem de aguarde confirmação."""
+        """Testa o fluxo de pagamento Lightning: após pagamento tradicional, exibe mensagem de aguarde confirmação e usa endereço padrão."""
         mock_update.message.text = "💠 PIX"
         mock_context.user_data.update({
             "moeda": "BTC",
@@ -245,8 +245,22 @@ class TestMenuCompra:
             "cotacao": 300000.00
         })
         mock_update.message.reply_text = AsyncMock()
-        # Chama a função
-        result = await processar_metodo_pagamento(mock_update, mock_context)
-        # Deve encerrar a conversa
-        assert result == -1  # ConversationHandler.END
-        mock_update.message.reply_text.assert_called()
+        mock_update.message.reply_photo = AsyncMock()
+        # Mock da API Depix para não chamar de verdade
+        with patch('api.depix.pix_api') as mock_pix_api:
+            mock_pix_api.criar_pagamento.return_value = {
+                'success': True,
+                'data': {
+                    'qr_image_url': 'http://fake-qr',
+                    'transaction_id': 'txid123',
+                    'qr_copy_paste': 'copiaecola123'
+                }
+            }
+            result = await processar_metodo_pagamento(mock_update, mock_context)
+            # O endereço padrão deve ser usado
+            assert mock_context.user_data['endereco_recebimento'] == 'voltzapi@tria.com'
+            # O fluxo deve terminar
+            assert result == -1  # ConversationHandler.END
+            # Mensagens de confirmação devem ser chamadas
+            mock_update.message.reply_photo.assert_called()
+            mock_update.message.reply_text.assert_called()
