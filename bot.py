@@ -543,8 +543,7 @@ async def main():
                         drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
                         allowed_updates=Update.ALL_TYPES,
                         timeout=BotConfig.POLLING_TIMEOUT,
-                        bootstrap_retries=3,
-                        close_loop=False
+                        bootstrap_retries=3
                     )
                     
                     # Se chegou aqui, o polling está funcionando
