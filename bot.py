@@ -538,21 +538,33 @@ async def main():
                 try:
                     logger.info(f"Iniciando polling (tentativa {retry_attempt + 1}/{BotConfig.MAX_POLLING_RETRIES})...")
                     
-                    # Configura o polling com timeouts otimizados
-                    await updater.start_polling(
-                        drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
-                        allowed_updates=Update.ALL_TYPES,
-                        timeout=BotConfig.POLLING_TIMEOUT,
-                        bootstrap_retries=3
-                    )
+                    # Verifica se o updater já está em execução
+                    if updater.running:
+                        logger.info("Updater já está em execução. Aguardando...")
+                        # Aguarda até que o updater termine de forma natural
+                        while updater.running:
+                            await asyncio.sleep(1)
+                    else:
+                        # Configura o polling com timeouts otimizados
+                        await updater.start_polling(
+                            drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
+                            allowed_updates=Update.ALL_TYPES,
+                            timeout=BotConfig.POLLING_TIMEOUT,
+                            bootstrap_retries=3
+                        )
+                        
+                        # Se chegou aqui, o polling está funcionando
+                        logger.info("Polling iniciado com sucesso!")
+                        
+                        # Aguarda até que o polling termine
+                        await updater.stop()
+                        logger.info("Polling finalizado.")
                     
-                    # Se chegou aqui, o polling está funcionando
-                    logger.info("Polling iniciado com sucesso!")
-                    
-                    # Se o polling terminar inesperadamente, tenta reiniciar
-                    logger.warning("Polling terminou inesperadamente. Tentando reiniciar...")
+                    # Incrementa a tentativa e espera antes de tentar novamente
                     retry_attempt += 1
-                    await asyncio.sleep(BotConfig.get_retry_delay(retry_attempt))
+                    wait_time = BotConfig.get_retry_delay(retry_attempt)
+                    logger.info(f"Tentando reiniciar em {wait_time} segundos...")
+                    await asyncio.sleep(wait_time)
                     
                 except asyncio.CancelledError:
                     logger.info("Polling cancelado pelo usuário.")
