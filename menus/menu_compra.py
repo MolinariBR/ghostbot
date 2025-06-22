@@ -145,13 +145,13 @@ async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logger.error(f"Erro ao exibir opções de moedas: {str(e)}")
         # Tenta enviar uma mensagem de erro
         try:
+            # Tenta enviar novamente a mensagem com o teclado
+            opcoes_moedas = menu_moedas()
+            reply_markup = ReplyKeyboardMarkup(opcoes_moedas, resize_keyboard=True)
             await update.message.reply_text(
                 "💱 *ESCOLHA A MOEDA PARA COMPRA*\n\n"
-                "Selecione a criptomoeda que deseja comprar:\n\n"
-                "₿ Bitcoin (BTC)\n"
-                "💵 Tether (USDT)\n"
-                "💠 Depix\n"
-                "🔙 Voltar",
+                "Selecione a criptomoeda que deseja comprar:",
+                reply_markup=reply_markup,
                 parse_mode='Markdown'
             )
         except Exception as e2:
