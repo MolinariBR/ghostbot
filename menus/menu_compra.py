@@ -488,7 +488,8 @@ async def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 reply_markup=reply_markup
             )
         except Exception as e:
-            logger.error(f"Erro ao exibir métodos de pagamento: {str(e)}")
+            import traceback
+            logger.error(f"Erro ao exibir métodos de pagamento: {str(e)}\n{traceback.format_exc()}")
             await update.message.reply_text(
                 "❌ Ocorreu um erro ao exibir as opções de pagamento. Por favor, tente novamente.",
                 reply_markup=ReplyKeyboardMarkup([["🔙 Voltar"]], resize_keyboard=True)
