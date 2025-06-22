@@ -560,7 +560,7 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
         endereco = ''
     else:
         endereco = context.user_data.get('endereco_recebimento', '')
-    
+
     valor_formatado = formatar_brl(valor_brl)
     cotacao = await obter_cotacao(moeda)
     taxa = 0.01  # 1% de taxa de exemplo
@@ -570,8 +570,8 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
     valor_recebido_formatado = formatar_cripto(valor_recebido, moeda)
 
     # FLUXO ESPECIAL PARA LIGHTNING: NÃO ACIONA VOLTZ, SÓ EXIBE INSTRUÇÃO
-    if 'lightning' in rede.lower():
-        # Exibe instrução para aguardar confirmação manual/backend
+    # Só exibe a mensagem especial se NÃO for PIX
+    if 'lightning' in rede.lower() and metodo_pagamento != '💠 PIX':
         from telegram import ReplyKeyboardMarkup as GlobalReplyKeyboardMarkup
         await update.message.reply_text(
             '''⚡ *Pagamento registrado!*
@@ -580,7 +580,6 @@ Seu pagamento tradicional foi recebido. Aguarde a confirmação manual do pagame
             parse_mode='Markdown',
             reply_markup=GlobalReplyKeyboardMarkup([['/start']], resize_keyboard=True)
         )
-        # Aqui NÃO aciona a API Voltz. O saque Lightning será feito após confirmação manual/backend.
         context.user_data.clear()
         return ConversationHandler.END
 
@@ -590,7 +589,6 @@ Seu pagamento tradicional foi recebido. Aguarde a confirmação manual do pagame
     try:
         # Garante que o endereço correto será usado para o pagamento
         endereco = context.user_data.get('endereco_recebimento', '')
-        
         # Cria pagamento PIX via Depix
         valor_centavos = int(round(valor_brl * 100))
         cobranca = pix_api.criar_pagamento(valor_centavos=valor_centavos, endereco=endereco)
@@ -605,18 +603,20 @@ Seu pagamento tradicional foi recebido. Aguarde a confirmação manual do pagame
             txid = cobranca.get('transaction_id') or cobranca.get('txid')
             copia_e_cola = cobranca.get('qr_code_text') or cobranca.get('copia_e_cola')
 
-        # Caption exatamente como esperado pelo teste
+        # Exibe QR Code e chave para o cliente pagar
         await update.message.reply_photo(
             photo=qr_code,
             caption='📱 *QR Code para pagamento*\n\nAponte a câmera do seu app de pagamento para escanear o QR Code acima.',
             parse_mode='Markdown'
         )
-
         await update.message.reply_text(
             f"🔗 *Copia e Cola:*\n`{copia_e_cola}`",
             parse_mode='Markdown'
         )
-        # Mensagem de confirmação detalhada conforme esperado pelo teste
+        # --- PONTO DE INTEGRAÇÃO PARA CONFIRMAÇÃO AUTOMÁTICA DEPAGAMENTO PIX ---
+        # Aqui, futuramente, implemente a verificação automática do pagamento via Depix.
+        # Quando o pagamento for confirmado, libere o saque via Voltz para o cliente.
+        # ------------------------------------------------------------------------
         mensagem_confirmacao = (
             '✅ *SOLICITAÇÃO DE DEPÓSITO RECEBIDA!*\n'
             '━━━━━━━━━━━━━━━━━━━━\n'
@@ -624,7 +624,7 @@ Seu pagamento tradicional foi recebido. Aguarde a confirmação manual do pagame
             f'• *Criptomoeda:* {moeda.upper()}\n'
             f'• *Endereço de destino:* `{endereco}`\n'
             f'• *ID da transação:* `{txid}`\n\n'
-            '📱 *Pague o PIX usando o QR Code abaixo ou o código copia e cola:*\n\n'
+            '📱 *Pague o PIX usando o QR Code acima ou o código copia e cola:*\n\n'
             f'`{copia_e_cola}`\n\n'
             'Após o pagamento, aguarde alguns instantes para a confirmação.\n'
             'Obrigado pela preferência!'
