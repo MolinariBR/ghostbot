@@ -233,53 +233,75 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     Returns:
         int: Próximo estado da conversa (MENU).
     """
+    mensagem = '👋 Olá! Eu sou o Ghost Bot, seu assistente de criptomoedas.\n\nEscolha uma opção abaixo:'
+    
     try:
-        # Mensagem de boas-vindas
-        mensagem = '👋 Olá! Eu sou o Ghost Bot, seu assistente de criptomoedas.\n\nEscolha uma opção abaixo:'
-        reply_markup = ReplyKeyboardMarkup(menu_principal(), resize_keyboard=True)
+        # Tenta obter o teclado principal
+        teclado_principal = menu_principal()
+        reply_markup = ReplyKeyboardMarkup(teclado_principal, resize_keyboard=True)
         
-        # Caminho para a imagem de boas-vindas
-        imagem_path = os.path.join('images', 'ghostp2p.jpg')
-        
-        # Verifica se a imagem existe e tenta enviá-la
+        # Tenta enviar apenas a mensagem de texto primeiro para garantir que o usuário veja algo
         try:
-            if os.path.exists(imagem_path):
-                with open(imagem_path, 'rb') as photo:
-                    await update.message.reply_photo(
-                        photo=photo,
-                        caption=mensagem,
-                        reply_markup=reply_markup,
-                        parse_mode='Markdown'
-                    )
-            else:
-                # Se a imagem não existir, envia apenas o texto
-                logger.warning(f"Imagem de boas-vindas não encontrada em: {os.path.abspath(imagem_path)}")
-                await update.message.reply_text(
-                    mensagem,
-                    reply_markup=reply_markup,
-                    parse_mode='Markdown'
-                )
-        except Exception as photo_error:
-            # Em caso de erro ao enviar a foto, envia apenas o texto
-            logger.error(f"Erro ao enviar foto de boas-vindas: {str(photo_error)}")
             await update.message.reply_text(
                 mensagem,
                 reply_markup=reply_markup,
                 parse_mode='Markdown'
             )
+        except Exception as text_error:
+            logger.error(f"Erro ao enviar mensagem de texto: {str(text_error)}")
+            # Se falhar, tenta novamente sem formatação
+            try:
+                await update.message.reply_text(
+                    "👋 Olá! Eu sou o Ghost Bot, seu assistente de criptomoedas.\n\nEscolha uma opção abaixo:",
+                    reply_markup=reply_markup
+                )
+            except Exception as fallback_error:
+                logger.error(f"Erro ao enviar mensagem de fallback: {str(fallback_error)}")
+                # Se ainda assim falhar, tenta enviar sem teclado
+                try:
+                    await update.message.reply_text(
+                        "👋 Olá! Por favor, use o comando /start novamente."
+                    )
+                except Exception as final_error:
+                    logger.error(f"Erro crítico ao enviar mensagem: {str(final_error)}")
+                return MENU
+        
+        # Tenta enviar a imagem separadamente para não bloquear a experiência do usuário
+        try:
+            imagem_path = os.path.join('images', 'ghostp2p.jpg')
+            if os.path.exists(imagem_path):
+                # Usa uma tarefa assíncrona para não bloquear
+                asyncio.create_task(
+                    _enviar_imagem_boas_vindas(update, context, imagem_path)
+                )
+        except Exception as img_error:
+            logger.error(f"Erro ao tentar enviar imagem de boas-vindas: {str(img_error)}")
         
         return MENU
     except Exception as e:
-        logger.error(f"Erro no handler start: {str(e)}", exc_info=True)
-        # Tenta enviar uma mensagem de erro genérica
-        try:
-            await update.message.reply_text(
-                "👋 Olá! Ocorreu um erro ao carregar o menu. Por favor, tente novamente.",
-                reply_markup=ReplyKeyboardMarkup(menu_principal(), resize_keyboard=True)
-            )
-        except:
-            pass  # Se falhar, não há mais o que fazer
+        logger.error(f"Erro crítico no handler start: {str(e)}", exc_info=True)
         return MENU
+
+async def _enviar_imagem_boas_vindas(update: Update, context: ContextTypes.DEFAULT_TYPE, imagem_path: str):
+    """
+    Função auxiliar para enviar a imagem de boas-vindas de forma assíncrona.
+    
+    Args:
+        update: Objeto Update do Telegram.
+        context: Contexto da conversa.
+        imagem_path: Caminho para a imagem.
+    """
+    try:
+        with open(imagem_path, 'rb') as photo:
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=photo,
+                caption="👻 *Ghost Bot* - Seu assistente de criptomoedas",
+                parse_mode='Markdown',
+                reply_to_message_id=update.effective_message.message_id
+            )
+    except Exception as e:
+        logger.error(f"Erro ao enviar imagem de boas-vindas: {str(e)}", exc_info=True)
 
 @error_handler
 async def vender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
