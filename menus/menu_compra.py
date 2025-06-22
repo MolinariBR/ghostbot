@@ -7,6 +7,9 @@ import json
 import logging
 from typing import Dict, Any, Optional
 
+# Importa o módulo para integração com a API Voltz (Lightning Network)
+from api.voltz import VoltzAPI
+
 # Variável para armazenar a função do menu principal
 menu_principal_func = None
 
@@ -492,11 +495,10 @@ async def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     # Mensagem de instrução baseada no tipo de rede
     if "Lightning" in rede:
         instrucao = (
-            "⚡ *Informe o endereço Lightning ou LNURL‑Pay*\n\n"
-            "Exemplos de endereços aceitos:\n"
-            "• Endereço Lightning: `lnbc10u1p3...`\n"
-            "• LNURL-Pay: `lnurl1dp68gurn...`\n"
-            "• Endereço de nó: `node@domain.com`"
+            "⚡ *Método de Pagamento Voltz*\n\n"
+            "Você selecionou a rede Lightning. Para continuar, basta confirmar o pagamento abaixo.\n\n"
+            "O valor será creditado automaticamente na sua carteira Lightning após a confirmação.\n\n"
+            "Por favor, aguarde enquanto preparamos seu pagamento..."
         )
     elif "Liquid" in rede or "On-chain" in rede or "Polygon" in rede:
         instrucao = (
@@ -599,7 +601,76 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
     valor_recebido_formatado = formatar_cripto(valor_recebido, moeda)
     
     # Processa de acordo com o método de pagamento
-    if metodo_pagamento == "💠 PIX":
+    if "Lightning" in rede and metodo_pagamento in ["💠 PIX", "🏦 TED", "📄 Boleto"]:
+        # Processa pagamento via Lightning Network usando a API Voltz
+        logger.info(f"Iniciando processamento via Lightning Network - Valor: {valor_brl}, Endereço: {endereco}")
+        
+        try:
+            # Converte o valor para satoshis (1 BRL = 1000 sats de exemplo, ajuste conforme a cotação real)
+            # Aqui você deve implementar a conversão correta de BRL para satoshis
+            valor_sats = int((valor_brl * 1000) / 200)  # Exemplo: 200 BRL = 1.000.000 sats
+            
+            # Cria uma instância da API Voltz
+            voltz_api = VoltzAPI()
+            
+            # Cria um link de saque
+            logger.info(f"Criando link de saque para {valor_sats} sats...")
+            withdraw_data = voltz_api.create_withdraw_link(
+                amount_sats=valor_sats,
+                description=f"Saque {moeda} via Ghost Bot"
+            )
+            
+            # Obtém o LNURL e a URL do QR code
+            lnurl = withdraw_data['lnurl']
+            qr_code_url = withdraw_data['qr_code_url']
+            
+            # Formata a mensagem para o usuário
+            mensagem = voltz_api.format_withdraw_message(
+                amount_sats=valor_sats,
+                lnurl=lnurl,
+                qr_code_url=qr_code_url
+            )
+            
+            # Envia a mensagem com o QR code
+            await update.message.reply_photo(
+                photo=qr_code_url,
+                caption=mensagem,
+                parse_mode='Markdown'
+            )
+            
+            # Envia o LNURL como texto também
+            await update.message.reply_text(
+                f"🔗 *LNURL para cópia:*\n`{lnurl}`",
+                parse_mode='Markdown'
+            )
+            
+            # Registra a transação
+            logger.info(f"Link de saque criado com sucesso: {lnurl}")
+            
+            # Retorna para o menu principal
+            main_menu = menu_principal_func() if menu_principal_func else None
+            reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
+            
+            await update.message.reply_text(
+                "✅ *Saque processado com sucesso!*\n\n"
+                "Por favor, verifique sua carteira Lightning para confirmar o recebimento.",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            
+            return ConversationHandler.END
+            
+        except Exception as e:
+            logger.error(f"Erro ao processar saque Lightning: {str(e)}")
+            error_msg = (
+                "❌ *Erro ao processar saque via Lightning Network*\n\n"
+                f"Detalhes: {str(e)}\n\n"
+                "Por favor, tente novamente ou entre em contato com o suporte."
+            )
+            await update.message.reply_text(error_msg, parse_mode='Markdown')
+            return ESCOLHER_PAGAMENTO
+            
+    elif metodo_pagamento == "💠 PIX":
         # Processa pagamento via PIX usando a API do servidor
         from api.depix import pix_api
         
