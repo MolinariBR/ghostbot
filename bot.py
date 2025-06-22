@@ -234,17 +234,52 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         int: Próximo estado da conversa (MENU).
     """
     try:
+        # Mensagem de boas-vindas
+        mensagem = '👋 Olá! Eu sou o Ghost Bot, seu assistente de criptomoedas.\n\nEscolha uma opção abaixo:'
         reply_markup = ReplyKeyboardMarkup(menu_principal(), resize_keyboard=True)
-        await update.message.reply_text(
-            '👋 Olá! Eu sou o Ghost Bot, seu assistente de criptomoedas.\n\n'
-            'Escolha uma opção abaixo:',
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
+        
+        # Caminho para a imagem de boas-vindas
+        imagem_path = os.path.join('images', 'ghostp2p.jpg')
+        
+        # Verifica se a imagem existe e tenta enviá-la
+        try:
+            if os.path.exists(imagem_path):
+                with open(imagem_path, 'rb') as photo:
+                    await update.message.reply_photo(
+                        photo=photo,
+                        caption=mensagem,
+                        reply_markup=reply_markup,
+                        parse_mode='Markdown'
+                    )
+            else:
+                # Se a imagem não existir, envia apenas o texto
+                logger.warning(f"Imagem de boas-vindas não encontrada em: {os.path.abspath(imagem_path)}")
+                await update.message.reply_text(
+                    mensagem,
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+        except Exception as photo_error:
+            # Em caso de erro ao enviar a foto, envia apenas o texto
+            logger.error(f"Erro ao enviar foto de boas-vindas: {str(photo_error)}")
+            await update.message.reply_text(
+                mensagem,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+        
         return MENU
     except Exception as e:
         logger.error(f"Erro no handler start: {str(e)}", exc_info=True)
-        raise
+        # Tenta enviar uma mensagem de erro genérica
+        try:
+            await update.message.reply_text(
+                "👋 Olá! Ocorreu um erro ao carregar o menu. Por favor, tente novamente.",
+                reply_markup=ReplyKeyboardMarkup(menu_principal(), resize_keyboard=True)
+            )
+        except:
+            pass  # Se falhar, não há mais o que fazer
+        return MENU
 
 @error_handler
 async def vender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -310,20 +345,49 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         int: Próximo estado da conversa (AJUDA).
     """
     try:
+        # Importa a função obter_ajuda do módulo ajuda
+        from ajuda import obter_ajuda
+        
+        # Obtém o texto de ajuda formatado
+        ajuda_texto = obter_ajuda()
+        
+        # Cria o teclado com o botão de voltar
+        teclado_voltar = [["🔙 Voltar"]]
+        
+        # Envia a mensagem com as informações de ajuda
         await update.message.reply_text(
-            "❓ *AJUDA* ❓\n\n"
-            "Como posso te ajudar?\n\n"
-            "• Para começar, use /start\n"
-            "• Para comprar criptomoedas, toque em *Comprar*\n"
-            "• Para vender criptomoedas, toque em *Vender*\n"
-            "• Dúvidas? Entre em contato com nosso suporte",
+            ajuda_texto,
+            parse_mode='Markdown',
+            reply_markup=ReplyKeyboardMarkup(teclado_voltar, resize_keyboard=True),
+            disable_web_page_preview=True
+        )
+        return AJUDA
+    except ImportError as e:
+        logger.error(f"Erro ao importar módulo ajuda: {str(e)}", exc_info=True)
+        mensagem_erro = (
+            "❌ *Erro ao carregar as informações de ajuda.*\n\n"
+            "Desculpe, não foi possível carregar as informações de ajuda no momento. "
+            "Por favor, tente novamente mais tarde."
+        )
+    except Exception as e:
+        logger.error(f"Erro no handler ajuda: {str(e)}", exc_info=True)
+        mensagem_erro = (
+            "❌ *Ocorreu um erro ao carregar a ajuda.*\n\n"
+            "Nossa central de ajuda está temporariamente indisponível. "
+            "Por favor, tente novamente mais tarde."
+        )
+    
+    # Se chegou aqui, houve um erro
+    try:
+        await update.message.reply_text(
+            mensagem_erro,
             parse_mode='Markdown',
             reply_markup=ReplyKeyboardMarkup([['🔙 Voltar']], resize_keyboard=True)
         )
-        return AJUDA
     except Exception as e:
-        logger.error(f"Erro no handler ajuda: {str(e)}", exc_info=True)
-        raise
+        logger.error(f"Falha ao enviar mensagem de erro: {str(e)}", exc_info=True)
+    
+    return AJUDA
 
 @error_handler
 async def termos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -338,26 +402,48 @@ async def termos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         int: Próximo estado da conversa (TERMOS).
     """
     try:
+        # Importa a função obter_termos do módulo termos
+        from termos import obter_termos
+        
+        # Obtém o texto dos termos formatado
+        termos_texto = obter_termos()
+        
+        # Cria o teclado com o botão de voltar
+        teclado_voltar = [["🔙 Voltar"]]
+        
+        # Envia a mensagem com os termos
         await update.message.reply_text(
-            "📜 *TERMOS DE USO E POLÍTICA DE PRIVACIDADE* 📜\n\n"
-            "1. *Termos de Uso*\n"
-            "   - Este bot é fornecido como está, sem garantias de qualquer tipo.\n"
-            "   - O uso do bot é de sua inteira responsabilidade.\n"
-            "   - Não use para atividades ilegais.\n"
-            "   - Mantenha suas credenciais em segredo.\n\n"
-            "2. *Política de Privacidade*\n"
-            "   - Respeitamos sua privacidade.\n"
-            "   - Seus dados são usados apenas para fornecer os serviços solicitados.\n\n"
-            "3. *Mercado de Criptomoedas*\n"
-            "   - Esteja ciente dos riscos inerentes ao mercado de criptomoedas.\n"
-            "   - A volatilidade dos preços pode resultar em perdas financeiras.",
+            termos_texto,
+            parse_mode='Markdown',
+            reply_markup=ReplyKeyboardMarkup(teclado_voltar, resize_keyboard=True)
+        )
+        return TERMOS
+    except ImportError as e:
+        logger.error(f"Erro ao importar módulo termos: {str(e)}", exc_info=True)
+        mensagem_erro = (
+            "❌ *Erro ao carregar os termos de uso.*\n\n"
+            "Desculpe, não foi possível carregar os termos de uso no momento. "
+            "Por favor, tente novamente mais tarde."
+        )
+    except Exception as e:
+        logger.error(f"Erro no handler termos: {str(e)}", exc_info=True)
+        mensagem_erro = (
+            "❌ *Ocorreu um erro ao carregar os termos de uso.*\n\n"
+            "Nossos termos de uso estão temporariamente indisponíveis. "
+            "Por favor, tente novamente mais tarde."
+        )
+    
+    # Se chegou aqui, houve um erro
+    try:
+        await update.message.reply_text(
+            mensagem_erro,
             parse_mode='Markdown',
             reply_markup=ReplyKeyboardMarkup([['🔙 Voltar']], resize_keyboard=True)
         )
-        return TERMOS
     except Exception as e:
-        logger.error(f"Erro no handler termos: {str(e)}", exc_info=True)
-        raise
+        logger.error(f"Falha ao enviar mensagem de erro: {str(e)}", exc_info=True)
+    
+    return TERMOS
 
 def setup_handlers(application):
     """Configura todos os handlers do bot."""
