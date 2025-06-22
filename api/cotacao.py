@@ -44,12 +44,16 @@ class CotacaoAPI:
         except Exception as e:
             logger.error(f"Erro ao obter preço do BTC: {e}")
             # Tenta o outro provedor em caso de falha
-            if self.provider == 'binance':
-                logger.info("Tentando obter cotação do BTC na CoinGecko...")
-                return coingecko_api.get_btc_price_brl()
-            else:
-                logger.info("Tentando obter cotação do BTC na Binance...")
-                return binance_api.get_btc_price_brl()
+            try:
+                if self.provider == 'binance':
+                    logger.info("Tentando obter cotação do BTC na CoinGecko...")
+                    return coingecko_api.get_btc_price_brl()
+                else:
+                    logger.info("Tentando obter cotação do BTC na Binance...")
+                    return binance_api.get_btc_price_brl()
+            except Exception as e2:
+                logger.error(f"Falha em ambos os provedores: {e2}")
+                raise Exception("Falha ao obter cotação do BTC em todos os provedores.")
     
     def get_usdt_price_brl(self) -> Decimal:
         """Obtém o preço do USDT em BRL com margem de 2%."""

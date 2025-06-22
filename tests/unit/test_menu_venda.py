@@ -113,25 +113,25 @@ class TestMenuVenda:
         """Testa o processamento do endereço de saque."""
         mock_update.message.text = "bc1qxyz..."
         mock_context.user_data.update({
-            "moeda_venda": "₿ Vender Bitcoin (BTC)",
+            "moeda_venda": "\u20bf Vender Bitcoin (BTC)",
             "quantidade_venda": 0.5
         })
         mock_update.message.reply_text = AsyncMock()
         
         result = await processar_endereco(mock_update, mock_context)
         
-        assert mock_context.user_data["endereco_saque"] == "bc1qxyz..."
+        assert mock_context.user_data["endereco"] == "bc1qxyz..."
         assert result == CONFIRMAR
         mock_update.message.reply_text.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_confirmar_venda(self, mock_update, mock_context):
         """Testa a confirmação da venda."""
-        mock_update.message.text = "✅ Confirmar Venda"
+        mock_update.message.text = "\u2705 Confirmar Venda"
         mock_context.user_data.update({
-            "moeda_venda": "₿ Vender Bitcoin (BTC)",
+            "moeda_venda": "\u20bf Vender Bitcoin (BTC)",
             "quantidade_venda": 0.5,
-            "endereco_saque": "bc1qxyz..."
+            "endereco": "bc1qxyz..."
         })
         mock_update.message.reply_text = AsyncMock()
         

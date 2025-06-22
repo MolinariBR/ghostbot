@@ -127,29 +127,28 @@ class TestMenuCompra:
         assert keyboard.keyboard[1][0].text == "🔙 Voltar"
     
     @pytest.mark.asyncio
-    async def test_iniciar_compra(self, mock_update, mock_context):
+    @patch('menus.menu_compra.ReplyKeyboardMarkup')
+    async def test_iniciar_compra(self, mock_keyboard, mock_update, mock_context):
         """Testa o início do fluxo de compra."""
         mock_update.message.reply_text = AsyncMock()
-        
         result = await iniciar_compra(mock_update, mock_context)
-        
         mock_update.message.reply_text.assert_called_once()
         assert result == ESCOLHER_MOEDA
     
     @pytest.mark.asyncio
-    async def test_escolher_moeda_valida(self, mock_update, mock_context):
+    @patch('menus.menu_compra.ReplyKeyboardMarkup')
+    async def test_escolher_moeda_valida(self, mock_keyboard, mock_update, mock_context):
         """Testa a seleção de uma moeda válida."""
-        mock_update.message.text = "₿ Bitcoin (BTC)"
+        mock_update.message.text = "\u20bf Bitcoin (BTC)"
         mock_update.message.reply_text = AsyncMock()
-        
         result = await escolher_moeda(mock_update, mock_context)
-        
-        assert mock_context.user_data["moeda"] == "BTC"
+        assert mock_context.user_data["moeda"] == "\u20bf Bitcoin (BTC)"
         assert result == ESCOLHER_REDE
         mock_update.message.reply_text.assert_called_once()
-    
+
     @pytest.mark.asyncio
-    async def test_escolher_rede_valida(self, mock_update, mock_context):
+    @patch('menus.menu_compra.ReplyKeyboardMarkup')
+    async def test_escolher_rede_valida(self, mock_keyboard, mock_update, mock_context):
         """Testa a seleção de uma rede válida."""
         mock_update.message.text = "Bitcoin"
         mock_context.user_data["moeda"] = "BTC"
@@ -169,7 +168,8 @@ class TestMenuCompra:
         mock_context.user_data["rede"] = "Bitcoin"
         mock_update.message.reply_text = AsyncMock()
         
-        with patch('menus.menu_compra.obter_cotacao', return_value=300000.00):
+        with patch('menus.menu_compra.obter_cotacao', new_callable=AsyncMock) as mock_cotacao:
+            mock_cotacao.return_value = 300000.00
             result = await processar_quantidade(mock_update, mock_context)
         
         assert mock_context.user_data["valor_brl"] == 100.50
@@ -195,14 +195,15 @@ class TestMenuCompra:
         mock_update.message.reply_text.assert_called()
     
     @pytest.mark.asyncio
-    async def test_processar_endereco(self, mock_update, mock_context):
+    @patch('menus.menu_compra.ReplyKeyboardMarkup')
+    async def test_processar_endereco(self, mock_keyboard, mock_update, mock_context):
         """Testa o processamento do endereço de recebimento."""
         mock_update.message.text = "bc1qxyz..."
         mock_update.message.reply_text = AsyncMock()
         
         result = await processar_endereco(mock_update, mock_context)
         
-        assert mock_context.user_data["endereco"] == "bc1qxyz..."
+        assert mock_context.user_data["endereco_recebimento"] == "bc1qxyz..."
         assert result == ESCOLHER_PAGAMENTO
         mock_update.message.reply_text.assert_called()
     

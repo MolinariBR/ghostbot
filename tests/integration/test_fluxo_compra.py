@@ -40,27 +40,19 @@ class TestFluxoCompraIntegracao:
     """Testes de integração para o fluxo de compra."""
     
     @pytest.mark.asyncio
-    @patch('menus.menu_compra.obter_cotacao')
+    @patch('menus.menu_compra.obter_cotacao', new_callable=AsyncMock)
     @patch('api.depix.PixAPI.criar_pagamento')
     @patch('menus.menu_compra.ReplyKeyboardMarkup')
     async def test_fluxo_completo_compra_pix(
         self, mock_keyboard, mock_criar_pagamento, mock_obter_cotacao, mock_update, mock_context
     ):
         """Testa o fluxo completo de compra com pagamento via PIX."""
-        # Configura os mocks
         mock_update.message.reply_text = AsyncMock()
         mock_update.message.reply_photo = AsyncMock()
         mock_keyboard.return_value = MagicMock()
         
-        # Mock para obter_cotacao (chamado em processar_quantidade)
-        def mock_obter_cotacao_side_effect(moeda):
-            if 'BTC' in moeda.upper():
-                return 300000.00  # Preço do BTC
-            return 1.0  # Valor padrão para outras moedas
-            
-        mock_obter_cotacao.side_effect = mock_obter_cotacao_side_effect
+        mock_obter_cotacao.return_value = 300000.00
         
-        # Mock para criar_pagamento (chamado em processar_metodo_pagamento)
         mock_criar_pagamento.return_value = {
             'qr_image_url': 'http://test.com/qr.png',
             'qr_code_text': '00020126330014BR.GOV.BCB.PIX0111test@test.com5204000053039865802BR5913Teste Loja6008BRASILIA62070503***6304A8A0',

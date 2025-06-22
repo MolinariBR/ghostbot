@@ -44,7 +44,7 @@ class CoinGeckoAPI:
             vs_currency: Moeda de referência (padrão: 'brl')
             
         Returns:
-            Decimal: Preço atual com margem de 2%
+            Decimal: Preço atual com margem de 2%, arredondado para 2 casas decimais
         """
         try:
             coin_id = self.coin_ids.get(coin.upper())
@@ -63,9 +63,9 @@ class CoinGeckoAPI:
             if coin_id not in data or vs_currency.lower() not in data[coin_id]:
                 raise ValueError(f"Dados de preço não disponíveis para {coin}/{vs_currency}")
             
-            # Aplica a margem de 2% e formata para 8 casas decimais
+            # Aplica a margem de 2% e formata para 2 casas decimais
             price = Decimal(str(data[coin_id][vs_currency.lower()])) * self.margin
-            return price.quantize(Decimal('0.00000001'), rounding=ROUND_DOWN)
+            return price.quantize(Decimal('0.01'), rounding=ROUND_DOWN)
             
         except Exception as e:
             logger.error(f"Erro ao obter preço da CoinGecko: {e}")
@@ -81,11 +81,9 @@ class CoinGeckoAPI:
     
     def get_depix_price_brl(self) -> Decimal:
         """
-        Obtém o preço do Depix em BRL.
-        Como o Depix é uma stablecoin atrelada ao Real, retornamos 1:1 com margem de 2%.
+        Obtém o preço do Depix em BRL com margem de 2%.
         """
-        # Depix é 1:1 com BRL, então aplicamos apenas a margem
-        return Decimal('1.0') * self.margin
+        return self.get_price('DEPIX', 'BRL')
 
 # Instância global para ser importada
 coingecko_api = CoinGeckoAPI()

@@ -70,42 +70,42 @@ class TestBinanceAPI:
     def test_get_btc_price_brl(self, mock_get_price):
         """Testa a obtenção do preço do BTC em BRL."""
         # Configura o mock
-        mock_get_price.return_value = Decimal('306000.00')
+        mock_get_price.return_value = Decimal('563193.00000000')
         
         # Executa o teste
         api = BinanceAPI()
         price = api.get_btc_price_brl()
         
         # Verifica os resultados
-        assert price == Decimal('306000.00')
+        assert price == Decimal('563193.00000000')
         mock_get_price.assert_called_once_with('BTCBRL')
     
     @patch('api.api_binance.BinanceAPI.get_price')
     def test_get_usdt_price_brl(self, mock_get_price):
         """Testa a obtenção do preço do USDT em BRL."""
         # Configura o mock
-        mock_get_price.return_value = Decimal('5.50')
+        mock_get_price.return_value = Decimal('1.02030600')
         
         # Executa o teste
         api = BinanceAPI()
         price = api.get_usdt_price_brl()
         
         # Verifica os resultados
-        assert price == Decimal('5.50')
+        assert price == Decimal('1.02030600')
         mock_get_price.assert_called_once_with('BUSDUSDT')
     
     @patch('api.api_binance.BinanceAPI.get_price')
     def test_get_depix_price_brl(self, mock_get_price):
         """Testa a obtenção do preço do Depix em BRL."""
         # Configura o mock para retornar preço em USDT
-        mock_get_price.return_value = Decimal('0.10')
+        mock_get_price.return_value = Decimal('1.020')
         
         # Executa o teste
         api = BinanceAPI()
         price = api.get_depix_price_brl()
         
         # Verifica os resultados
-        assert price == Decimal('0.10')
+        assert price == Decimal('1.020')
         assert mock_get_price.call_count == 2  # Deve chamar duas vezes (USDT e BUSD)
     
     @patch('api.api_binance.BinanceAPI._make_request')
@@ -119,4 +119,4 @@ class TestBinanceAPI:
         price = api.get_price('DEPIXBRL')
         
         # Deve arredondar para 8 casas decimais
-        assert price == Decimal('0.12592692')  # 0.123456789 * 1.02 = 0.12592592478 -> 0.12592692
+        assert price == Decimal('0.12592592')  # 0.123456789 * 1.02 = 0.12592592478 -> 0.12592592
