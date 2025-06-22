@@ -63,10 +63,6 @@ class PixAPI:
             'User-Agent': 'GhostBot/1.0'
         }
         
-        # Adiciona o token de autorização se estiver disponível
-        if self.api_key:
-            headers['Authorization'] = f'Bearer {self.api_key}'
-        
         try:
             logger.info(f"Enviando requisição {method} para {url}")
             
@@ -180,8 +176,7 @@ class PixAPI:
             logger.info(f"Dados do pagamento: {data}")
             
             # Chama a API
-            logger.info(f"Chamando API PIX em: {self.api_url}")
-            logger.info(f"Usando chave de API: {self.api_key}")
+            logger.info(f"Chamando API de depósito em: {self.api_url}")
             
             # Faz a requisição para o endpoint do backend
             headers = {
