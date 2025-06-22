@@ -234,6 +234,11 @@ class PixAPI:
                 logger.error(error_msg)
                 raise PixAPIError(error_msg)
             
+            # Verifica e mapeia os campos da resposta
+            # A API pode retornar qr_copy_paste ou qr_code_text
+            if 'qr_copy_paste' in payment_data and 'qr_code_text' not in payment_data:
+                payment_data['qr_code_text'] = payment_data['qr_copy_paste']
+            
             # Verifica os campos obrigatórios na resposta
             required_fields = ['qr_image_url', 'qr_code_text', 'transaction_id']
             missing_fields = [field for field in required_fields if field not in payment_data]

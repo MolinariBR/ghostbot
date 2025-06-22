@@ -201,6 +201,14 @@ async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa a quantidade informada e mostra confirmação."""
     try:
+        print("\n" + "="*50)
+        print("DEBUG - INÍCIO processar_quantidade")
+        print(f"update.message.text: {update.message.text}")
+        print(f"context.user_data: {context.user_data}")
+        print(f"context.bot_data: {getattr(context, 'bot_data', 'N/A')}")
+        print(f"context.chat_data: {getattr(context, 'chat_data', 'N/A')}")
+        print("-"*50)
+        
         # Se o usuário clicou em "Digitar valor", pede para digitar
         if update.message.text == "Digitar valor":
             await update.message.reply_text(
@@ -217,8 +225,15 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
             )
             return QUANTIDADE
             
-        # Remove R$, pontos e substitui vírgula por ponto
-        valor_texto = update.message.text.replace('R$', '').replace('.', '').replace(',', '.').strip()
+        # Remove R$ e espaços em branco
+        valor_texto = update.message.text.replace('R$', '').strip()
+        
+        # Verifica se tem vírgula como separador decimal
+        if ',' in valor_texto:
+            # Se tiver vírgula, remove pontos de milhar e substitui vírgula por ponto
+            valor_texto = valor_texto.replace('.', '').replace(',', '.')
+        
+        print(f"DEBUG - processar_quantidade - Valor convertido: {valor_texto}")
         valor_brl = float(valor_texto)
         
         # Validação dos valores mínimo e máximo (em centavos)
@@ -234,18 +249,34 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
         moeda = context.user_data.get('moeda', 'a moeda selecionada')
         rede = context.user_data.get('rede', 'a rede selecionada')
         
+        print(f"DEBUG - processar_quantidade - Moeda: {moeda}, Rede: {rede}")
+        print(f"DEBUG - processar_quantidade - Valor BRL: {valor_brl}")
+        
         # Obtém a cotação e calcula o valor a receber
         cotacao = obter_cotacao(moeda)
+        print(f"DEBUG - processar_quantidade - Cotação: {cotacao}")
+        
+        # Salva a cotação no user_data para uso posterior
+        context.user_data['cotacao'] = cotacao
+        
         taxa = 0.01  # 1% de taxa de exemplo
         valor_taxa = valor_brl * taxa
         valor_liquido = valor_brl - valor_taxa
         valor_recebido = valor_liquido / cotacao
+        
+        print(f"DEBUG - processar_quantidade - Valor recebido: {valor_recebido}")
         
         # Formata os valores
         valor_brl_formatado = formatar_brl(valor_brl)
         valor_recebido_formatado = formatar_cripto(valor_recebido, moeda)
         valor_taxa_formatado = formatar_brl(valor_taxa)
         cotacao_formatada = formatar_brl(cotacao)
+        
+        print(f"DEBUG - processar_quantidade - Valores formatados:")
+        print(f"- BRL: {valor_brl_formatado}")
+        print(f"- Recebido: {valor_recebido_formatado}")
+        print(f"- Taxa: {valor_taxa_formatado}")
+        print(f"- Cotação: {cotacao_formatada}")
         
         keyboard = [
             [KeyboardButton("✅ Confirmar Compra")],
@@ -266,6 +297,8 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
             "Confirma os dados da compra?"
         )
+        
+        print("DEBUG - processar_quantidade - Mensagem de confirmação montada")
         
         await update.message.reply_text(
             mensagem,
@@ -460,7 +493,8 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
             
             # Obtém a URL do QR code e o código PIX da resposta
             qr_code_url = pagamento.get('qr_image_url', '')
-            qr_code_text = pagamento.get('qr_code_text', '')
+            # Usa qr_code_text se existir, senão usa qr_copy_paste
+            qr_code_text = pagamento.get('qr_code_text', pagamento.get('qr_copy_paste', ''))
             
             # Monta a mensagem de confirmação do depósito
             mensagem = (
