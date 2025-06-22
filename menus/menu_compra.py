@@ -1,4 +1,5 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import MessageHandler, ConversationHandler, CommandHandler, filters
 from telegram.ext import ContextTypes
 import requests
