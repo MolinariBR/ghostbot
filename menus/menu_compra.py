@@ -1,4 +1,3 @@
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import MessageHandler, ConversationHandler, CommandHandler, filters
 from telegram.ext import ContextTypes
@@ -587,63 +586,17 @@ Seu pagamento tradicional foi recebido. Aguarde a confirmação manual do pagame
     # Processa pagamento via PIX usando a API Depix (cliente paga em BRL)
     from api.depix import pix_api
     logger.info(f"Iniciando processamento de PIX - Valor: {valor_brl}, Endereço: {endereco}")
+    # Garante que o endereço correto será usado para o pagamento
+    endereco = context.user_data.get('endereco_recebimento', '')
+    valor_centavos = int(round(valor_brl * 100))
     try:
-        # Garante que o endereço correto será usado para o pagamento
-        endereco = context.user_data.get('endereco_recebimento', '')
-        # Cria pagamento PIX via Depix
-        valor_centavos = int(round(valor_brl * 100))
         cobranca = pix_api.criar_pagamento(valor_centavos=valor_centavos, endereco=endereco)
-        # Ajuste para alinhar com o teste de integração: caption e campos do dicionário
-        if cobranca.get('success') and 'data' in cobranca:
-            data = cobranca['data']
-            qr_code = data.get('qr_image_url')
-            txid = data.get('transaction_id')
-            copia_e_cola = data.get('qr_copy_paste') or data.get('qr_code_text')
-        else:
-            qr_code = cobranca.get('qr_image_url') or cobranca.get('qr_code')
-            txid = cobranca.get('transaction_id') or cobranca.get('txid')
-            copia_e_cola = cobranca.get('qr_code_text') or cobranca.get('copia_e_cola')
-
-        # Exibe QR Code e chave para o cliente pagar
-        await update.message.reply_photo(
-            photo=qr_code,
-            caption='📱 *QR Code para pagamento*\n\nAponte a câmera do seu app de pagamento para escanear o QR Code acima.',
-            parse_mode='Markdown'
-        )
-        await update.message.reply_text(
-            f"🔗 *Copia e Cola:*\n`{copia_e_cola}`",
-            parse_mode='Markdown'
-        )
-        # --- PONTO DE INTEGRAÇÃO PARA CONFIRMAÇÃO AUTOMÁTICA DEPAGAMENTO PIX ---
-        # Aqui, futuramente, implemente a verificação automática do pagamento via Depix.
-        # Quando o pagamento for confirmado, libere o saque via Voltz para o cliente.
-        # ------------------------------------------------------------------------
-        mensagem_confirmacao = (
-            '✅ *SOLICITAÇÃO DE DEPÓSITO RECEBIDA!*\n'
-            '━━━━━━━━━━━━━━━━━━━━\n'
-            f'• *Valor:* {valor_formatado}\n'
-            f'• *Criptomoeda:* {moeda.upper()}\n'
-            f'• *Endereço de destino:* `{endereco}`\n'
-            f'• *ID da transação:* `{txid}`\n\n'
-            '📱 *Pague o PIX usando o QR Code acima ou o código copia e cola:*\n\n'
-            f'`{copia_e_cola}`\n\n'
-            'Após o pagamento, aguarde alguns instantes para a confirmação.\n'
-            'Obrigado pela preferência!'
-        )
-        await update.message.reply_text(
-            mensagem_confirmacao,
-            parse_mode='Markdown',
-            reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
-        )
-        return ConversationHandler.END
-        
     except Exception as e:
         import traceback
-        from telegram import ReplyKeyboardMarkup as GlobalReplyKeyboardMarkup
         error_details = traceback.format_exc()
-        logger.error(f"Erro ao processar pagamento PIX: {e}\n{error_details}")
+        logger.error(f"Erro ao criar pagamento PIX: {e}\n{error_details}")
         mensagem_erro = (
-            "❌ *Erro ao processar pagamento PIX*\n\n"
+            "❌ *Erro ao criar pagamento PIX*\n\n"
             "Por favor, tente novamente ou escolha outro método de pagamento.\n\n"
             "Se o problema persistir, entre em contato com o suporte.\n"
             f"Erro: {str(e)}"
@@ -651,160 +604,65 @@ Seu pagamento tradicional foi recebido. Aguarde a confirmação manual do pagame
         await update.message.reply_text(
             mensagem_erro,
             parse_mode='Markdown',
-            reply_markup=GlobalReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+            reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
         )
-        # Se for Lightning, encerra a conversa; senão, volta para o menu de pagamento
         if 'lightning' in rede.lower():
             return ConversationHandler.END
         return ESCOLHER_PAGAMENTO
 
-    try:
-        from api.depix import obter_dados_ted
-        from telegram import ReplyKeyboardMarkup
-        logger.info(f"Processando pagamento via TED - Valor: {valor_brl}, Endereço: {endereco}")
-        # Obtém os dados para TED
-        dados_ted = obter_dados_ted()
-        if not dados_ted or not all(key in dados_ted for key in ['banco', 'agencia', 'conta', 'tipo_conta', 'favorecido', 'cpf_cnpj']):
-            raise Exception("Dados bancários incompletos ou inválidos")
-        # Monta a mensagem com os dados bancários
-        mensagem = (
-            "🏦 *DADOS PARA TRANSFERÊNCIA BANCÁRIA*\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"• *Banco:* {dados_ted['banco']}\n"
-            f"• *Agência:* {dados_ted['agencia']}\n"
-            f"• *Conta:* {dados_ted['conta']}\n"
-            f"• *Tipo de Conta:* {dados_ted['tipo_conta']}\n"
-            f"• *Favorecido:* {dados_ted['favorecido']}\n"
-            f"• *CPF/CNPJ:* {dados_ted['cpf_cnpj']}\n\n"
-            "Por favor, verifique os dados antes de confirmar a transferência.\n\n"
-            "Obrigado pela preferência!"
-        )
-        main_menu = menu_principal()
-        reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
+    # Validação dos campos essenciais
+    if cobranca.get('success') and 'data' in cobranca:
+        data = cobranca['data']
+        qr_code = data.get('qr_image_url')
+        txid = data.get('transaction_id')
+        copia_e_cola = data.get('qr_code_text') or data.get('qr_code')
+    else:
+        qr_code = cobranca.get('qr_image_url') or cobranca.get('qr_code')
+        txid = cobranca.get('transaction_id') or cobranca.get('txid')
+        copia_e_cola = cobranca.get('qr_code_text') or cobranca.get('copia_e_cola')
+
+    if not qr_code or not copia_e_cola:
+        logger.error(f"Resposta da API Depix incompleta: {cobranca}")
         await update.message.reply_text(
-            mensagem,
+            "❌ *Erro ao gerar QR Code PIX. Tente novamente ou contate o suporte.*",
             parse_mode='Markdown',
-            reply_markup=reply_markup
+            reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
         )
-        logger.info(f"Dados de TED enviados para o usuário {update.effective_user.id}")
-    except Exception as e:
-        from telegram import ReplyKeyboardMarkup as GlobalReplyKeyboardMarkup
-        logger.error(f"Erro ao processar TED: {str(e)}")
-        mensagem_erro = (
-            "❌ *Erro ao processar transferência bancária*\n\n"
-            "Por favor, tente novamente ou escolha outro método de pagamento.\n"
-            "Se o problema persistir, entre em contato com o suporte."
-        )
-        await update.message.reply_text(
-            mensagem_erro,
-            parse_mode='Markdown',
-            reply_markup=GlobalReplyKeyboardMarkup([['/start']], resize_keyboard=True)
-        )
+        if 'lightning' in rede.lower():
+            return ConversationHandler.END
         return ESCOLHER_PAGAMENTO
 
-    try:
-        from api.depix import obter_chat_boleto
-        from telegram import ReplyKeyboardMarkup
-        
-        logger.info(f"Processando pagamento via Boleto - Valor: {valor_brl}, Endereço: {endereco}")
-        
-        # Obtém o chat para envio do boleto
-        chat_boleto = obter_chat_boleto()
-        
-        if not chat_boleto:
-            raise Exception("Dados para geração de boleto não configurados")
-        
-        # Monta a mensagem para o usuário
-        mensagem = (
-            "📄 *SOLICITAÇÃO DE BOLETO*\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"• *Valor:* {valor_formatado}\n"
-            f"• *Criptomoeda:* {moeda.upper()}\n"
-            f"• *Endereço de destino:* `{endereco}`\n\n"
-            f"Para receber o boleto, entre em contato com: {chat_boleto}\n\n"
-            "Obrigado pela preferência!"
-        )
-        
-        main_menu = menu_principal()
-        reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
-        
-        await update.message.reply_text(
-            mensagem,
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
-        
-        logger.info(f"Instruções de boleto enviadas para o usuário {update.effective_user.id}")
-        
-    except Exception as e:
-        logger.error(f"Erro ao processar boleto: {str(e)}")
-        
-        mensagem_erro = (
-            "❌ *Erro ao processar solicitação de boleto*\n\n"
-            "Por favor, tente novamente ou escolha outro método de pagamento.\n"
-            "Se o problema persistir, entre em contato com o suporte."
-        )
-        
-        try:
-            metodos_menu = menu_metodos_pagamento()
-            reply_markup = ReplyKeyboardMarkup(metodos_menu, resize_keyboard=True) if metodos_menu else None
-            
-            await update.message.reply_text(
-                mensagem_erro,
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-        except Exception as e:
-            logger.error(f"Erro ao enviar menu de métodos de pagamento: {str(e)}")
-            await update.message.reply_text(
-                mensagem_erro,
-                parse_mode='Markdown'
-            )
-        return ESCOLHER_PAGAMENTO
-    
-    try:
-        # Mensagem de confirmação final
-        mensagem_final = (
-            "✅ *COMPRA REGISTRADA!*\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"• *Moeda:* {moeda}\n"
-            f"• *Rede:* {rede}\n"
-            f"• *Valor investido:* {valor_formatado}\n"
-            f"• *Você receberá:* {valor_recebido_formatado}\n"
-            f"• *Endereço de recebimento:* `{endereco}`\n"
-            f"• *Método de pagamento:* {metodo_pagamento}\n\n"
-            "📨 Um e-mail de confirmação foi enviado com os detalhes da sua compra.\n"
-            "Obrigado por utilizar nossos serviços!"
-        )
-        
-        # Obtém o menu principal de forma segura
-        main_menu = menu_principal_func() if menu_principal_func else None
-        reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
-        
-        # Envia a mensagem de confirmação
-        await update.message.reply_text(
-            mensagem_final,
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
-        
-        # Aqui você pode adicionar o processamento real da compra
-        # e o envio do e-mail de confirmação
-        
-    except Exception as e:
-        logger.error(f"Erro ao enviar mensagem de confirmação final: {str(e)}")
-        try:
-            # Tenta enviar uma mensagem de confirmação mais simples em caso de erro
-            await update.message.reply_text(
-                "✅ Compra registrada com sucesso! Obrigado por utilizar nossos serviços.",
-                parse_mode='Markdown'
-            )
-        except Exception as e2:
-            logger.error(f"Falha ao enviar mensagem de confirmação alternativa: {str(e2)}")
-    
-    # Limpa os dados da sessão em qualquer caso
-    context.user_data.clear()
-    
+    # Exibe QR Code e chave para o cliente pagar
+    await update.message.reply_photo(
+        photo=qr_code,
+        caption='📱 *QR Code para pagamento*\n\nAponte a câmera do seu app de pagamento para escanear o QR Code acima.',
+        parse_mode='Markdown'
+    )
+    await update.message.reply_text(
+        f"🔗 *Copia e Cola:*\n`{copia_e_cola}`",
+        parse_mode='Markdown'
+    )
+    # --- PONTO DE INTEGRAÇÃO PARA CONFIRMAÇÃO AUTOMÁTICA DEPAGAMENTO PIX ---
+    # Aqui, futuramente, implemente a verificação automática do pagamento via Depix.
+    # Quando o pagamento for confirmado, libere o saque via Voltz para o cliente.
+    # ------------------------------------------------------------------------
+    mensagem_confirmacao = (
+        '✅ *SOLICITAÇÃO DE DEPÓSITO RECEBIDA!*\n'
+        '━━━━━━━━━━━━━━━━━━━━\n'
+        f'• *Valor:* {valor_formatado}\n'
+        f'• *Criptomoeda:* {moeda.upper()}\n'
+        f'• *Endereço de destino:* `{endereco}`\n'
+        f'• *ID da transação:* `{txid}`\n\n'
+        '📱 *Pague o PIX usando o QR Code acima ou o código copia e cola:*\n\n'
+        f'`{copia_e_cola}`\n\n'
+        'Após o pagamento, aguarde alguns instantes para a confirmação.\n'
+        'Obrigado pela preferência!'
+    )
+    await update.message.reply_text(
+        mensagem_confirmacao,
+        parse_mode='Markdown',
+        reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+    )
     return ConversationHandler.END
 
 async def cancelar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
