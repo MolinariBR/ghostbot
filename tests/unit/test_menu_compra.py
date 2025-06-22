@@ -3,7 +3,7 @@ Testes unitários para o módulo menu_compra.py
 """
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
-from telegram import Update, Message, Chat, User
+from telegram import Update, Message, Chat, User, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 from menus.menu_compra import (
     obter_cotacao, formatar_brl, formatar_cripto,
@@ -215,4 +215,38 @@ class TestMenuCompra:
         result = await cancelar_compra(mock_update, mock_context)
         
         assert result == -1  # Encerra a conversa
+        mock_update.message.reply_text.assert_called()
+    
+    @pytest.mark.asyncio
+    async def test_confirmar_compra_lightning(self, mock_update, mock_context):
+        """Testa a confirmação da compra para Lightning: não pede endereço, exibe menu de pagamento."""
+        mock_update.message.text = "✅ Confirmar Compra"
+        mock_context.user_data.update({
+            "moeda": "BTC",
+            "rede": "Lightning",
+            "valor_brl": 100.50,
+            "cotacao": 300000.00
+        })
+        mock_update.message.reply_text = AsyncMock()
+        # Chama a função
+        result = await confirmar_compra(mock_update, mock_context)
+        # Deve ir direto para ESCOLHER_PAGAMENTO
+        assert result == ESCOLHER_PAGAMENTO
+        mock_update.message.reply_text.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_processar_metodo_pagamento_lightning(self, mock_update, mock_context):
+        """Testa o fluxo de pagamento Lightning: após pagamento tradicional, exibe mensagem de aguarde confirmação."""
+        mock_update.message.text = "💠 PIX"
+        mock_context.user_data.update({
+            "moeda": "BTC",
+            "rede": "Lightning",
+            "valor_brl": 100.50,
+            "cotacao": 300000.00
+        })
+        mock_update.message.reply_text = AsyncMock()
+        # Chama a função
+        result = await processar_metodo_pagamento(mock_update, mock_context)
+        # Deve encerrar a conversa
+        assert result == -1  # ConversationHandler.END
         mock_update.message.reply_text.assert_called()
