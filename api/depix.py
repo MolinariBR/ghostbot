@@ -165,12 +165,13 @@ class PixAPI:
         try:
             # Prepara os dados para a API
             # O endpoint espera os seguintes campos:
-            # - amount: valor em centavos
-            # - address: endereço de destino da criptomoeda
+            # - amount_in_cents: valor em centavos (obrigatório)
+            # - address: endereço de destino da criptomoeda (obrigatório)
+            # - type: tipo de depósito (opcional, padrão 'pix')
             data = {
-                'amount': valor_centavos,  # Valor em centavos
-                'address': endereco,     # Endereço de destino da criptomoeda
-                'type': 'pix'            # Tipo de depósito
+                'amount_in_cents': valor_centavos,  # Valor em centavos (obrigatório)
+                'address': endereco,               # Endereço de destino da criptomoeda (obrigatório)
+                'type': 'pix'                      # Tipo de depósito
             }
             
             logger.info(f"Dados do pagamento: {data}")
@@ -234,7 +235,7 @@ class PixAPI:
                 raise PixAPIError(error_msg)
             
             # Verifica os campos obrigatórios na resposta
-            required_fields = ['qr_code', 'qr_code_text', 'transaction_id']
+            required_fields = ['qr_image_url', 'qr_code_text', 'transaction_id']
             missing_fields = [field for field in required_fields if field not in payment_data]
             
             if missing_fields:
@@ -244,11 +245,11 @@ class PixAPI:
                 logger.error(f"Conteúdo completo da resposta: {response_data}")
                 raise PixAPIError("Resposta da API incompleta")
             
-            # Formata a resposta no formato esperado pelo código existente
+            # Prepara o resultado
             result = {
-                'qr_image_url': str(payment_data['qr_code']),      # URL do QR Code
-                'qr_copy_paste': str(payment_data['qr_code_text']), # Código PIX copia e cola
-                'transaction_id': str(payment_data['transaction_id']) # ID da transação
+                'qr_image_url': payment_data['qr_image_url'],
+                'qr_code_text': payment_data['qr_code_text'],
+                'transaction_id': payment_data['transaction_id']
             }
             
             logger.info("Pagamento PIX criado com sucesso")
