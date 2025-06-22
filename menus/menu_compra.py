@@ -88,17 +88,17 @@ TED = "TED"
 BOLETO = "Boleto Bancário"
 
 def menu_moedas():
-    """Retorna as opções de moedas como ReplyKeyboardMarkup."""
+    """Retorna as opções de moedas como lista de listas de KeyboardButton."""
     teclado = [
         [KeyboardButton("₿ Bitcoin (BTC)")],
         [KeyboardButton("💵 Tether (USDT)")],
         [KeyboardButton("💠 Depix")],
         [KeyboardButton("🔙 Voltar")]
     ]
-    return ReplyKeyboardMarkup(teclado, resize_keyboard=True, one_time_keyboard=False)
+    return teclado
 
 def menu_redes(moeda: str):
-    """Retorna as opções de rede para a moeda selecionada como ReplyKeyboardMarkup."""
+    """Retorna as opções de rede para a moeda selecionada como lista de listas de KeyboardButton."""
     if "BTC" in moeda.upper():
         teclado = [
             [KeyboardButton("⛓️ On-chain")],
@@ -117,7 +117,7 @@ def menu_redes(moeda: str):
             [KeyboardButton("💧 Liquid")],
             [KeyboardButton("🔙 Voltar")]
         ]
-    return ReplyKeyboardMarkup(teclado, resize_keyboard=True, one_time_keyboard=False)
+    return teclado
 
 async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Inicia o fluxo de compra mostrando as moedas disponíveis."""
@@ -126,7 +126,6 @@ async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         opcoes_moedas = menu_moedas()
         # Cria o ReplyKeyboardMarkup a partir da lista de opções
         reply_markup = ReplyKeyboardMarkup(opcoes_moedas, resize_keyboard=True)
-        
         await update.message.reply_text(
             "💱 *ESCOLHA A MOEDA PARA COMPRA*\n\n"
             "Selecione a criptomoeda que deseja comprar:",
@@ -137,7 +136,6 @@ async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logger.error(f"Erro ao exibir opções de moedas: {str(e)}")
         # Tenta enviar uma mensagem de erro
         try:
-            # Tenta enviar novamente a mensagem com o teclado
             opcoes_moedas = menu_moedas()
             reply_markup = ReplyKeyboardMarkup(opcoes_moedas, resize_keyboard=True)
             await update.message.reply_text(
