@@ -638,10 +638,11 @@ Seu pagamento tradicional foi recebido. Aguarde a confirmação manual do pagame
         caption='📱 *QR Code para pagamento*\n\nAponte a câmera do seu app de pagamento para escanear o QR Code acima.',
         parse_mode='Markdown'
     )
-    await update.message.reply_text(
-        f"🔗 *Copia e Cola:*\n`{copia_e_cola}`",
-        parse_mode='Markdown'
-    )
+    # Removido o envio duplicado do Copia e Cola para evitar mensagens repetidas
+    # await update.message.reply_text(
+    #     f"🔗 *Copia e Cola:*\n`{copia_e_cola}`",
+    #     parse_mode='Markdown'
+    # )
     # --- PONTO DE INTEGRAÇÃO PARA CONFIRMAÇÃO AUTOMÁTICA DEPAGAMENTO PIX ---
     # Aqui, futuramente, implemente a verificação automática do pagamento via Depix.
     # Quando o pagamento for confirmado, libere o saque via Voltz para o cliente.
