@@ -175,14 +175,11 @@ def init_bot():
         
         logger.debug("Criando instância da aplicação...")
         # Cria e configura a aplicação com a instância personalizada de request
+        # Os timeouts já foram configurados no HTTPXRequest
         application = (
             Application.builder()
             .token(Config.TELEGRAM_BOT_TOKEN)
             .request(request)  # Usa a instância personalizada com configurações
-            .connect_timeout(BotConfig.CONNECTION_TIMEOUT)
-            .read_timeout(BotConfig.READ_TIMEOUT)
-            .write_timeout(BotConfig.WRITE_TIMEOUT)
-            .pool_timeout(BotConfig.POOL_TIMEOUT)
             .build()
         )
         
