@@ -538,14 +538,15 @@ async def main():
                 try:
                     logger.info(f"Iniciando polling (tentativa {retry_attempt + 1}/{BotConfig.MAX_POLLING_RETRIES})...")
                     
-                    # Verifica se o updater já está em execução
+                    # Se o updater já estiver em execução, não faz nada
                     if updater.running:
-                        logger.info("Updater já está em execução. Aguardando...")
-                        # Aguarda até que o updater termine de forma natural
-                        while updater.running:
-                            await asyncio.sleep(1)
+                        logger.info("Updater já está em execução. Aguardando mensagens...")
+                        # Mantém o bot rodando indefinidamente
+                        while True:
+                            await asyncio.sleep(3600)  # Dorme por 1 hora
                     else:
                         # Configura o polling com timeouts otimizados
+                        logger.info("Iniciando polling...")
                         await updater.start_polling(
                             drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
                             allowed_updates=Update.ALL_TYPES,
@@ -556,15 +557,9 @@ async def main():
                         # Se chegou aqui, o polling está funcionando
                         logger.info("Polling iniciado com sucesso!")
                         
-                        # Aguarda até que o polling termine
-                        await updater.stop()
-                        logger.info("Polling finalizado.")
-                    
-                    # Incrementa a tentativa e espera antes de tentar novamente
-                    retry_attempt += 1
-                    wait_time = BotConfig.get_retry_delay(retry_attempt)
-                    logger.info(f"Tentando reiniciar em {wait_time} segundos...")
-                    await asyncio.sleep(wait_time)
+                        # Mantém o bot rodando indefinidamente
+                        while True:
+                            await asyncio.sleep(3600)  # Dorme por 1 hora
                     
                 except asyncio.CancelledError:
                     logger.info("Polling cancelado pelo usuário.")
