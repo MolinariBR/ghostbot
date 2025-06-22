@@ -632,12 +632,10 @@ Seu pagamento tradicional foi recebido. Aguarde a confirmação manual do pagame
             return ConversationHandler.END
         return ESCOLHER_PAGAMENTO
 
-    # --- BYPASS DE TESTE: não envie QR Code real se variável de ambiente estiver setada ---
-    import os
-    logger.info(f"[DEBUG] Valor de MODO_TESTE_VOLTZ: {os.getenv('MODO_TESTE_VOLTZ')}")
-    if os.getenv("MODO_TESTE_VOLTZ") == "1":
-        # ATENÇÃO: Este bloco é para testes e deve ser REMOVIDO em produção!
-        await update.message.reply_text("[DEBUG] Simulação: QR Code não enviado no modo de teste. Apenas texto exibido.")
+    # --- BYPASS DE TESTE: sempre simula Voltz para Lightning (para facilitar testes) ---
+    if 'lightning' in rede.lower():
+        logger.info("[DEBUG] Bypass de teste Voltz ativado automaticamente para Lightning.")
+        await update.message.reply_text("[DEBUG] Simulação: QR Code não enviado no modo de teste Lightning. Apenas texto exibido.")
         await update.message.reply_text(
             mensagem_confirmacao,
             parse_mode='Markdown',
