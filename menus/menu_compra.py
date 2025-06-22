@@ -634,6 +634,7 @@ Seu pagamento tradicional foi recebido. Aguarde a confirmação manual do pagame
 
     # --- BYPASS DE TESTE: não envie QR Code real se variável de ambiente estiver setada ---
     import os
+    logger.info(f"[DEBUG] Valor de MODO_TESTE_VOLTZ: {os.getenv('MODO_TESTE_VOLTZ')}")
     if os.getenv("MODO_TESTE_VOLTZ") == "1":
         # ATENÇÃO: Este bloco é para testes e deve ser REMOVIDO em produção!
         await update.message.reply_text("[DEBUG] Simulação: QR Code não enviado no modo de teste. Apenas texto exibido.")
