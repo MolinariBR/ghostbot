@@ -11,11 +11,18 @@ from typing import Dict, Any, Optional
 menu_principal_func = None
 
 def menu_principal():
-    """Retorna o teclado do menu principal."""
+    """Retorna o teclado do menu principal como uma lista de listas de strings."""
     if menu_principal_func:
-        return menu_principal_func()
-    # Se a função do menu principal não estiver definida, retorna um teclado vazio
-    return ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+        try:
+            menu = menu_principal_func()
+            # Garante que o menu seja uma lista de listas de strings
+            if isinstance(menu, list) and all(isinstance(row, list) for row in menu):
+                return menu
+            logger.warning("menu_principal não retornou uma lista de listas válida")
+        except Exception as e:
+            logger.error(f"Erro ao obter menu principal: {str(e)}")
+    # Retorna um menu padrão em caso de erro
+    return [['/start']]
 
 # Configuração de logging
 logging.basicConfig(
@@ -88,116 +95,195 @@ TED = "TED"
 BOLETO = "Boleto Bancário"
 
 def menu_moedas():
-    """Retorna o teclado com as opções de moedas."""
-    keyboard = [
-        [KeyboardButton("₿ Bitcoin (BTC)")],
-        [KeyboardButton("💵 Tether (USDT)")],
-        [KeyboardButton("💠 Depix")],
-        [KeyboardButton("🔙 Voltar")]
+    """Retorna as opções de moedas como uma lista de listas de strings."""
+    return [
+        ["₿ Bitcoin (BTC)"],
+        ["💵 Tether (USDT)"],
+        ["💠 Depix"],
+        ["🔙 Voltar"]
     ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
 def menu_redes(moeda: str):
-    """Retorna o teclado com as opções de rede para a moeda selecionada."""
-    if "BTC" in moeda:
-        redes = [
-            [KeyboardButton("⛓️ On-chain")],
-            [KeyboardButton("⚡ Lightning")],
-            [KeyboardButton("💧 Liquid")],
-            [KeyboardButton("🔙 Voltar")]
+    """Retorna as opções de rede para a moeda selecionada como uma lista de listas de strings."""
+    if "BTC" in moeda.upper():
+        return [
+            ["⛓️ On-chain"],
+            ["⚡ Lightning"],
+            ["💧 Liquid"],
+            ["🔙 Voltar"]
         ]
-    elif "USDT" in moeda:
-        redes = [
-            [KeyboardButton("💧 Liquid")],
-            [KeyboardButton("🟣 Polygon")],
-            [KeyboardButton("🔙 Voltar")]
+    elif "USDT" in moeda.upper():
+        return [
+            ["💧 Liquid"],
+            ["🟣 Polygon"],
+            ["🔙 Voltar"]
         ]
     else:  # Depix
-        redes = [
-            [KeyboardButton("💧 Liquid")],
-            [KeyboardButton("🔙 Voltar")]
+        return [
+            ["💧 Liquid"],
+            ["🔙 Voltar"]
         ]
-    return ReplyKeyboardMarkup(redes, resize_keyboard=True, one_time_keyboard=False)
 
 async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Inicia o fluxo de compra mostrando as moedas disponíveis."""
-    await update.message.reply_text(
-        "💱 *ESCOLHA A MOEDA PARA COMPRA*\n\n"
-        "Selecione a criptomoeda que deseja comprar:",
-        reply_markup=menu_moedas(),
-        parse_mode='Markdown'
-    )
+    try:
+        # Obtém as opções de moedas
+        opcoes_moedas = menu_moedas()
+        # Cria o ReplyKeyboardMarkup a partir da lista de opções
+        reply_markup = ReplyKeyboardMarkup(opcoes_moedas, resize_keyboard=True)
+        
+        await update.message.reply_text(
+            "💱 *ESCOLHA A MOEDA PARA COMPRA*\n\n"
+            "Selecione a criptomoeda que deseja comprar:",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"Erro ao exibir opções de moedas: {str(e)}")
+        # Tenta enviar uma mensagem de erro
+        try:
+            await update.message.reply_text(
+                "💱 *ESCOLHA A MOEDA PARA COMPRA*\n\n"
+                "Selecione a criptomoeda que deseja comprar:\n\n"
+                "₿ Bitcoin (BTC)\n"
+                "💵 Tether (USDT)\n"
+                "💠 Depix\n"
+                "🔙 Voltar",
+                parse_mode='Markdown'
+            )
+        except Exception as e2:
+            logger.error(f"Falha ao enviar mensagem de erro: {str(e2)}")
+    
     return ESCOLHER_MOEDA
 
 async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa a escolha da moeda e pede para selecionar a rede."""
     if update.message.text == "🔙 Voltar":
-        # Get the main menu keyboard (synchronous call)
-        main_menu = menu_principal_func()
-        await update.message.reply_text(
-            "Operação cancelada.",
-            reply_markup=ReplyKeyboardMarkup(main_menu, resize_keyboard=True)
-        )
+        try:
+            # Obtém o menu principal
+            main_menu = menu_principal_func()
+            # Cria o ReplyKeyboardMarkup a partir da lista de opções
+            reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
+            
+            await update.message.reply_text(
+                "Operação cancelada.",
+                reply_markup=reply_markup
+            )
+        except Exception as e:
+            logger.error(f"Erro ao exibir menu principal: {str(e)}")
+            try:
+                await update.message.reply_text(
+                    "Operação cancelada.",
+                    parse_mode='Markdown'
+                )
+            except Exception as e2:
+                logger.error(f"Falha ao enviar mensagem de cancelamento: {str(e2)}")
         return ConversationHandler.END
-        
-    moeda_escolhida = update.message.text
-    context.user_data['moeda'] = moeda_escolhida
     
-    await update.message.reply_text(
-        f"🔄 *Rede de {moeda_escolhida}*\n\n"
-        "Selecione a rede que deseja utilizar:",
-        reply_markup=menu_redes(moeda_escolhida),
-        parse_mode='Markdown'
-    )
+    try:
+        moeda_escolhida = update.message.text
+        context.user_data['moeda'] = moeda_escolhida
+        
+        # Obtém as opções de rede para a moeda selecionada
+        opcoes_rede = menu_redes(moeda_escolhida)
+        # Cria o ReplyKeyboardMarkup a partir da lista de opções
+        reply_markup = ReplyKeyboardMarkup(opcoes_rede, resize_keyboard=True)
+        
+        await update.message.reply_text(
+            f"🔄 *Rede de {moeda_escolhida}*\n\n"
+            "Selecione a rede que deseja utilizar:",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"Erro ao processar escolha de moeda: {str(e)}")
+        # Tenta enviar uma mensagem de erro
+        try:
+            await update.message.reply_text(
+                "❌ *Erro ao processar a moeda selecionada*\n\n"
+                "Por favor, tente novamente.",
+                parse_mode='Markdown'
+            )
+            # Volta para o menu de moedas
+            opcoes_moedas = menu_moedas()
+            reply_markup = ReplyKeyboardMarkup(opcoes_moedas, resize_keyboard=True) if opcoes_moedas else None
+            await update.message.reply_text(
+                "💱 *ESCOLHA A MOEDA PARA COMPRA*\n\n"
+                "Selecione a criptomoeda que deseja comprar:",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+            return ESCOLHER_MOEDA
+        except Exception as e2:
+            logger.error(f"Falha ao enviar mensagem de erro: {str(e2)}")
+            return ConversationHandler.END
+    
     return ESCOLHER_REDE
 
 async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa a escolha da rede e pede o valor em BRL."""
     if update.message.text == "🔙 Voltar":
         return await iniciar_compra(update, context)
+    
+    try:
+        rede = update.message.text
+        context.user_data['rede'] = rede
         
-    rede = update.message.text
-    context.user_data['rede'] = rede
-    
-    # Get the selected coin
-    moeda = context.user_data.get('moeda', 'a moeda selecionada')
-    
-    # Formata os valores para exibição
-    min_valor = "10,00"
-    max_valor = "5.000,00"
-    
-    # Mensagem inicial
-    mensagem = (
-        f"💎 *{moeda} - {rede}*\n\n"
-        f"💰 *Valor de Investimento*\n"
-        f"• Mínimo: R$ {min_valor}\n"
-        f"• Máximo: R$ {max_valor}\n\n"
-        "💵 *Digite o valor desejado* (ex: 150,50) ou use os valores sugeridos abaixo:"
-    )
-    
-    # Teclado com valores sugeridos e campo de digitação
-    teclado = [
-        [
-            KeyboardButton("R$ 50,00"), 
-            KeyboardButton("R$ 100,00"),
-            KeyboardButton("R$ 250,00")
-        ],
-        [
-            KeyboardButton("R$ 500,00"),
-            KeyboardButton("R$ 1.000,00"),
-            KeyboardButton("R$ 2.500,00")
-        ],
-        [
-            KeyboardButton("Digitar valor"),
-            KeyboardButton("🔙 Voltar")
+        # Obtém a moeda selecionada
+        moeda = context.user_data.get('moeda', 'a moeda selecionada')
+        
+        # Formata os valores para exibição
+        min_valor = "10,00"
+        max_valor = "5.000,00"
+        
+        # Mensagem inicial
+        mensagem = (
+            f"💎 *{moeda} - {rede}*\n\n"
+            f"💰 *Valor de Investimento*\n"
+            f"• Mínimo: R$ {min_valor}\n"
+            f"• Máximo: R$ {max_valor}\n\n"
+            "💵 *Digite o valor desejado* (ex: 150,50) ou use os valores sugeridos abaixo:"
+        )
+        
+        # Teclado com valores sugeridos e campo de digitação
+        teclado = [
+            ["R$ 50,00", "R$ 100,00", "R$ 250,00"],
+            ["R$ 500,00", "R$ 1.000,00", "R$ 2.500,00"],
+            ["Digitar valor", "🔙 Voltar"]
         ]
-    ]
+        
+        # Cria o ReplyKeyboardMarkup a partir da lista de opções
+        reply_markup = ReplyKeyboardMarkup(teclado, resize_keyboard=True)
+        
+        await update.message.reply_text(
+            mensagem,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        logger.error(f"Erro ao processar escolha de rede: {str(e)}")
+        # Tenta enviar uma mensagem de erro
+        try:
+            await update.message.reply_text(
+                "❌ *Erro ao processar a rede selecionada*\n\n"
+                "Por favor, tente novamente.",
+                parse_mode='Markdown'
+            )
+            # Volta para o menu de redes
+            moeda = context.user_data.get('moeda', '')
+            opcoes_rede = menu_redes(moeda)
+            reply_markup = ReplyKeyboardMarkup(opcoes_rede, resize_keyboard=True) if opcoes_rede else None
+            await update.message.reply_text(
+                f"🔄 *Rede de {moeda}*\n\n"
+                "Selecione a rede que deseja utilizar:",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+            return ESCOLHER_REDE
+        except Exception as e2:
+            logger.error(f"Falha ao enviar mensagem de erro: {str(e2)}")
+            return ConversationHandler.END
     
-    await update.message.reply_text(
-        mensagem,
-        parse_mode='Markdown',
-        reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True)
-    )
     return QUANTIDADE
 
 async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -213,18 +299,32 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
         
         # Se o usuário clicou em "Digitar valor", pede para digitar
         if update.message.text == "Digitar valor":
-            await update.message.reply_text(
-                "💵 *Digite o valor desejado*\n\n"
-                "Exemplos:\n"
-                "• 150,50\n"
-                "• 1250,00\n\n"
-                "*Lembre-se:* Valor entre R$ 10,00 e R$ 5.000,00",
-                parse_mode='Markdown',
-                reply_markup=ReplyKeyboardMarkup(
-                    [[KeyboardButton("🔙 Voltar")]], 
-                    resize_keyboard=True
+            try:
+                # Cria um teclado com o botão de voltar
+                teclado_voltar = [["🔙 Voltar"]]
+                reply_markup = ReplyKeyboardMarkup(teclado_voltar, resize_keyboard=True)
+                
+                await update.message.reply_text(
+                    "💵 *Digite o valor desejado*\n\n"
+                    "Exemplos:\n"
+                    "• 150,50\n"
+                    "• 1250,00\n\n"
+                    "*Lembre-se:* Valor entre R$ 10,00 e R$ 5.000,00",
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
                 )
-            )
+            except Exception as e:
+                logger.error(f"Erro ao exibir teclado de digitar valor: {str(e)}")
+                # Tenta enviar sem teclado em caso de erro
+                await update.message.reply_text(
+                    "💵 *Digite o valor desejado*\n\n"
+                    "Exemplos:\n"
+                    "• 150,50\n"
+                    "• 1250,00\n\n"
+                    "*Lembre-se:* Valor entre R$ 10,00 e R$ 5.000,00\n\n"
+                    "Digite 'voltar' para retornar.",
+                    parse_mode='Markdown'
+                )
             return QUANTIDADE
             
         # Remove R$ e espaços em branco
@@ -280,33 +380,55 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
         print(f"- Taxa: {valor_taxa_formatado}")
         print(f"- Cotação: {cotacao_formatada}")
         
-        keyboard = [
-            [KeyboardButton("✅ Confirmar Compra")],
-            [KeyboardButton("✏️ Alterar Valor"), KeyboardButton("🔙 Mudar Moeda")]
-        ]
-        
-        # Monta a mensagem de confirmação
-        mensagem = (
-            f"📋 *RESUMO DA COMPRA*\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"• *Moeda:* {moeda}\n"
-            f"• *Rede:* {rede}\n"
-            f"• *Valor investido:* {valor_brl_formatado}\n"
-            f"• *Taxa (1%):* {valor_taxa_formatado}\n"
-            f"• *Cotação:* {cotacao_formatada}\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"💎 *Você receberá:* {valor_recebido_formatado}\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            "Confirma os dados da compra?"
-        )
-        
-        print("DEBUG - processar_quantidade - Mensagem de confirmação montada")
-        
-        await update.message.reply_text(
-            mensagem,
-            parse_mode='Markdown',
-            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        )
+        try:
+            # Cria o teclado de confirmação
+            teclado_confirmacao = [
+                ["✅ Confirmar Compra"],
+                ["✏️ Alterar Valor", "🔙 Mudar Moeda"]
+            ]
+            reply_markup = ReplyKeyboardMarkup(teclado_confirmacao, resize_keyboard=True)
+            
+            # Monta a mensagem de confirmação
+            mensagem = (
+                f"📋 *RESUMO DA COMPRA*\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"• *Moeda:* {moeda}\n"
+                f"• *Rede:* {rede}\n"
+                f"• *Valor investido:* {valor_brl_formatado}\n"
+                f"• *Taxa (1%):* {valor_taxa_formatado}\n"
+                f"• *Cotação:* {cotacao_formatada}\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"💎 *Você receberá:* {valor_recebido_formatado}\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Confirma os dados da compra?"
+            )
+            
+            print("DEBUG - processar_quantidade - Mensagem de confirmação montada")
+            
+            await update.message.reply_text(
+                mensagem,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        except Exception as e:
+            logger.error(f"Erro ao exibir confirmação de compra: {str(e)}")
+            # Tenta enviar sem teclado em caso de erro
+            await update.message.reply_text(
+                "❌ *Ocorreu um erro ao processar sua solicuição.*\n\n"
+                "Por favor, tente novamente mais tarde.",
+                parse_mode='Markdown'
+            )
+            # Volta para o menu de redes
+            moeda = context.user_data.get('moeda', '')
+            opcoes_rede = menu_redes(moeda)
+            reply_markup = ReplyKeyboardMarkup(opcoes_rede, resize_keyboard=True) if opcoes_rede else None
+            await update.message.reply_text(
+                f"🔄 *Rede de {moeda}*\n\n"
+                "Selecione a rede que deseja utilizar:",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+            return ESCOLHER_REDE
         return CONFIRMAR
         
     except ValueError as e:
@@ -384,25 +506,35 @@ async def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     else:
         instrucao = "📬 Informe o endereço de recebimento:"
     
-    await update.message.reply_text(
-        instrucao,
-        parse_mode='Markdown',
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton("🔙 Voltar")]], 
-            resize_keyboard=True
+    try:
+        # Cria o teclado com o botão de voltar
+        teclado_voltar = [["🔙 Voltar"]]
+        reply_markup = ReplyKeyboardMarkup(teclado_voltar, resize_keyboard=True)
+        
+        await update.message.reply_text(
+            instrucao,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
         )
-    )
+    except Exception as e:
+        logger.error(f"Erro ao exibir teclado de endereço: {str(e)}")
+        # Tenta enviar sem teclado em caso de erro
+        await update.message.reply_text(
+            f"{instrucao}\n\n"
+            "Digite 'voltar' para retornar.",
+            parse_mode='Markdown'
+        )
+    
     return SOLICITAR_ENDERECO
 
 def menu_metodos_pagamento():
-    """Retorna o teclado com as opções de métodos de pagamento."""
-    keyboard = [
-        [KeyboardButton("💠 PIX")],
-        [KeyboardButton("🏦 TED")],
-        [KeyboardButton("📄 Boleto")],
-        [KeyboardButton("🔙 Voltar")]
+    """Retorna as opções de métodos de pagamento como uma lista de listas de strings."""
+    return [
+        ["💠 PIX"],
+        ["🏦 TED"],
+        ["📄 Boleto"],
+        ["🔙 Voltar"]
     ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
 async def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa o endereço informado e solicita o método de pagamento."""
@@ -413,11 +545,31 @@ async def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data['endereco_recebimento'] = endereco
     
     # Mostra opções de pagamento
-    await update.message.reply_text(
-        "💳 *Escolha a forma de pagamento:*",
-        parse_mode='Markdown',
-        reply_markup=menu_metodos_pagamento()
-    )
+    try:
+        # Obtém as opções de pagamento
+        opcoes_pagamento = menu_metodos_pagamento()
+        # Cria o ReplyKeyboardMarkup a partir da lista de opções
+        reply_markup = ReplyKeyboardMarkup(opcoes_pagamento, resize_keyboard=True)
+        
+        await update.message.reply_text(
+            "💳 *Escolha a forma de pagamento:*",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        logger.error(f"Erro ao exibir opções de pagamento: {str(e)}")
+        # Tenta enviar uma mensagem de erro
+        try:
+            await update.message.reply_text(
+                "💳 *Escolha a forma de pagamento:*\n\n"
+                "💠 PIX\n"
+                "🏦 TED\n"
+                "📄 Boleto\n"
+                "🔙 Voltar",
+                parse_mode='Markdown'
+            )
+        except Exception as e2:
+            logger.error(f"Falha ao enviar mensagem de erro: {str(e2)}")
     
     return ESCOLHER_PAGAMENTO
 
@@ -563,11 +715,24 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
                         # Continua mesmo se não conseguir enviar a imagem
                 
                 # Envia a mensagem de confirmação
-                await update.message.reply_text(
-                    mensagem,
-                    parse_mode='Markdown',
-                    reply_markup=menu_principal()
-                )
+                try:
+                    # Obtém o menu principal
+                    main_menu = menu_principal_func()
+                    # Cria o ReplyKeyboardMarkup a partir da lista de opções
+                    reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
+                    
+                    await update.message.reply_text(
+                        mensagem,
+                        parse_mode='Markdown',
+                        reply_markup=reply_markup
+                    )
+                except Exception as e:
+                    logger.error(f"Erro ao exibir menu principal após confirmação: {str(e)}")
+                    # Tenta enviar sem teclado em caso de erro
+                    await update.message.reply_text(
+                        mensagem,
+                        parse_mode='Markdown'
+                    )
                 
                 # Registra a conclusão da transação
                 logger.info(f"Depósito PIX finalizado para o usuário {update.effective_user.id}")
@@ -576,12 +741,25 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
                 logger.error(f"Erro ao enviar mensagem de confirmação: {str(e)}")
                 # Tenta enviar uma mensagem de erro mais simples
                 try:
+                    from telegram import ReplyKeyboardMarkup
+                    main_menu = menu_principal()
+                    reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
+                    
                     await update.message.reply_text(
                         "✅ Pagamento processado com sucesso! Por favor, verifique sua conta bancária para o QR Code.",
-                        reply_markup=menu_principal()
+                        parse_mode='Markdown',
+                        reply_markup=reply_markup
                     )
                 except Exception as e2:
                     logger.error(f"Erro ao enviar mensagem de fallback: {str(e2)}")
+                    # Tenta enviar sem o reply_markup em caso de falha
+                    try:
+                        await update.message.reply_text(
+                            "✅ Pagamento processado com sucesso! Por favor, verifique sua conta bancária para o QR Code.",
+                            parse_mode='Markdown'
+                        )
+                    except Exception as e3:
+                        logger.error(f"Falha ao enviar mensagem de fallback alternativa: {str(e3)}")
             
             # Retorna para o menu principal em qualquer caso
             return ConversationHandler.END
@@ -599,16 +777,28 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
                 f"Erro: {str(e)}"
             )
             
-            await update.message.reply_text(
-                mensagem_erro,
-                parse_mode='Markdown',
-                reply_markup=menu_metodos_pagamento()
-            )
+            from telegram import ReplyKeyboardMarkup
+            try:
+                metodos_menu = menu_metodos_pagamento()
+                reply_markup = ReplyKeyboardMarkup(metodos_menu, resize_keyboard=True) if metodos_menu else None
+                
+                await update.message.reply_text(
+                    mensagem_erro,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+            except Exception as e:
+                logger.error(f"Erro ao enviar menu de métodos de pagamento: {str(e)}")
+                await update.message.reply_text(
+                    mensagem_erro,
+                    parse_mode='Markdown'
+                )
             return ESCOLHER_PAGAMENTO
             
     elif metodo_pagamento == "🏦 TED":
         try:
             from api.depix import obter_dados_ted
+            from telegram import ReplyKeyboardMarkup
             
             logger.info(f"Processando pagamento via TED - Valor: {valor_brl}, Endereço: {endereco}")
             
@@ -635,10 +825,13 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
                 "Obrigado pela preferência!"
             )
             
+            main_menu = menu_principal()
+            reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
+            
             await update.message.reply_text(
                 mensagem,
                 parse_mode='Markdown',
-                reply_markup=menu_principal()
+                reply_markup=reply_markup
             )
             
             logger.info(f"Dados de TED enviados para o usuário {update.effective_user.id}")
@@ -652,11 +845,21 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
                 "Se o problema persistir, entre em contato com o suporte."
             )
             
-            await update.message.reply_text(
-                mensagem_erro,
-                parse_mode='Markdown',
-                reply_markup=menu_metodos_pagamento()
-            )
+            try:
+                metodos_menu = menu_metodos_pagamento()
+                reply_markup = ReplyKeyboardMarkup(metodos_menu, resize_keyboard=True) if metodos_menu else None
+                
+                await update.message.reply_text(
+                    mensagem_erro,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+            except Exception as e:
+                logger.error(f"Erro ao enviar menu de métodos de pagamento: {str(e)}")
+                await update.message.reply_text(
+                    mensagem_erro,
+                    parse_mode='Markdown'
+                )
             return ESCOLHER_PAGAMENTO
         
         return ConversationHandler.END
@@ -664,6 +867,7 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
     elif metodo_pagamento == "📄 Boleto":
         try:
             from api.depix import obter_chat_boleto
+            from telegram import ReplyKeyboardMarkup
             
             logger.info(f"Processando pagamento via Boleto - Valor: {valor_brl}, Endereço: {endereco}")
             
@@ -684,10 +888,13 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
                 "Obrigado pela preferência!"
             )
             
+            main_menu = menu_principal()
+            reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
+            
             await update.message.reply_text(
                 mensagem,
                 parse_mode='Markdown',
-                reply_markup=menu_principal()
+                reply_markup=reply_markup
             )
             
             logger.info(f"Instruções de boleto enviadas para o usuário {update.effective_user.id}")
@@ -701,39 +908,66 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
                 "Se o problema persistir, entre em contato com o suporte."
             )
             
-            await update.message.reply_text(
-                mensagem_erro,
-                parse_mode='Markdown',
-                reply_markup=menu_metodos_pagamento()
-            )
+            try:
+                metodos_menu = menu_metodos_pagamento()
+                reply_markup = ReplyKeyboardMarkup(metodos_menu, resize_keyboard=True) if metodos_menu else None
+                
+                await update.message.reply_text(
+                    mensagem_erro,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+            except Exception as e:
+                logger.error(f"Erro ao enviar menu de métodos de pagamento: {str(e)}")
+                await update.message.reply_text(
+                    mensagem_erro,
+                    parse_mode='Markdown'
+                )
             return ESCOLHER_PAGAMENTO
         
         return ConversationHandler.END
 
-    # Mensagem de confirmação final
-    mensagem_final = (
-        "✅ *COMPRA REGISTRADA!*\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        f"• *Moeda:* {moeda}\n"
-        f"• *Rede:* {rede}\n"
-        f"• *Valor investido:* {valor_formatado}\n"
-        f"• *Você receberá:* {valor_recebido_formatado}\n"
-        f"• *Endereço de recebimento:* `{endereco}`\n"
-        f"• *Método de pagamento:* {metodo_pagamento}\n\n"
-        "📨 Um e-mail de confirmação foi enviado com os detalhes da sua compra.\n"
-        "Obrigado por utilizar nossos serviços!"
-    )
+    try:
+        # Mensagem de confirmação final
+        mensagem_final = (
+            "✅ *COMPRA REGISTRADA!*\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"• *Moeda:* {moeda}\n"
+            f"• *Rede:* {rede}\n"
+            f"• *Valor investido:* {valor_formatado}\n"
+            f"• *Você receberá:* {valor_recebido_formatado}\n"
+            f"• *Endereço de recebimento:* `{endereco}`\n"
+            f"• *Método de pagamento:* {metodo_pagamento}\n\n"
+            "📨 Um e-mail de confirmação foi enviado com os detalhes da sua compra.\n"
+            "Obrigado por utilizar nossos serviços!"
+        )
+        
+        # Obtém o menu principal de forma segura
+        main_menu = menu_principal_func() if menu_principal_func else None
+        reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
+        
+        # Envia a mensagem de confirmação
+        await update.message.reply_text(
+            mensagem_final,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        
+        # Aqui você pode adicionar o processamento real da compra
+        # e o envio do e-mail de confirmação
+        
+    except Exception as e:
+        logger.error(f"Erro ao enviar mensagem de confirmação final: {str(e)}")
+        try:
+            # Tenta enviar uma mensagem de confirmação mais simples em caso de erro
+            await update.message.reply_text(
+                "✅ Compra registrada com sucesso! Obrigado por utilizar nossos serviços.",
+                parse_mode='Markdown'
+            )
+        except Exception as e2:
+            logger.error(f"Falha ao enviar mensagem de confirmação alternativa: {str(e2)}")
     
-    update.message.reply_text(
-        mensagem_final,
-        parse_mode='Markdown',
-        reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None
-    )
-    
-    # Aqui você pode adicionar o processamento real da compra
-    # e o envio do e-mail de confirmação
-    
-    # Limpa os dados da sessão
+    # Limpa os dados da sessão em qualquer caso
     context.user_data.clear()
     
     return ConversationHandler.END
@@ -757,34 +991,63 @@ async def cancelar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         context.user_data.clear()
         
         # Obtém o menu principal de forma síncrona
+        reply_markup = None
         try:
-            main_menu = menu_principal_func()
-            reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True) if main_menu else None
+            if menu_principal_func:
+                main_menu = menu_principal_func()
+                if main_menu:
+                    reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True)
         except Exception as e:
             logger.error(f"Erro ao obter menu principal: {str(e)}")
-            reply_markup = None
         
         # Envia mensagem de confirmação
-        await update.message.reply_text(
-            "❌ *Compra cancelada.*\n\nVocê pode iniciar uma nova compra a qualquer momento.",
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
-        
-        logger.info(f"Fluxo de compra cancelado para o usuário {user_id}")
+        try:
+            await update.message.reply_text(
+                "❌ *Compra cancelada.*\n\nVocê pode iniciar uma nova compra a qualquer momento.",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            logger.info(f"Fluxo de compra cancelado para o usuário {user_id}")
+        except Exception as e:
+            logger.error(f"Erro ao enviar mensagem de cancelamento: {str(e)}")
+            # Tenta enviar sem o reply_markup
+            try:
+                await update.message.reply_text(
+                    "❌ Compra cancelada.\n\nVocê pode iniciar uma nova compra a qualquer momento.",
+                    parse_mode='Markdown'
+                )
+            except Exception as e2:
+                logger.error(f"Falha ao enviar mensagem de cancelamento alternativa: {str(e2)}")
         
     except Exception as e:
         logger.error(f"Erro ao cancelar compra: {str(e)}")
         
         # Tenta enviar uma mensagem de erro genérica
         try:
+            reply_markup = None
+            if menu_principal_func:
+                try:
+                    main_menu = menu_principal_func()
+                    if main_menu:
+                        reply_markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True)
+                except Exception as e_menu:
+                    logger.error(f"Erro ao obter menu principal para mensagem de erro: {str(e_menu)}")
+            
             await update.message.reply_text(
                 "❌ Ocorreu um erro ao cancelar a compra. Por favor, tente novamente.",
                 parse_mode='Markdown',
-                reply_markup=ReplyKeyboardMarkup(menu_principal_func(), resize_keyboard=True) if menu_principal_func else None
+                reply_markup=reply_markup
             )
-        except:
-            pass  # Se falhar, não há muito o que fazer
+        except Exception as e2:
+            logger.error(f"Falha ao enviar mensagem de erro de cancelamento: {str(e2)}")
+            # Última tentativa sem reply_markup
+            try:
+                await update.message.reply_text(
+                    "❌ Ocorreu um erro ao cancelar a compra. Por favor, tente novamente.",
+                    parse_mode='Markdown'
+                )
+            except:
+                pass  # Se falhar, não há mais o que fazer
     
     return ConversationHandler.END
 
