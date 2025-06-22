@@ -467,32 +467,51 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
         return QUANTIDADE
 
 async def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Confirma os dados e solicita o endereço de recebimento."""
+    """Confirma os dados e solicita o endereço de recebimento ou método de pagamento, conforme a rede."""
     # Se o usuário clicou em "Alterar Valor", volta para a tela de quantidade
     if update.message.text == "✏️ Alterar Valor":
         return await escolher_rede(update, context)
     # Se clicou em "Mudar Moeda", volta para o início
     elif update.message.text == "🔙 Mudar Moeda":
         return await iniciar_compra(update, context)
-    
-    # Se confirmou, pede o endereço
-    try:
-        # Cria o teclado com o botão de voltar
-        teclado_voltar = [["🔙 Voltar"]]
-        reply_markup = ReplyKeyboardMarkup(teclado_voltar, resize_keyboard=True)
-        await update.message.reply_text(
-            "📬 Informe o endereço de recebimento:",
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
-    except Exception as e:
-        logger.error(f"Erro ao exibir teclado de endereço: {str(e)}")
-        # Tenta enviar sem teclado em caso de erro
-        await update.message.reply_text(
-            "📬 Informe o endereço de recebimento:\n\nDigite 'voltar' para retornar.",
-            parse_mode='Markdown'
-        )
-    return SOLICITAR_ENDERECO
+
+    # Decide o próximo passo conforme a rede
+    rede = context.user_data.get('rede', '').lower()
+    if 'lightning' in rede:
+        # Vai direto para o menu de métodos de pagamento
+        try:
+            opcoes_pagamento = menu_metodos_pagamento()
+            reply_markup = ReplyKeyboardMarkup(opcoes_pagamento, resize_keyboard=True)
+            await update.message.reply_text(
+                "💳 *Escolha a forma de pagamento:*",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        except Exception as e:
+            logger.error(f"Erro ao exibir métodos de pagamento: {str(e)}")
+            await update.message.reply_text(
+                "❌ Ocorreu um erro ao exibir as opções de pagamento. Por favor, tente novamente.",
+                reply_markup=ReplyKeyboardMarkup([["🔙 Voltar"]], resize_keyboard=True)
+            )
+            return SOLICITAR_ENDERECO
+        return ESCOLHER_PAGAMENTO
+    else:
+        # Pede o endereço normalmente
+        try:
+            teclado_voltar = [["🔙 Voltar"]]
+            reply_markup = ReplyKeyboardMarkup(teclado_voltar, resize_keyboard=True)
+            await update.message.reply_text(
+                "📬 Informe o endereço de recebimento:",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        except Exception as e:
+            logger.error(f"Erro ao exibir teclado de endereço: {str(e)}")
+            await update.message.reply_text(
+                "📬 Informe o endereço de recebimento:\n\nDigite 'voltar' para retornar.",
+                parse_mode='Markdown'
+            )
+        return SOLICITAR_ENDERECO
 
 def menu_metodos_pagamento():
     """Retorna as opções de métodos de pagamento como uma lista de listas de strings."""
