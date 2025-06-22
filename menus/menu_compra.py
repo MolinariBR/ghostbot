@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import json
 import logging
 from typing import Dict, Any, Optional
+import os
 
 # Importa o módulo para integração com a API Voltz (Lightning Network)
 from api.voltz import VoltzAPI
@@ -631,17 +632,6 @@ Seu pagamento tradicional foi recebido. Aguarde a confirmação manual do pagame
         if 'lightning' in rede.lower():
             return ConversationHandler.END
         return ESCOLHER_PAGAMENTO
-
-    # --- BYPASS DE TESTE: sempre simula Voltz para Lightning (para facilitar testes) ---
-    if 'lightning' in rede.lower():
-        logger.info("[DEBUG] Bypass de teste Voltz ativado automaticamente para Lightning.")
-        await update.message.reply_text("[DEBUG] Simulação: QR Code não enviado no modo de teste Lightning. Apenas texto exibido.")
-        await update.message.reply_text(
-            mensagem_confirmacao,
-            parse_mode='Markdown',
-            reply_markup=ReplyKeyboardMarkup([["/start"]], resize_keyboard=True)
-        )
-        return ConversationHandler.END
 
     # Exibe QR Code e chave para o cliente pagar
     await update.message.reply_photo(
