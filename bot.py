@@ -170,12 +170,7 @@ def init_bot():
             connect_timeout=BotConfig.CONNECTION_TIMEOUT,
             write_timeout=BotConfig.WRITE_TIMEOUT,
             pool_timeout=BotConfig.POOL_TIMEOUT,
-            http_version='1.1',
-            limits={
-                'max_keepalive_connections': BotConfig.POOL_SIZE,
-                'max_connections': BotConfig.POOL_SIZE * 2,
-                'keepalive_expiry': 30.0,  # segundos
-            }
+            http_version='1.1'
         )
         
         logger.debug("Criando instância da aplicação...")
