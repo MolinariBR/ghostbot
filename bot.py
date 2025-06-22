@@ -543,7 +543,6 @@ async def main():
                         drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
                         allowed_updates=Update.ALL_TYPES,
                         timeout=BotConfig.POLLING_TIMEOUT,
-                        read_latency=BotConfig.READ_LATENCY,
                         bootstrap_retries=3,
                         close_loop=False
                     )
