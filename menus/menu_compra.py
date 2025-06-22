@@ -572,12 +572,13 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
     # FLUXO ESPECIAL PARA LIGHTNING: NÃO ACIONA VOLTZ, SÓ EXIBE INSTRUÇÃO
     if 'lightning' in rede.lower():
         # Exibe instrução para aguardar confirmação manual/backend
+        from telegram import ReplyKeyboardMarkup as GlobalReplyKeyboardMarkup
         await update.message.reply_text(
             '''⚡ *Pagamento registrado!*
 
 Seu pagamento tradicional foi recebido. Aguarde a confirmação manual do pagamento.\nAssim que for confirmado, você receberá instruções para saque via Lightning (LNURL).''',
             parse_mode='Markdown',
-            reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+            reply_markup=GlobalReplyKeyboardMarkup([['/start']], resize_keyboard=True)
         )
         # Aqui NÃO aciona a API Voltz. O saque Lightning será feito após confirmação manual/backend.
         context.user_data.clear()
