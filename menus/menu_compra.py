@@ -476,32 +476,12 @@ async def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return await iniciar_compra(update, context)
     
     # Se confirmou, pede o endereço
-    moeda = context.user_data.get('moeda', '')
-    rede = context.user_data.get('rede', '')
-    
-    # Mensagem de instrução baseada no tipo de rede
-    if "Lightning" in rede:
-        instrucao = (
-            "⚡ *Método de Pagamento Voltz*\n\n"
-            "Você selecionou a rede Lightning. Para continuar, basta confirmar o pagamento abaixo.\n\n"
-            "O valor será creditado automaticamente na sua carteira Lightning após a confirmação.\n\n"
-            "Por favor, aguarde enquanto preparamos seu pagamento..."
-        )
-    elif "Liquid" in rede or "On-chain" in rede or "Polygon" in rede:
-        instrucao = (
-            "📬 *Informe o endereço de recebimento*\n\n"
-            f"Certifique-se de que o endereço é compatível com a rede *{rede}*."
-        )
-    else:
-        instrucao = "📬 Informe o endereço de recebimento:"
-    
     try:
         # Cria o teclado com o botão de voltar
         teclado_voltar = [["🔙 Voltar"]]
         reply_markup = ReplyKeyboardMarkup(teclado_voltar, resize_keyboard=True)
-        
         await update.message.reply_text(
-            instrucao,
+            "📬 Informe o endereço de recebimento:",
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
@@ -509,11 +489,9 @@ async def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         logger.error(f"Erro ao exibir teclado de endereço: {str(e)}")
         # Tenta enviar sem teclado em caso de erro
         await update.message.reply_text(
-            f"{instrucao}\n\n"
-            "Digite 'voltar' para retornar.",
+            "📬 Informe o endereço de recebimento:\n\nDigite 'voltar' para retornar.",
             parse_mode='Markdown'
         )
-    
     return SOLICITAR_ENDERECO
 
 def menu_metodos_pagamento():
@@ -699,7 +677,7 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
             await update.message.reply_text(
                 mensagem_confirmacao,
                 parse_mode='Markdown',
-                reply_markup=[['/start']]
+                reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
             )
             return ConversationHandler.END
             
@@ -716,7 +694,7 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
             await update.message.reply_text(
                 mensagem_erro,
                 parse_mode='Markdown',
-                reply_markup=[['/start']]
+                reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
             )
             return ESCOLHER_PAGAMENTO
             

@@ -96,35 +96,35 @@ class TestMenuCompra:
         """Testa a criação do menu de moedas."""
         keyboard = menu_moedas()
         # Verifica o número de linhas (4: BTC, USDT, Depix e Voltar)
-        assert len(keyboard.keyboard) == 4  
+        assert len(keyboard) == 4  # Agora é uma lista de listas
         # Verifica os textos dos botões
-        assert keyboard.keyboard[0][0].text == "₿ Bitcoin (BTC)"
-        assert keyboard.keyboard[1][0].text == "💵 Tether (USDT)"
-        assert keyboard.keyboard[2][0].text == "💠 Depix"
-        assert keyboard.keyboard[3][0].text == "🔙 Voltar"
-    
+        assert keyboard[0][0].text == "₿ Bitcoin (BTC)"
+        assert keyboard[1][0].text == "💵 Tether (USDT)"
+        assert keyboard[2][0].text == "💠 Depix"
+        assert keyboard[3][0].text == "🔙 Voltar"
+
     def test_menu_redes(self):
         """Testa a criação do menu de redes."""
         # Testa com BTC
         keyboard = menu_redes("BTC")
-        assert len(keyboard.keyboard) == 4  # 3 redes + voltar
-        assert keyboard.keyboard[0][0].text == "⛓️ On-chain"
-        assert keyboard.keyboard[1][0].text == "⚡ Lightning"
-        assert keyboard.keyboard[2][0].text == "💧 Liquid"
-        assert keyboard.keyboard[3][0].text == "🔙 Voltar"
+        assert len(keyboard) == 4  # 3 redes + voltar
+        assert keyboard[0][0].text == "⛓️ On-chain"
+        assert keyboard[1][0].text == "⚡ Lightning"
+        assert keyboard[2][0].text == "💧 Liquid"
+        assert keyboard[3][0].text == "🔙 Voltar"
         
         # Testa com USDT
         keyboard = menu_redes("USDT")
-        assert len(keyboard.keyboard) == 3  # 2 redes + voltar
-        assert keyboard.keyboard[0][0].text == "💧 Liquid"
-        assert keyboard.keyboard[1][0].text == "🟣 Polygon"
-        assert keyboard.keyboard[2][0].text == "🔙 Voltar"
+        assert len(keyboard) == 3  # 2 redes + voltar
+        assert keyboard[0][0].text == "💧 Liquid"
+        assert keyboard[1][0].text == "🟣 Polygon"
+        assert keyboard[2][0].text == "🔙 Voltar"
         
         # Testa com Depix
         keyboard = menu_redes("Depix")
-        assert len(keyboard.keyboard) == 2  # 1 rede + voltar
-        assert keyboard.keyboard[0][0].text == "💧 Liquid"
-        assert keyboard.keyboard[1][0].text == "🔙 Voltar"
+        assert len(keyboard) == 2  # 1 rede + voltar
+        assert keyboard[0][0].text == "💧 Liquid"
+        assert keyboard[1][0].text == "🔙 Voltar"
     
     @pytest.mark.asyncio
     @patch('menus.menu_compra.ReplyKeyboardMarkup')
