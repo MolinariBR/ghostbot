@@ -8,6 +8,13 @@ import logging
 # Variável para armazenar a função do menu principal
 menu_principal_func = None
 
+def menu_principal():
+    """Retorna o teclado do menu principal."""
+    if menu_principal_func:
+        return menu_principal_func()
+    # Se a função do menu principal não estiver definida, retorna um teclado vazio
+    return ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+
 # Configuração de logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -416,61 +423,64 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
             valor_centavos = int(valor_brl * 100)
             logger.info(f"Valor convertido para centavos: {valor_centavos}")
             
-            # Obtém a chave PIX da loja a partir das configurações
-            from tokens import Config
-            chave_pix_loja = getattr(Config, 'PIX_KEY', 'sua_chave_pix_aqui@exemplo.com')
-            
-            # 1. Primeiro, armazena a transação no banco de dados
-            # Aqui você deve implementar a lógica para salvar a transação
-            # com o endereço de destino da criptomoeda
+            # Prepara os dados da transação para envio ao backend
             transaction_data = {
                 'user_id': update.effective_user.id,
                 'amount_brl': valor_brl,
                 'amount_crypto': valor_recebido,
-                'crypto_currency': moeda,
+                'crypto_currency': moeda.lower(),  # Converte para minúsculas para padronização
                 'crypto_address': endereco,  # Endereço de destino da criptomoeda
                 'status': 'pending',
                 'payment_method': 'pix',
-                'created_at': datetime.now().isoformat()
+                'created_at': datetime.now().isoformat(),
+                'type': 'deposit'  # Indica que é um depósito
             }
             
-            # TODO: Implementar salvamento no banco de dados
-            # Exemplo: db.save_transaction(transaction_data)
-            logger.info(f"Transação armazenada: {transaction_data}")
+            logger.info(f"Enviando solicitação de depósito para o backend: {transaction_data}")
             
-            # 2. Cria o pagamento PIX com valor e endereço
+            # Envia a solicitação de depósito para o backend
             logger.info("Chamando pix_api.criar_pagamento...")
-            pagamento = pix_api.criar_pagamento(
+            resposta = pix_api.criar_pagamento(
                 valor_centavos=valor_centavos,
-                endereco=endereco  # Envia o endereço para a API
+                endereco=endereco  # Envia o endereço da criptomoeda para o backend
             )
-            logger.info("Pagamento PIX criado com sucesso")
             
-            # 3. Associa o transaction_id do PIX à transação no banco
-            # TODO: Atualizar a transação com o transaction_id retornado
-            transaction_id = pagamento.get('transaction_id')
-            logger.info(f"Transação PIX {transaction_id} associada ao endereço {endereco}")
+            logger.info(f"Resposta do backend: {resposta}")
             
-            # Monta a mensagem com o QR Code
+            # Verifica se a resposta contém os dados necessários
+            if not resposta or 'success' not in resposta or not resposta['success']:
+                error_msg = resposta.get('error', 'Erro desconhecido ao processar o pagamento')
+                raise Exception(f"Erro no processamento do pagamento: {error_msg}")
+            
+            # Obtém os dados do pagamento da resposta
+            pagamento = resposta.get('data', {})
+            transaction_id = pagamento.get('transaction_id', 'N/A')
+            
+            logger.info(f"Depósito PIX processado com sucesso. Transaction ID: {transaction_id}")
+            
+            # Monta a mensagem de confirmação do depósito
             mensagem = (
-                "🔘 *PAGAMENTO VIA PIX*\n"
+                "✅ *SOLICITAÇÃO DE DEPÓSITO RECEBIDA!*\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
-                f"• *Valor:* {valor_formatado}\n\n"
-                "Escaneie o QR Code abaixo ou copie o código PIX para efetuar o pagamento.\n"
-                "O pagamento é válido por 1 hora."
+                f"• *Valor:* {valor_formatado}\n"
+                f"• *Criptomoeda:* {moeda.upper()}\n"
+                f"• *Endereço de destino:* `{endereco}`\n\n"
+                "Seu depósito está sendo processado. Você receberá uma confirmação assim que for concluído.\n"
+                "ID da transação: `{transaction_id}`"
             )
             
-            # Envia a mensagem com o QR Code
+            # Envia a mensagem de confirmação
             await update.message.reply_text(
                 mensagem,
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                reply_markup=menu_principal()
             )
             
-            # Envia o código copia e cola
-            await update.message.reply_text(
-                f"📋 *Código PIX (copiar e colar):*\n`{pagamento['qr_copy_paste']}`",
-                parse_mode='Markdown'
-            )
+            # Registra a conclusão da transação
+            logger.info(f"Depósito PIX finalizado para o usuário {update.effective_user.id}")
+            
+            # Retorna para o menu principal
+            return ConversationHandler.END
             
         except Exception as e:
             import traceback

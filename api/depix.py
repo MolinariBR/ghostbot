@@ -22,23 +22,18 @@ class PixAPIError(Exception):
 class PixAPI:
     """Cliente para a API de pagamentos PIX do servidor VPS."""
     
-    def __init__(self, api_url: Optional[str] = None, api_key: Optional[str] = None):
+    def __init__(self, api_url: Optional[str] = None):
         """
-        Inicializa o cliente da API PIX.
+        Inicializa o cliente da API de depósito.
         
         Args:
             api_url: URL base da API (opcional, usa PIX_API_URL do tokens.py por padrão)
-            api_key: Chave de API para autenticação (opcional, usa PIX_API_KEY do tokens.py por padrão)
         """
-        # Endpoint da API PIX
-        self.api_url = (api_url or getattr(Config, 'PIX_API_URL', 'https://depix.eulen.app/api')).rstrip('/')
-        self.api_key = api_key or getattr(Config, 'PIX_API_KEY', None)
+        # Endpoint da API de depósito
+        self.api_url = (api_url or getattr(Config, 'PIX_API_URL', 'https://basetria.xyz/api/bot_deposit.php')).rstrip('/')
         
         if not self.api_url:
-            raise PixAPIError("URL da API PIX não configurada. Defina PIX_API_URL no tokens.py")
-            
-        if not self.api_key:
-            logger.warning("Chave da API PIX não configurada. Algumas funcionalidades podem não funcionar corretamente.")
+            raise PixAPIError("URL da API de depósito não configurada. Defina PIX_API_URL no tokens.py")
     
     def _make_request(self, method: str, path: str = '', data: Dict[str, Any] = None) -> Dict[str, Any]:
         """
@@ -175,18 +170,18 @@ class PixAPI:
             # Prepara os dados para a API
             # O endpoint espera os seguintes campos:
             # - amount: valor em centavos
-            # - address: endereço de destino
-            # - api_key: chave de API para autenticação
+            # - address: endereço de destino da criptomoeda
             data = {
                 'amount': valor_centavos,  # Valor em centavos
-                'address': endereco,       # Endereço de destino
-                'api_key': self.api_key    # Chave de API para autenticação
+                'address': endereco,     # Endereço de destino da criptomoeda
+                'type': 'pix'            # Tipo de depósito
             }
             
             logger.info(f"Dados do pagamento: {data}")
             
             # Chama a API
             logger.info(f"Chamando API PIX em: {self.api_url}")
+            logger.info(f"Usando chave de API: {self.api_key}")
             
             # Faz a requisição para o endpoint do backend
             headers = {
@@ -196,6 +191,7 @@ class PixAPI:
             
             logger.info(f"Headers da requisição: {headers}")
             
+            # Envia a requisição para o endpoint de depósito
             response = requests.post(
                 self.api_url,
                 json=data,

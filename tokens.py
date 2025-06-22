@@ -15,8 +15,8 @@ class Config:
         False: "https://ghostp2p.squareweb.app/api/bot_deposit.php"  # Desenvolvimento
     }
     
-    # URL base da API (será definida automaticamente)
-    PIX_API_URL = API_URLS[IS_PRODUCTION]
+    # URL base da API de depósito (será definida automaticamente)
+    PIX_API_URL = API_URLS[IS_PRODUCTION]  # URL do endpoint de depósito no backend
     
     # Configurações de Transferência Bancária
     TED_BANCO = "Banco do Brasil"
