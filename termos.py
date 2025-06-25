@@ -10,38 +10,46 @@ def obter_termos() -> str:
         str: Texto formatado em Markdown com os termos de uso.
     """
     termos = """
-📜 *TERMOS DE USO E POLÍTICA DE PRIVACIDADE*
+📜 *Termos de Uso para Compra de Criptomoedas*
 
-*1. Aceitação dos Termos* 
-Ao utilizar este serviço, você concorda com estes termos e condições. Se não concordar, por favor, não utilize nosso serviço.
+Ao usar este bot, você concorda com os termos abaixo:
 
-*2. Serviço Oferecido* 
-Este serviço permite a compra e venda de criptomoedas de forma facilitada através do Telegram.
+*1. Objetivo*
+O bot facilita a compra de criptomoedas, direcionando usuários a atendentes após confirmação do pagamento.
 
-*3. Responsabilidades do Usuário* 
-- É de responsabilidade do usuário fornecer informações corretas e atualizadas.
-- O usuário é responsável por manter a segurança de suas credenciais de acesso.
-- O usuário concorda em não utilizar o serviço para atividades ilegais.
+*2. Regras de Pagamento*
+Chave PIX: Copie todo o texto da chave PIX e pague na área "PIX Copia e Cola" do seu banco.
 
-*4. Política de Privacidade* 
-- Coletamos apenas as informações necessárias para a prestação do serviço.
-- Não compartilhamos seus dados pessoais com terceiros sem sua autorização, exceto quando exigido por lei.
-- Utilizamos medidas de segurança para proteger suas informações.
+Proibição de terceiros: Use apenas sua conta bancária. Pagamentos de terceiros são permitidos só para cadastrados no bot. Inconsistências podem levar à retenção do valor e processo de KYC para estorno.
 
-*5. Limitação de Responsabilidade* 
-- Não nos responsabilizamos por perdas decorrentes de flutuações do mercado de criptomoedas.
-- Não nos responsabilizamos por perdas resultantes de falhas de segurança causadas pelo usuário.
+Comprovante: Clique em PAGO, envie o comprovante e aguarde o atendente.
 
-*6. Alterações nos Termos* 
-Reservamo-nos o direito de modificar estes termos a qualquer momento. As alterações entrarão em vigor imediatamente após a publicação.
+*3. Contestações Indevidas*
+Tentativas de chargeback, MED ou contestações indevidas são proibidas.
 
-*7. Lei Aplicável* 
-Estes termos são regidos pelas leis do Brasil e qualquer litígio será resolvido no foro da comarca de São Paulo/SP.
+Medidas legais serão tomadas, e custos bancários serão repassados ao usuário.
 
-*8. Contato* 
-Para dúvidas sobre estes termos, entre em contato através do nosso suporte.
+A entrega das criptomoedas será suspensa até a resolução da disputa.
 
-*Data da última atualização: 22/06/2024*
+*4. Responsabilidades do Usuário*
+Forneça dados corretos e siga as instruções.
+
+Fraudes ou uso indevido resultam em bloqueio e retenção de valores.
+
+O usuário assume os riscos da compra de criptomoedas.
+
+*5. Retenção e Estorno*
+Pagamentos retidos por inconsistências ou contestações exigem KYC para estorno, feito apenas à conta de origem.
+
+Não nos responsabilizamos por atrasos causados por dados incorretos.
+
+*6. Privacidade*
+Dados são tratados com confidencialidade, e usados apenas para averiguação.
+
+*7. Aceitação*
+Usar o bot implica concordância com estes termos.
+
+Dúvidas? Fale com o suporte: @GhosttP2P
 """
     return termos.strip()
 
@@ -52,7 +60,7 @@ def obter_termos_resumido() -> str:
     Returns:
         str: Texto resumido dos termos.
     """
-    return "📜 Termos de Uso e Política de Privacidade"
+    return "📜 Termos de Uso para Compra de Criptomoedas"
 
 # Exemplo de uso:
 if __name__ == "__main__":
