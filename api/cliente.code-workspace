@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../../cliente"
+		},
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../ghostbackend"
+		}
+	],
+	"settings": {}
+}
