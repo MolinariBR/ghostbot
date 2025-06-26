@@ -496,6 +496,25 @@ def setup_handlers(application):
     application.add_handler(MessageHandler(filters.Regex('^❓ Ajuda$'), ajuda))
     application.add_handler(MessageHandler(filters.Regex('^📜 Termos$'), termos))
     application.add_handler(MessageHandler(filters.Regex('^🔙 Voltar$'), start))
+    
+    # ⚡ NOVA INTEGRAÇÃO LIGHTNING ⚡
+    try:
+        from handlers.lightning_integration import setup_lightning_integration
+        
+        # Configura a integração Lightning
+        lightning_integration = setup_lightning_integration(
+            application=application,
+            enable_monitoring=True,  # Ativa monitoramento automático
+            interval_seconds=30      # Verifica a cada 30 segundos
+        )
+        
+        if lightning_integration:
+            logger.info("✅ Integração Lightning configurada com sucesso!")
+        else:
+            logger.warning("⚠️ Falha ao configurar integração Lightning")
+            
+    except Exception as e:
+        logger.error(f"❌ Erro ao configurar integração Lightning: {e}", exc_info=True)
 
 async def signal_handler(app, signum=None, frame=None):
     """
