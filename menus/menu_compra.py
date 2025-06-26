@@ -766,7 +766,7 @@ async def processar_comprovante_ted(update: Update, context: ContextTypes.DEFAUL
     """Processa o comprovante de TED enviado."""
     if update.message.text == "🔙 Voltar":
         return await mostrar_metodos_pagamento(update, context)
-    
+
     # Verifica se é um documento/foto
     if update.message.document or update.message.photo:
         try:
@@ -774,16 +774,15 @@ async def processar_comprovante_ted(update: Update, context: ContextTypes.DEFAUL
             if update.message.document:
                 file_info = update.message.document
                 file_name = file_info.file_name or "comprovante_ted"
-                file_size = file_info.file_size
+                file_id = file_info.file_id
             else:
                 file_info = update.message.photo[-1]  # Maior resolução
                 file_name = "comprovante_ted.jpg"
-                file_size = file_info.file_size
-            
+                file_id = file_info.file_id
+
             # Verifica extensão do arquivo
             extensoes_validas = ['.pdf', '.jpg', '.jpeg', '.png']
             file_ext = '.' + file_name.split('.')[-1].lower() if '.' in file_name else '.jpg'
-            
             if file_ext not in extensoes_validas:
                 await update.message.reply_text(
                     "❌ *Formato não suportado*\n\n"
@@ -791,22 +790,52 @@ async def processar_comprovante_ted(update: Update, context: ContextTypes.DEFAUL
                     parse_mode='Markdown'
                 )
                 return AGUARDAR_TED_COMPROVANTE
-            
-            # Confirma recebimento
-            await update.message.reply_text(
-                "✅ *Comprovante recebido!*\n\n"
-                "🔄 *Transação em processamento, aguarde!*\n\n"
-                "Você receberá uma notificação assim que o pagamento for confirmado.",
-                parse_mode='Markdown',
-                reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
-            )
-            
-            # Aqui você pode adicionar lógica para salvar/processar o comprovante
-            # Por exemplo, reencaminhar para um admin ou salvar no sistema
-            
+
+            # Baixa o arquivo do Telegram
+            bot = context.bot
+            new_file = await bot.get_file(file_id)
+            file_path = f"/tmp/{file_name}"
+            await new_file.download_to_drive(file_path)
+
+            # Prepara dados para upload
+            user_data = context.user_data
+            chatid = str(context._user_id if hasattr(context, '_user_id') else user_data.get('chatid', ''))
+            # O deposit_id pode ser retornado pelo backend no registro, mas aqui usamos chatid como referência
+            url = 'https://ghostp2p.squareweb.app/api/upload_comprovante.php'
+            files = {'comprovante': (file_name, open(file_path, 'rb'))}
+            data = {'chatid': chatid}
+            try:
+                import requests
+                response = requests.post(url, files=files, data=data, timeout=20)
+                if response.status_code == 200 and 'success' in response.text:
+                    await update.message.reply_text(
+                        "✅ *Comprovante recebido e enviado para análise!*\n\n"
+                        "🔄 Transação em processamento, aguarde a confirmação.\n\n"
+                        "Você receberá uma notificação assim que o pagamento for confirmado.",
+                        parse_mode='Markdown',
+                        reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+                    )
+                else:
+                    await update.message.reply_text(
+                        "⚠️ *Comprovante recebido, mas houve um erro ao enviar ao sistema.*\n\n"
+                        "Tente novamente ou contate o suporte.",
+                        parse_mode='Markdown',
+                        reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+                    )
+            except Exception as e:
+                logger.error(f"Erro ao enviar comprovante para backend: {e}")
+                await update.message.reply_text(
+                    "❌ Erro ao enviar comprovante ao sistema. Tente novamente ou envie para o suporte.",
+                    parse_mode='Markdown',
+                    reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+                )
+            finally:
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    pass
             context.user_data.clear()
             return ConversationHandler.END
-            
         except Exception as e:
             logger.error(f"Erro ao processar comprovante: {e}")
             await update.message.reply_text(
@@ -814,7 +843,6 @@ async def processar_comprovante_ted(update: Update, context: ContextTypes.DEFAUL
                 parse_mode='Markdown'
             )
             return AGUARDAR_TED_COMPROVANTE
-    
     else:
         await update.message.reply_text(
             "📎 *Por favor, envie o comprovante como arquivo ou foto.*\n\n"
