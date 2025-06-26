@@ -25,8 +25,8 @@ class LightningPaymentManager:
         """
         self.bot = telegram_bot
         self.backend_url = backend_url.rstrip('/')
-        # Em produção, o banco estará no servidor web
-        self.db_path = Path('/var/www/html/data/deposit.db') if Path('/var/www/html/data/deposit.db').exists() else Path(__file__).parent.parent.parent / 'ghostbackend' / 'data' / 'deposit.db'
+        # Caminho correto do banco de dados
+        self.db_path = Path('/home/mau/bot/ghostbackend/data/deposit.db')
         self.last_check = datetime.now()
         
     async def start_monitoring(self, interval_seconds: int = 30):
