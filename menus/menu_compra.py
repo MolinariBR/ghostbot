@@ -681,6 +681,7 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
 async def registrar_pedido_backend(context: ContextTypes.DEFAULT_TYPE, status: str = "pending"):
     """
     Registra o pedido no backend (tabela deposit) para TED e Boleto.
+    Salva o id do depósito criado em context.user_data['deposit_id'].
     """
     try:
         from tokens import Config
@@ -706,6 +707,12 @@ async def registrar_pedido_backend(context: ContextTypes.DEFAULT_TYPE, status: s
         response = requests.post(url, data=json.dumps(payload), headers=headers, timeout=10)
         if response.status_code == 200:
             logger.info(f"Pedido registrado no backend: {payload}")
+            try:
+                resp_json = response.json()
+                if 'id' in resp_json:
+                    context.user_data['deposit_id'] = resp_json['id']
+            except Exception as e:
+                logger.warning(f"Não foi possível obter o id do depósito: {e}")
         else:
             logger.error(f"Erro ao registrar pedido no backend: {response.text}")
     except Exception as e:
@@ -800,10 +807,12 @@ async def processar_comprovante_ted(update: Update, context: ContextTypes.DEFAUL
             # Prepara dados para upload
             user_data = context.user_data
             chatid = str(context._user_id if hasattr(context, '_user_id') else user_data.get('chatid', ''))
-            # O deposit_id pode ser retornado pelo backend no registro, mas aqui usamos chatid como referência
+            deposit_id = user_data.get('deposit_id')
             url = 'https://ghostp2p.squareweb.app/api/upload_comprovante.php'
             files = {'comprovante': (file_name, open(file_path, 'rb'))}
             data = {'chatid': chatid}
+            if deposit_id:
+                data['deposit_id'] = str(deposit_id)
             try:
                 import requests
                 response = requests.post(url, files=files, data=data, timeout=20)
