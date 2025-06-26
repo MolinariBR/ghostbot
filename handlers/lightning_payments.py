@@ -62,17 +62,19 @@ class LightningPaymentManager:
             logger.error(f"Erro ao verificar pagamentos completados: {e}")
             
     def _get_completed_lightning_payments(self) -> List[Dict]:
-        """Busca pagamentos Lightning completados (prioriza banco local se disponível)"""
-        try:
-            # Se banco local disponível, usa primeiro (mais rápido)
-            if self.local_db_path.exists():
-                logger.info("Usando banco local (mais rápido)")
+        """Busca pagamentos Lightning completados (sempre prioriza banco local)"""
+        # SEMPRE tenta banco local primeiro se existir
+        if self.local_db_path.exists():
+            try:
                 return self._get_payments_from_local_db()
-            
-            # Caso contrário, tenta API
-            logger.info("Banco local não disponível, tentando API")
+            except Exception as e:
+                logger.error(f"Erro ao acessar banco local: {e}")
+        
+        # Só tenta API se banco local não funcionar
+        try:
+            logger.info("Tentando API como fallback")
             url = f"{self.backend_url}/api/lightning_payments_api.php"
-            response = requests.get(url, timeout=15)
+            response = requests.get(url, timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
@@ -82,20 +84,15 @@ class LightningPaymentManager:
                 else:
                     logger.warning(f"API retornou erro: {data.get('error', 'Erro desconhecido')}")
             else:
-                logger.warning(f"API HTTP {response.status_code}: {response.text[:200]}")
+                logger.warning(f"API HTTP {response.status_code}")
                 
         except Exception as e:
-            logger.error(f"Erro ao buscar pagamentos Lightning: {e}")
-            
-            # Último recurso: banco local
-            if self.local_db_path.exists():
-                logger.info("Usando banco local como fallback")
-                return self._get_payments_from_local_db()
+            logger.warning(f"API também falhou: {e}")
                 
         return []
     
     def _get_payments_from_local_db(self) -> List[Dict]:
-        """Busca pagamentos do banco local (fallback)"""
+        """Busca pagamentos do banco local (método principal)"""
         try:
             conn = sqlite3.connect(str(self.local_db_path))
             conn.row_factory = sqlite3.Row
@@ -115,6 +112,9 @@ class LightningPaymentManager:
             cursor = conn.execute(query)
             payments = [dict(row) for row in cursor.fetchall()]
             conn.close()
+            
+            if payments:
+                logger.info(f"Encontrados {len(payments)} pagamentos Lightning pendentes no banco local")
             
             return payments
             
@@ -205,20 +205,29 @@ class LightningPaymentManager:
         
     def _mark_payment_as_notified(self, payment_id: int):
         """
-        Marca um pagamento como notificado via API do backend
+        Marca um pagamento como notificado (prioriza banco local)
         
         Args:
             payment_id: ID do pagamento
         """
+        # SEMPRE tenta banco local primeiro se existir
+        if self.local_db_path.exists():
+            try:
+                self._mark_notified_local_db(payment_id)
+                return
+            except Exception as e:
+                logger.error(f"Erro ao atualizar banco local: {e}")
+        
+        # Só tenta API se banco local não funcionar
         try:
-            # Primeiro tenta via API
+            logger.info("Tentando API para marcar como notificado")
             url = f"{self.backend_url}/api/update_transaction.php"
             data = {
                 'id': payment_id,
                 'notified': 1
             }
             
-            response = requests.post(url, json=data, timeout=10)
+            response = requests.post(url, json=data, timeout=5)
             
             if response.status_code == 200:
                 result = response.json()
@@ -226,16 +235,10 @@ class LightningPaymentManager:
                     logger.info(f"Pagamento ID {payment_id} marcado como notificado via API")
                     return
             
-            logger.warning("API não disponível, tentando banco local")
-            
-            # Fallback para banco local
-            if self.local_db_path.exists():
-                self._mark_notified_local_db(payment_id)
-            else:
-                logger.error(f"Não foi possível marcar pagamento {payment_id} como notificado")
+            logger.warning(f"API falhou para marcar pagamento {payment_id}")
                 
         except Exception as e:
-            logger.error(f"Erro ao marcar pagamento como notificado: {e}")
+            logger.warning(f"Erro na API para marcar como notificado: {e}")
     
     def _mark_notified_local_db(self, payment_id: int):
         """Marca como notificado no banco local (fallback)"""
