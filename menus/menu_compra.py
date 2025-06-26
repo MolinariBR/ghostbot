@@ -684,8 +684,13 @@ async def registrar_pedido_backend(context: ContextTypes.DEFAULT_TYPE, status: s
     """
     try:
         from tokens import Config
-        url = getattr(Config, 'PIX_API_URL', 'https://basetria.xyz/api/bot_deposit.php')
         user_data = context.user_data
+        metodo = user_data.get('metodo_pagamento', '')
+        # Decide o endpoint conforme o método de pagamento
+        if metodo == PIX:
+            url = getattr(Config, 'PIX_API_URL', 'https://basetria.xyz/api/bot_deposit.php')
+        else:
+            url = 'https://ghostp2p.squareweb.app/api/bot_register_deposit.php'
         payload = {
             'amount_in_cents': int(round(user_data.get('valor_brl', 0) * 100)),
             'address': user_data.get('endereco_recebimento', 'manual'),
@@ -693,11 +698,10 @@ async def registrar_pedido_backend(context: ContextTypes.DEFAULT_TYPE, status: s
             'rede': user_data.get('rede', ''),
             'chatid': str(context._user_id if hasattr(context, '_user_id') else user_data.get('chatid', '')),
             'status': status,
-            'metodo_pagamento': user_data.get('metodo_pagamento', ''),
+            'metodo_pagamento': metodo,
             'taxa': float(user_data.get('valor_brl', 0)) * 0.01,
             'send': user_data.get('valor_liquido', 0),
         }
-        # Envia para o backend
         headers = {'Content-Type': 'application/json'}
         response = requests.post(url, data=json.dumps(payload), headers=headers, timeout=10)
         if response.status_code == 200:
