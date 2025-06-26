@@ -25,8 +25,10 @@ class LightningPaymentManager:
         """
         self.bot = telegram_bot
         self.backend_url = backend_url.rstrip('/')
-        # Caminho correto do banco de dados
-        self.db_path = Path('/home/mau/bot/ghostbackend/data/deposit.db')
+        # URL do banco de dados no servidor
+        self.db_url = f"{self.backend_url}/data/deposit.db"
+        # Caminho local do banco (para desenvolvimento)
+        self.local_db_path = Path('/home/mau/bot/ghostbackend/data/deposit.db')
         self.last_check = datetime.now()
         
     async def start_monitoring(self, interval_seconds: int = 30):
@@ -60,13 +62,34 @@ class LightningPaymentManager:
             logger.error(f"Erro ao verificar pagamentos completados: {e}")
             
     def _get_completed_lightning_payments(self) -> List[Dict]:
-        """Busca pagamentos Lightning completados no banco"""
+        """Busca pagamentos Lightning completados via API do backend"""
         try:
-            if not self.db_path.exists():
-                logger.warning(f"Banco de dados não encontrado: {self.db_path}")
+            # Primeiro tenta via API do backend
+            url = f"{self.backend_url}/api/lightning_monitor.php"
+            response = requests.get(url, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    return data.get('payments', [])
+            
+            logger.warning(f"API não disponível, tentando banco local")
+            
+            # Fallback para banco local (desenvolvimento)
+            if self.local_db_path.exists():
+                return self._get_payments_from_local_db()
+            else:
+                logger.warning(f"Banco local não encontrado: {self.local_db_path}")
                 return []
                 
-            conn = sqlite3.connect(str(self.db_path))
+        except Exception as e:
+            logger.error(f"Erro ao buscar pagamentos Lightning: {e}")
+            return []
+    
+    def _get_payments_from_local_db(self) -> List[Dict]:
+        """Busca pagamentos do banco local (fallback)"""
+        try:
+            conn = sqlite3.connect(str(self.local_db_path))
             conn.row_factory = sqlite3.Row
             
             # Busca transações Lightning completadas mas não notificadas
@@ -88,7 +111,7 @@ class LightningPaymentManager:
             return payments
             
         except Exception as e:
-            logger.error(f"Erro ao buscar pagamentos Lightning: {e}")
+            logger.error(f"Erro ao acessar banco local: {e}")
             return []
             
     async def _send_lightning_notification(self, payment: Dict):
@@ -174,16 +197,42 @@ class LightningPaymentManager:
         
     def _mark_payment_as_notified(self, payment_id: int):
         """
-        Marca um pagamento como notificado
+        Marca um pagamento como notificado via API do backend
         
         Args:
             payment_id: ID do pagamento
         """
         try:
-            if not self.db_path.exists():
-                return
+            # Primeiro tenta via API
+            url = f"{self.backend_url}/api/update_transaction.php"
+            data = {
+                'id': payment_id,
+                'notified': 1
+            }
+            
+            response = requests.post(url, json=data, timeout=10)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success'):
+                    logger.info(f"Pagamento ID {payment_id} marcado como notificado via API")
+                    return
+            
+            logger.warning("API não disponível, tentando banco local")
+            
+            # Fallback para banco local
+            if self.local_db_path.exists():
+                self._mark_notified_local_db(payment_id)
+            else:
+                logger.error(f"Não foi possível marcar pagamento {payment_id} como notificado")
                 
-            conn = sqlite3.connect(str(self.db_path))
+        except Exception as e:
+            logger.error(f"Erro ao marcar pagamento como notificado: {e}")
+    
+    def _mark_notified_local_db(self, payment_id: int):
+        """Marca como notificado no banco local (fallback)"""
+        try:
+            conn = sqlite3.connect(str(self.local_db_path))
             
             # Adiciona coluna notified se não existir
             try:
@@ -199,10 +248,10 @@ class LightningPaymentManager:
             conn.commit()
             conn.close()
             
-            logger.info(f"Pagamento ID {payment_id} marcado como notificado")
+            logger.info(f"Pagamento ID {payment_id} marcado como notificado no banco local")
             
         except Exception as e:
-            logger.error(f"Erro ao marcar pagamento como notificado: {e}")
+            logger.error(f"Erro ao atualizar banco local: {e}")
             
     async def trigger_payment_processing(self, transaction_id: Optional[int] = None):
         """
@@ -236,7 +285,7 @@ class LightningPaymentManager:
             
     async def get_lightning_status(self, chatid: str) -> List[Dict]:
         """
-        Obtém status dos pagamentos Lightning para um usuário
+        Obtém status dos pagamentos Lightning para um usuário via API
         
         Args:
             chatid: ID do chat do usuário
@@ -245,10 +294,37 @@ class LightningPaymentManager:
             Lista de pagamentos Lightning do usuário
         """
         try:
-            if not self.db_path.exists():
+            # Primeiro tenta via API
+            url = f"{self.backend_url}/rest/users.php"
+            params = {
+                'chatid': chatid,
+                'moeda': 'BTC',
+                'rede': 'lightning'
+            }
+            
+            response = requests.get(url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    return data.get('transactions', [])
+            
+            logger.warning("API não disponível, tentando banco local")
+            
+            # Fallback para banco local
+            if self.local_db_path.exists():
+                return self._get_status_from_local_db(chatid)
+            else:
                 return []
                 
-            conn = sqlite3.connect(str(self.db_path))
+        except Exception as e:
+            logger.error(f"Erro ao buscar status Lightning: {e}")
+            return []
+    
+    def _get_status_from_local_db(self, chatid: str) -> List[Dict]:
+        """Busca status do banco local (fallback)"""
+        try:
+            conn = sqlite3.connect(str(self.local_db_path))
             conn.row_factory = sqlite3.Row
             
             query = """
@@ -268,7 +344,7 @@ class LightningPaymentManager:
             return payments
             
         except Exception as e:
-            logger.error(f"Erro ao buscar status Lightning: {e}")
+            logger.error(f"Erro ao acessar banco local para status: {e}")
             return []
 
 # Instância global para ser importada
