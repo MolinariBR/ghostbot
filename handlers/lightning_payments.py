@@ -65,13 +65,18 @@ class LightningPaymentManager:
         """Busca pagamentos Lightning completados via API do backend"""
         try:
             # Primeiro tenta via API do backend
-            url = f"{self.backend_url}/api/lightning_monitor.php"
-            response = requests.get(url, timeout=10)
+            url = f"{self.backend_url}/api/lightning_payments_api.php"
+            response = requests.get(url, timeout=30)
             
             if response.status_code == 200:
                 data = response.json()
                 if data.get('success'):
+                    logger.info(f"API retornou {data.get('count', 0)} pagamentos Lightning pendentes")
                     return data.get('payments', [])
+                else:
+                    logger.warning(f"API retornou erro: {data.get('error', 'Erro desconhecido')}")
+            else:
+                logger.warning(f"API HTTP {response.status_code}: {response.text[:200]}")
             
             logger.warning(f"API não disponível, tentando banco local")
             
@@ -84,6 +89,10 @@ class LightningPaymentManager:
                 
         except Exception as e:
             logger.error(f"Erro ao buscar pagamentos Lightning: {e}")
+            # Fallback para banco local em caso de erro
+            if self.local_db_path.exists():
+                logger.info("Tentando fallback para banco local")
+                return self._get_payments_from_local_db()
             return []
     
     def _get_payments_from_local_db(self) -> List[Dict]:
