@@ -62,11 +62,17 @@ class LightningPaymentManager:
             logger.error(f"Erro ao verificar pagamentos completados: {e}")
             
     def _get_completed_lightning_payments(self) -> List[Dict]:
-        """Busca pagamentos Lightning completados via API do backend"""
+        """Busca pagamentos Lightning completados (prioriza banco local se disponível)"""
         try:
-            # Primeiro tenta via API do backend
+            # Se banco local disponível, usa primeiro (mais rápido)
+            if self.local_db_path.exists():
+                logger.info("Usando banco local (mais rápido)")
+                return self._get_payments_from_local_db()
+            
+            # Caso contrário, tenta API
+            logger.info("Banco local não disponível, tentando API")
             url = f"{self.backend_url}/api/lightning_payments_api.php"
-            response = requests.get(url, timeout=30)
+            response = requests.get(url, timeout=15)
             
             if response.status_code == 200:
                 data = response.json()
@@ -77,23 +83,16 @@ class LightningPaymentManager:
                     logger.warning(f"API retornou erro: {data.get('error', 'Erro desconhecido')}")
             else:
                 logger.warning(f"API HTTP {response.status_code}: {response.text[:200]}")
-            
-            logger.warning(f"API não disponível, tentando banco local")
-            
-            # Fallback para banco local (desenvolvimento)
-            if self.local_db_path.exists():
-                return self._get_payments_from_local_db()
-            else:
-                logger.warning(f"Banco local não encontrado: {self.local_db_path}")
-                return []
                 
         except Exception as e:
             logger.error(f"Erro ao buscar pagamentos Lightning: {e}")
-            # Fallback para banco local em caso de erro
+            
+            # Último recurso: banco local
             if self.local_db_path.exists():
-                logger.info("Tentando fallback para banco local")
+                logger.info("Usando banco local como fallback")
                 return self._get_payments_from_local_db()
-            return []
+                
+        return []
     
     def _get_payments_from_local_db(self) -> List[Dict]:
         """Busca pagamentos do banco local (fallback)"""
