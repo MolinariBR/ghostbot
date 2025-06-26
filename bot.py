@@ -515,14 +515,6 @@ def setup_handlers(application):
             
     except Exception as e:
         logger.error(f"❌ Erro ao configurar integração Lightning: {e}", exc_info=True)
-    
-    # 🛒 HANDLERS DE COMPRA E NOTIFICAÇÕES 🛒
-    try:
-        from handlers.compra_notifications import setup_compra_handlers
-        setup_compra_handlers(application)
-        logger.info("✅ Handlers de compra configurados!")
-    except Exception as e:
-        logger.error(f"❌ Erro ao configurar handlers de compra: {e}", exc_info=True)
 
 async def signal_handler(app, signum=None, frame=None):
     """

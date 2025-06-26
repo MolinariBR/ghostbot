@@ -178,9 +178,12 @@ Processamento 100% automatizado via Voltz API!"""
     await update.message.reply_text(info_text, parse_mode='Markdown')
 
 # Handlers para registrar no bot
+from handlers.lightning_callbacks import comprar_novamente_handler
+
 lightning_handlers = [
     CommandHandler('lightning_status', lightning_status_command),
     CommandHandler('lightning_help', lightning_help_command),
     CommandHandler('lightning_trigger', lightning_trigger_command),
     CommandHandler('lightning_info', lightning_info_command),
+    comprar_novamente_handler,  # Handler para botão "Comprar Novamente"
 ]

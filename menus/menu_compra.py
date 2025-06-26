@@ -846,122 +846,66 @@ async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     valor_recebido = valor_liquido / cotacao
     valor_recebido_formatado = formatar_cripto(valor_recebido, moeda)
 
-    # FLUXO ESPECIAL PARA LIGHTNING: Integração automática com Voltz
+    # FLUXO ESPECIAL PARA LIGHTNING: Mostra confirmação especial
     if 'lightning' in rede.lower():
-        try:
-            # 1. Cria pagamento PIX normal
-            from api.depix import pix_api
-            valor_centavos = int(round(valor_brl * 100))
-            cobranca = pix_api.criar_pagamento(valor_centavos=valor_centavos, endereco="lightning_processing")
-            
-            if not cobranca.get('success'):
-                raise Exception("Falha ao criar cobrança PIX")
-            
-            data = cobranca['data']
-            qr_code = data.get('qr_image_url')
-            copia_e_cola = data.get('qr_code_text') or data.get('qr_code')
-            txid = data.get('transaction_id')
-            
-            # 2. Salva dados da transação Lightning no backend
-            try:
-                from api.voltz import VoltzAPI
-                voltz = VoltzAPI()
-                
-                # Salva transação Lightning pendente
-                lightning_data = {
-                    'user_id': update.effective_user.id,
-                    'username': update.effective_user.username or 'N/A',
-                    'valor_brl': valor_brl,
-                    'valor_recebido': valor_recebido,
-                    'moeda': moeda,
-                    'rede': rede,
-                    'pix_txid': txid,
-                    'status': 'aguardando_pagamento',
-                    'created_at': datetime.now().isoformat()
-                }
-                
-                # Chama API do backend para salvar
-                import requests
-                requests.post(
-                    'https://ghostp2p.squareweb.app/api/lightning_payments_api.php',
-                    json=lightning_data,
-                    timeout=10
-                )
-                
-            except Exception as e:
-                logger.warning(f"Erro ao salvar dados Lightning: {e}")
-            
-            # 3. Mensagem especial para Lightning
-            await update.message.reply_text(
-                f'''⚡ *COMPRA LIGHTNING NETWORK*
+        await update.message.reply_text(
+            f'''⚡ *Pagamento Lightning registrado!*
 
 💰 *Valor:* {valor_formatado}
-🎯 *Você receberá:* {valor_recebido_formatado}
 ⚡ *Rede:* Lightning Network
+🎯 *Você receberá:* {valor_recebido_formatado}
 
-🔄 *Como funciona:*
-1. Pague o PIX abaixo
-2. Sua compra será processada automaticamente
-3. Você receberá um *invoice withdraw* para saque Lightning
-4. Use sua carteira Lightning para sacar instantaneamente
+🔄 *Processamento:* Automático via invoice withdraw (LNURL)
 
-💡 *Vantagem:* Saque instantâneo e taxa zero na Lightning Network!''',
-                parse_mode='Markdown'
-            )
-            
-        except Exception as e:
-            logger.error(f"Erro no fluxo Lightning: {e}")
-            # Fallback para fluxo normal
-            await update.message.reply_text(
-                f"⚠️ Erro no processamento Lightning. Processando como PIX normal...",
-                parse_mode='Markdown'
-            )
+Prossiga com o pagamento PIX abaixo. Após a confirmação, você receberá automaticamente as instruções para saque Lightning.''',
+            parse_mode='Markdown'
+        )
+
+    # Processa pagamento via PIX usando a API Depix
+    from api.depix import pix_api
+    logger.info(f"Iniciando processamento de PIX - Valor: {valor_brl}, Endereço: {endereco}")
+    
+    valor_centavos = int(round(valor_brl * 100))
+    try:
+        cobranca = pix_api.criar_pagamento(valor_centavos=valor_centavos, endereco=endereco)
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"Erro ao criar pagamento PIX: {e}\n{error_details}")
+        mensagem_erro = (
+            "❌ *Erro ao criar pagamento PIX*\n\n"
+            "Por favor, tente novamente ou escolha outro método de pagamento.\n\n"
+            "Se o problema persistir, entre em contato com o suporte.\n"
+            f"Erro: {str(e)}"
+        )
+        await update.message.reply_text(
+            mensagem_erro,
+            parse_mode='Markdown',
+            reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+        )
+        return ConversationHandler.END
+
+    # Validação dos campos essenciais
+    if cobranca.get('success') and 'data' in cobranca:
+        data = cobranca['data']
+        qr_code = data.get('qr_image_url')
+        txid = data.get('transaction_id')
+        copia_e_cola = data.get('qr_code_text') or data.get('qr_code')
     else:
-        # Fluxo normal para outras redes
-        from api.depix import pix_api
-        logger.info(f"Iniciando processamento de PIX - Valor: {valor_brl}, Endereço: {endereco}")
-        
-        valor_centavos = int(round(valor_brl * 100))
-        try:
-            cobranca = pix_api.criar_pagamento(valor_centavos=valor_centavos, endereco=endereco)
-        except Exception as e:
-            import traceback
-            error_details = traceback.format_exc()
-            logger.error(f"Erro ao criar pagamento PIX: {e}\n{error_details}")
-            mensagem_erro = (
-                "❌ *Erro ao criar pagamento PIX*\n\n"
-                "Por favor, tente novamente ou escolha outro método de pagamento.\n\n"
-                "Se o problema persistir, entre em contato com o suporte.\n"
-                f"Erro: {str(e)}"
-            )
-            await update.message.reply_text(
-                mensagem_erro,
-                parse_mode='Markdown',
-                reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
-            )
-            return ConversationHandler.END
+        qr_code = cobranca.get('qr_image_url') or cobranca.get('qr_code')
+        txid = cobranca.get('transaction_id') or cobranca.get('txid')
+        copia_e_cola = cobranca.get('qr_code_text') or cobranca.get('copia_e_cola')
 
-        # Validação dos campos essenciais
-        if cobranca.get('success') and 'data' in cobranca:
-            data = cobranca['data']
-            qr_code = data.get('qr_image_url')
-            txid = data.get('transaction_id')
-            copia_e_cola = data.get('qr_code_text') or data.get('qr_code')
-        else:
-            qr_code = cobranca.get('qr_image_url') or cobranca.get('qr_code')
-            txid = cobranca.get('transaction_id') or cobranca.get('txid')
-            copia_e_cola = cobranca.get('qr_code_text') or cobranca.get('copia_e_cola')
+    if not qr_code or not copia_e_cola:
+        logger.error(f"Resposta da API Depix incompleta: {cobranca}")
+        await update.message.reply_text(
+            "❌ *Erro ao gerar QR Code PIX. Tente novamente ou contate o suporte.*",
+            parse_mode='Markdown',
+            reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+        )
+        return ConversationHandler.END
 
-        if not qr_code or not copia_e_cola:
-            logger.error(f"Resposta da API Depix incompleta: {cobranca}")
-            await update.message.reply_text(
-                "❌ *Erro ao gerar QR Code PIX. Tente novamente ou contate o suporte.*",
-                parse_mode='Markdown',
-                reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
-            )
-            return ConversationHandler.END
-
-    # Exibe QR Code e informações para o cliente (comum para ambos os fluxos)
+    # Exibe QR Code e informações para o cliente
     await update.message.reply_photo(
         photo=qr_code,
         caption='📱 *QR Code para pagamento*\n\nAponte a câmera do seu app de pagamento para escanear o QR Code acima.',

@@ -151,28 +151,65 @@ class LightningPaymentManager:
             
             logger.info(f"Notificação Lightning enviada para ChatID {chatid} - {amount_sats} sats")
             
-            # Envia mensagem de agradecimento com botão "Comprar Novamente"
-            await self._send_thank_you_message(chatid, amount_sats)
+            # Após enviar o LNURL, agenda uma mensagem de agradecimento
+            await self._schedule_thank_you_message(chatid, transaction_id)
             
         except Exception as e:
             logger.error(f"Erro ao enviar notificação Lightning: {e}")
             raise
-            
-    async def _send_thank_you_message(self, chatid: int, amount_sats: int):
-        """Envia mensagem de agradecimento com botão Comprar Novamente"""
+    
+    async def _schedule_thank_you_message(self, chatid: str, transaction_id: int):
+        """
+        Agenda mensagem de agradecimento após saque Lightning
+        
+        Args:
+            chatid: ID do chat
+            transaction_id: ID da transação
+        """
         try:
-            from handlers.compra_notifications import enviar_notificacao_lightning_completada
+            # Aguarda um tempo para o usuário sacar via Lightning
+            await asyncio.sleep(300)  # 5 minutos
             
-            # Dados da compra
-            dados_compra = {
-                'valor_brl': amount_sats * 0.0001,  # Conversão aproximada
-                'valor_recebido': amount_sats / 100000000,  # Sats para BTC
-                'moeda': 'BTC',
-                'rede': 'Lightning'
-            }
+            # Verifica se o saque foi realizado (implementar lógica de verificação)
+            await self._send_thank_you_message(chatid, transaction_id)
             
-            # Envia a notificação de agradecimento
-            await enviar_notificacao_lightning_completada(self.bot, chatid, dados_compra)
+        except Exception as e:
+            logger.error(f"Erro ao agendar mensagem de agradecimento: {e}")
+    
+    async def _send_thank_you_message(self, chatid: str, transaction_id: int):
+        """
+        Envia mensagem de agradecimento com botão 'Comprar Novamente'
+        
+        Args:
+            chatid: ID do chat
+            transaction_id: ID da transação
+        """
+        try:
+            # Importa InlineKeyboardMarkup e InlineKeyboardButton
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+            
+            # Cria botão "Comprar Novamente"
+            keyboard = [[
+                InlineKeyboardButton("🛒 Comprar Novamente", callback_data="comprar_novamente")
+            ]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            message = """✅ **Obrigado pela compra e confiança!** ✅
+
+🎉 Sua transação Lightning foi processada com sucesso!
+
+💫 Esperamos que tenha uma ótima experiência com suas criptomoedas.
+
+🔥 Quer fazer uma nova compra? Use o botão abaixo:"""
+
+            await self.bot.send_message(
+                chat_id=chatid,
+                text=message,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            
+            logger.info(f"Mensagem de agradecimento enviada para ChatID {chatid}")
             
         except Exception as e:
             logger.error(f"Erro ao enviar mensagem de agradecimento: {e}")
