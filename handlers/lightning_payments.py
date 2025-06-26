@@ -151,9 +151,31 @@ class LightningPaymentManager:
             
             logger.info(f"Notificação Lightning enviada para ChatID {chatid} - {amount_sats} sats")
             
+            # Envia mensagem de agradecimento com botão "Comprar Novamente"
+            await self._send_thank_you_message(chatid, amount_sats)
+            
         except Exception as e:
             logger.error(f"Erro ao enviar notificação Lightning: {e}")
             raise
+            
+    async def _send_thank_you_message(self, chatid: int, amount_sats: int):
+        """Envia mensagem de agradecimento com botão Comprar Novamente"""
+        try:
+            from handlers.compra_notifications import enviar_notificacao_lightning_completada
+            
+            # Dados da compra
+            dados_compra = {
+                'valor_brl': amount_sats * 0.0001,  # Conversão aproximada
+                'valor_recebido': amount_sats / 100000000,  # Sats para BTC
+                'moeda': 'BTC',
+                'rede': 'Lightning'
+            }
+            
+            # Envia a notificação de agradecimento
+            await enviar_notificacao_lightning_completada(self.bot, chatid, dados_compra)
+            
+        except Exception as e:
+            logger.error(f"Erro ao enviar mensagem de agradecimento: {e}")
             
     def _format_lightning_message(self, amount_sats: int, lnurl: str, qr_code_url: str, transaction_id: int) -> str:
         """
