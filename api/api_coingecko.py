@@ -11,8 +11,7 @@ class CoinGeckoAPI:
     BASE_URL = "https://api.coingecko.com/api/v3"
     
     def __init__(self):
-        # Margem de 2% acima do preço de mercado
-        self.margin = Decimal('1.02')
+        # Removido margem - usando preço real da corretora
         # Mapeamento de moedas para IDs da CoinGecko
         self.coin_ids = {
             'BTC': 'bitcoin',
@@ -44,7 +43,7 @@ class CoinGeckoAPI:
             vs_currency: Moeda de referência (padrão: 'brl')
             
         Returns:
-            Decimal: Preço atual com margem de 2%, arredondado para 2 casas decimais
+            Decimal: Preço real da corretora, arredondado para 2 casas decimais
         """
         try:
             coin_id = self.coin_ids.get(coin.upper())
@@ -63,8 +62,8 @@ class CoinGeckoAPI:
             if coin_id not in data or vs_currency.lower() not in data[coin_id]:
                 raise ValueError(f"Dados de preço não disponíveis para {coin}/{vs_currency}")
             
-            # Aplica a margem de 2% e formata para 2 casas decimais
-            price = Decimal(str(data[coin_id][vs_currency.lower()])) * self.margin
+            # Retorna o preço real sem margem, formatado para 2 casas decimais
+            price = Decimal(str(data[coin_id][vs_currency.lower()]))
             return price.quantize(Decimal('0.01'), rounding=ROUND_DOWN)
             
         except Exception as e:
@@ -72,16 +71,16 @@ class CoinGeckoAPI:
             raise
     
     def get_btc_price_brl(self) -> Decimal:
-        """Obtém o preço do BTC em BRL com margem de 2%."""
+        """Obtém o preço real do BTC em BRL."""
         return self.get_price('BTC', 'BRL')
     
     def get_usdt_price_brl(self) -> Decimal:
-        """Obtém o preço do USDT em BRL com margem de 2%."""
+        """Obtém o preço real do USDT em BRL."""
         return self.get_price('USDT', 'BRL')
     
     def get_depix_price_brl(self) -> Decimal:
         """
-        Obtém o preço do Depix em BRL com margem de 2%.
+        Obtém o preço do Depix em BRL.
         """
         return self.get_price('DEPIX', 'BRL')
 

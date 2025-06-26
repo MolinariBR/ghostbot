@@ -11,8 +11,8 @@ class BinanceAPI:
     BASE_URL = "https://api.binance.com/api/v3"
     
     def __init__(self):
-        # Margem de 2% acima do preço de mercado
-        self.margin = Decimal('1.02')
+        # Removido margem - usando preço real da corretora
+        pass
     
     def _make_request(self, endpoint: str, params: Optional[Dict] = None) -> Dict:
         """Faz uma requisição para a API da Binance."""
@@ -32,15 +32,15 @@ class BinanceAPI:
             symbol: Par de negociação (ex: 'BTCBRL', 'BTCUSDT')
             
         Returns:
-            Decimal: Preço atual com margem de 2%
+            Decimal: Preço real da corretora
         """
         try:
             endpoint = "ticker/price"
             params = {"symbol": symbol.upper()}
             data = self._make_request(endpoint, params)
             
-            # Aplica a margem de 2% e formata para 8 casas decimais
-            price = Decimal(str(data['price'])) * self.margin
+            # Retorna o preço real sem margem, formatado para 8 casas decimais
+            price = Decimal(str(data['price']))
             return price.quantize(Decimal('0.00000001'), rounding=ROUND_DOWN)
             
         except Exception as e:
@@ -48,20 +48,20 @@ class BinanceAPI:
             raise
     
     def get_btc_price_brl(self) -> Decimal:
-        """Obtém o preço do BTC em BRL com margem de 2%."""
+        """Obtém o preço real do BTC em BRL."""
         return self.get_price("BTCBRL")
     
     def get_usdt_price_brl(self) -> Decimal:
-        """Obtém o preço do USDT em BRL com margem de 2%."""
+        """Obtém o preço real do USDT em BRL."""
         return self.get_price("BUSDUSDT")  # Usando BUSD como proxy para BRL
     
     def get_depix_price_brl(self) -> Decimal:
         """
         Obtém o preço do Depix em BRL.
-        Como o Depix é uma stablecoin atrelada ao Real, retornamos 1:1 com margem de 2%.
+        Como o Depix é uma stablecoin atrelada ao Real, retornamos 1:1 sem margem.
         """
-        # Depix é 1:1 com BRL, então aplicamos apenas a margem
-        return Decimal('1.0') * self.margin
+        # Depix é 1:1 com BRL, sem margem
+        return Decimal('1.0')
 
 # Instância global para ser importada
 binance_api = BinanceAPI()
