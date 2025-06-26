@@ -678,7 +678,37 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
     )
     return ESCOLHER_PAGAMENTO
 
+async def registrar_pedido_backend(context: ContextTypes.DEFAULT_TYPE, status: str = "pending"):
+    """
+    Registra o pedido no backend (tabela deposit) para TED e Boleto.
+    """
+    try:
+        from tokens import Config
+        url = getattr(Config, 'PIX_API_URL', 'https://basetria.xyz/api/bot_deposit.php')
+        user_data = context.user_data
+        payload = {
+            'amount_in_cents': int(round(user_data.get('valor_brl', 0) * 100)),
+            'address': user_data.get('endereco_recebimento', 'manual'),
+            'moeda': user_data.get('moeda', ''),
+            'rede': user_data.get('rede', ''),
+            'chatid': str(context._user_id if hasattr(context, '_user_id') else user_data.get('chatid', '')),
+            'status': status,
+            'metodo_pagamento': user_data.get('metodo_pagamento', ''),
+            'taxa': float(user_data.get('valor_brl', 0)) * 0.01,
+            'send': user_data.get('valor_liquido', 0),
+        }
+        # Envia para o backend
+        headers = {'Content-Type': 'application/json'}
+        response = requests.post(url, data=json.dumps(payload), headers=headers, timeout=10)
+        if response.status_code == 200:
+            logger.info(f"Pedido registrado no backend: {payload}")
+        else:
+            logger.error(f"Erro ao registrar pedido no backend: {response.text}")
+    except Exception as e:
+        logger.error(f"Falha ao registrar pedido no backend: {e}")
+
 async def processar_ted(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await registrar_pedido_backend(context, status="pending")
     """Processa pagamento via TED."""
     try:
         # Importa as configurações TED dos tokens
@@ -790,6 +820,7 @@ async def processar_comprovante_ted(update: Update, context: ContextTypes.DEFAUL
         return AGUARDAR_TED_COMPROVANTE
 
 async def processar_boleto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await registrar_pedido_backend(context, status="pending")
     """Processa pagamento via Boleto - direciona para admin."""
     try:
         # Importa as configurações do boleto
