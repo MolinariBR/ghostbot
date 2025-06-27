@@ -9,8 +9,7 @@ from menus.menu_compra import (
     obter_cotacao, formatar_brl, formatar_cripto,
     menu_moedas, menu_redes, iniciar_compra, escolher_moeda,
     escolher_rede, processar_quantidade, confirmar_compra,
-    processar_endereco, processar_metodo_pagamento, cancelar_compra,
-    ESCOLHER_MOEDA, ESCOLHER_REDE, QUANTIDADE, CONFIRMAR,
+    ESCOLHER_MOEDA, ESCOLHER_REDE, QUANTIDADE, CONFIRMAR_COMPRA,
     SOLICITAR_ENDERECO, ESCOLHER_PAGAMENTO
 )
 
@@ -169,7 +168,7 @@ class TestMenuCompra:
         
         assert mock_context.user_data["valor_brl"] == 100.50
         assert mock_context.user_data["cotacao"] == 300000.00
-        assert result == CONFIRMAR
+        assert result == CONFIRMAR_COMPRA
         mock_update.message.reply_text.assert_called()
     
     @pytest.mark.asyncio

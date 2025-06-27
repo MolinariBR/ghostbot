@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from menus.menu_compra import (
     iniciar_compra, escolher_moeda, escolher_rede, processar_quantidade,
     processar_endereco, processar_metodo_pagamento, get_compra_conversation,
-    confirmar_compra, ESCOLHER_MOEDA, ESCOLHER_REDE, QUANTIDADE, CONFIRMAR, 
+    confirmar_compra, ESCOLHER_MOEDA, ESCOLHER_REDE, QUANTIDADE, CONFIRMAR_COMPRA, 
     SOLICITAR_ENDERECO, ESCOLHER_PAGAMENTO, menu_principal
 )
 from api.depix import PixAPI
@@ -78,9 +78,9 @@ class TestFluxoCompraIntegracao:
         # 4. Informar quantidade (R$ 100,50)
         mock_update.message.text = "100.50"
         result = await processar_quantidade(mock_update, mock_context)
-        print(f"Resultado de processar_quantidade: {result}, esperado: {CONFIRMAR}")
+        print(f"Resultado de processar_quantidade: {result}, esperado: {CONFIRMAR_COMPRA}")
         print(f"user_data: {mock_context.user_data}")
-        assert result == CONFIRMAR
+        assert result == CONFIRMAR_COMPRA
         assert mock_context.user_data["valor_brl"] == 100.50
         assert mock_context.user_data["cotacao"] == 300000.00
         
@@ -159,7 +159,7 @@ class TestFluxoCompraIntegracao:
         assert ESCOLHER_MOEDA in conversation_handler.states
         assert ESCOLHER_REDE in conversation_handler.states
         assert QUANTIDADE in conversation_handler.states
-        assert CONFIRMAR in conversation_handler.states
+        assert CONFIRMAR_COMPRA in conversation_handler.states
         assert SOLICITAR_ENDERECO in conversation_handler.states
         assert ESCOLHER_PAGAMENTO in conversation_handler.states
         
