@@ -978,6 +978,35 @@ Prossiga com o pagamento PIX abaixo. Após a confirmação, você receberá auto
         )
         return ConversationHandler.END
 
+    # --- REGISTRO DO DEPÓSITO NO BACKEND (DEPIX) ---
+    try:
+        import aiohttp
+        chatid = str(update.effective_user.id)
+        payload = {
+            "chatid": chatid,
+            "moeda": moeda.upper(),
+            "rede": rede,
+            "amount_in_cents": valor_centavos,
+            "taxa": round(taxa * 100, 2),
+            "address": endereco,
+            "forma_pagamento": "PIX",
+            "send": float(valor_recebido),
+            "depix_id": txid,
+            "status": "pending"
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://ghostp2p.squareweb.app/api/bot_register_deposit.php",
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                backend_resp = await resp.json()
+                if not backend_resp.get("success", False):
+                    logger.error(f"Falha ao registrar depósito no backend: {backend_resp}")
+    except Exception as e:
+        logger.error(f"Erro ao registrar depósito no backend: {e}")
+    # --- FIM REGISTRO BACKEND ---
+
     # Exibe QR Code e informações para o cliente
     await update.message.reply_photo(
         photo=qr_code,

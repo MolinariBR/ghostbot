@@ -72,11 +72,10 @@ class CotacaoAPI:
     def get_depix_price_brl(self) -> Decimal:
         """
         Obtém o preço do Depix em BRL.
-        Como o Depix é uma stablecoin atrelada ao Real, retornamos 1:1 com margem de 2%.
+        Como o Depix é uma stablecoin atrelada ao Real, retornamos 1:1 sem margem.
         """
         # Para o Depix, não precisamos consultar a API, pois é 1:1 com BRL
-        # Apenas aplicamos a margem de 2%
-        return Decimal('1.0') * Decimal('1.02')  # 1.0 * 1.02 = 1.02
+        return Decimal('1.0')  # Sem margem
 
 # Instância global para ser importada
 cotacao_api = CotacaoAPI()  # Usa Binance como padrão
