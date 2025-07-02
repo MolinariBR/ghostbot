@@ -591,7 +591,7 @@ async def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Processa o endereço informado e vai para escolha de pagamento."""
     if update.message.text == "🔙 Voltar":
         return await confirmar_compra(update, context)
-    
+
     endereco = update.message.text.strip()
     
     # Validação básica do endereço
@@ -989,6 +989,7 @@ Prossiga com o pagamento PIX abaixo. Após a confirmação, você receberá auto
             "amount_in_cents": valor_centavos,
             "taxa": round(taxa * 100, 2),
             "address": endereco,
+            "metodo_pagamento": "PIX",
             "forma_pagamento": "PIX",
             "send": float(valor_recebido),
             "depix_id": txid,
