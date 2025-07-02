@@ -389,6 +389,7 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
                 f"• *Valor investido:* {valor_brl_formatado}\n"
                 f"• *Taxa (1%):* {valor_taxa_formatado}\n"
                 f"• *Cotação:* {cotacao_formatada}\n"
+                f"• *Você receberá:* {valor_recebido_formatado}\n"  # <-- NOVA LINHA
                 f"━━━━━━━━━━━━━━━━━━━━\n\n"
                 "Confirma os dados da compra?"
             )
