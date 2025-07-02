@@ -9,3 +9,4 @@ six>=1.16.0
 Pillow>=10.0.0
 APScheduler>=3.10.1  # Para agendamento de tarefas
 loguru>=0.7.0  # Para logging mais avançado
+aiohttp>=3.9.0  # Para requisições assíncronas ao backend
