@@ -12,7 +12,7 @@ class Config:
     # URLs da API
     API_URLS = {
         True: "https://basetria.xyz/api/bot_deposit.php",    # Produção
-        False: "https://ghostp2p.squareweb.app/api/bot_deposit.php"  # Desenvolvimento
+        False: "https://useghost.squareweb.app/api/bot_deposit.php"  # Desenvolvimento
     }
     
     # URL base da API de depósito (será definida automaticamente)
@@ -31,3 +31,4 @@ class Config:
 # Exemplo de uso:
 # from tokens import Config
 # token = Config.TELEGRAM_BOT_TOKEN
+https://useghost.squareweb.app/api/bot_deposit.php
