@@ -4,7 +4,7 @@ class Config:
     IS_PRODUCTION = True  # Mude para False em desenvolvimento
     
     # Token do Bot do Telegram
-    TELEGRAM_BOT_TOKEN = "7226334777:AAEnunCE322uSFmaKzs5RPw5HOkxQAUwHsE"
+    TELEGRAM_BOT_TOKEN = "8051838488:AAFjm16PHup0mtFDAmqfSBc5TLu0kyxlrMU"
     
     # Configurações do Banco de Dados
     DB_NAME = "ghost_bot.db"
@@ -26,7 +26,7 @@ class Config:
     TED_FAVORECIDO = "Nome da Empresa LTDA"
     
     # Configurações de Boleto
-    BOLETO_CHAT_ID = "@triacorelabs"
+    BOLETO_CHAT_ID = "@GhosttP2P"
 
 # Exemplo de uso:
 # from tokens import Config
