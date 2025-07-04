@@ -31,4 +31,3 @@ class Config:
 # Exemplo de uso:
 # from tokens import Config
 # token = Config.TELEGRAM_BOT_TOKEN
-https://useghost.squareweb.app/api/bot_deposit.php
