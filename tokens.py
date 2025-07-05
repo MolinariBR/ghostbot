@@ -4,7 +4,7 @@ class Config:
     IS_PRODUCTION = True  # Mude para False em desenvolvimento
     
     # Token do Bot do Telegram
-    TELEGRAM_BOT_TOKEN = "8051838488:AAFjm16PHup0mtFDAmqfSBc5TLu0kyxlrMU"
+    TELEGRAM_BOT_TOKEN = "7105509014:AAENhZArthrysOBoEmdA6vaxE72pobliahI"
     
     # Configurações do Banco de Dados
     DB_NAME = "ghost_bot.db"
