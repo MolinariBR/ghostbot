@@ -1,7 +1,7 @@
 # Configurações do Bot
 class Config:
     # Configuração de Ambiente (True para produção, False para desenvolvimento)
-    IS_PRODUCTION = True  # Mude para False em desenvolvimento
+    IS_PRODUCTION = False  # Mude para False em desenvolvimento
     
     # Token do Bot do Telegram
     TELEGRAM_BOT_TOKEN = "7105509014:AAENhZArthrysOBoEmdA6vaxE72pobliahI"
@@ -11,7 +11,7 @@ class Config:
     
     # URLs da API
     API_URLS = {
-        True: "https://basetria.xyz/api/bot_deposit.php",    # Produção
+        # True: "https://basetria.xyz/api/bot_deposit.php",    # Produção
         False: "https://useghost.squareweb.app/api/bot_deposit.php"  # Desenvolvimento
     }
     
