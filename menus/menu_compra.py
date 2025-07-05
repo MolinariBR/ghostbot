@@ -122,6 +122,21 @@ def menu_redes(moeda: str):
 async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Inicia o fluxo de compra mostrando as moedas disponíveis."""
     try:
+        # Envia dados do usuário para o backend PHP
+        try:
+            user = update.effective_user
+            payload = {
+                "user_id": user.id,
+                "username": user.username,
+                "first_name": user.first_name,
+                "last_name": user.last_name
+            }
+            url = "https://ghostp2p.squareweb.app/api/user_api.php"
+            headers = {"Content-Type": "application/json"}
+            requests.post(url, data=json.dumps(payload), headers=headers, timeout=5)
+        except Exception as e:
+            logger.warning(f"Não foi possível enviar dados do usuário ao backend: {e}")
+        
         # Obtém as opções de moedas
         opcoes_moedas = menu_moedas()
         # Cria o ReplyKeyboardMarkup a partir da lista de opções
@@ -146,7 +161,6 @@ async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             )
         except Exception as e2:
             logger.error(f"Falha ao enviar mensagem de erro: {str(e2)}")
-    
     return ESCOLHER_MOEDA
 
 async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

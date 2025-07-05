@@ -24,6 +24,8 @@ class Config:
     TED_CONTA = "12345-6"
     TED_CPF_CNPJ = "000.000.000-00"
     TED_FAVORECIDO = "Nome da Empresa LTDA"
+    TED_CHAT_ID = "@GhosttP2P"  # Chat para TED, igual ao boleto
+    TED_CHAT_URL = "https://t.me/GhosttP2P"  # Link direto para o chat
     
     # Configurações de Boleto
     BOLETO_CHAT_ID = "@GhosttP2P"
