@@ -79,8 +79,8 @@ def formatar_cripto(valor: float, moeda: str) -> str:
         return f"{valor:,.2f} {moeda.split()[0].strip()}"  # 2 casas para outras moedas
 
 # Estados do menu de compra
-(ESCOLHER_MOEDA, ESCOLHER_REDE, QUANTIDADE, RESUMO_COMPRA, CONFIRMAR_COMPRA,
- SOLICITAR_ENDERECO, ESCOLHER_PAGAMENTO, AGUARDAR_TED_COMPROVANTE) = range(8)
+(SOLICITAR_CPF, ESCOLHER_MOEDA, ESCOLHER_REDE, QUANTIDADE, RESUMO_COMPRA, CONFIRMAR_COMPRA,
+ SOLICITAR_ENDERECO, ESCOLHER_PAGAMENTO, AGUARDAR_TED_COMPROVANTE) = range(9)
 
 # Constantes para métodos de pagamento
 PIX = "💠 PIX"
@@ -1130,11 +1130,90 @@ async def cancelar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     return ConversationHandler.END
 
+def validar_cpf(cpf: str) -> bool:
+    """Valida o CPF (formato e dígitos)."""
+    cpf = ''.join(filter(str.isdigit, cpf))
+    if len(cpf) != 11 or cpf == cpf[0] * 11:
+        return False
+    for i in range(9, 11):
+        soma = sum(int(cpf[num]) * ((i+1) - num) for num in range(0, i))
+        digito = ((soma * 10) % 11) % 10
+        if digito != int(cpf[i]):
+            return False
+    return True
+
+async def solicitar_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Solicita o CPF do usuário."""
+    try:
+        await update.message.reply_text(
+            "📝 *Precisamos do seu CPF para continuar*\n\n"\
+            "Informe seu CPF (apenas números):",
+            parse_mode='Markdown',
+            reply_markup=ReplyKeyboardMarkup([["🔙 Voltar"]], resize_keyboard=True)
+        )
+    except Exception as e:
+        logger.error(f"Erro ao solicitar CPF: {e}")
+        await update.message.reply_text(
+            "❌ Erro ao solicitar CPF. Tente novamente.",
+            parse_mode='Markdown'
+        )
+    return SOLICITAR_CPF
+
+async def processar_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Processa o CPF informado, valida e envia ao backend."""
+    if update.message.text == "🔙 Voltar":
+        return await cancelar_compra(update, context)
+    cpf = ''.join(filter(str.isdigit, update.message.text))
+    if not validar_cpf(cpf):
+        await update.message.reply_text(
+            "❌ CPF inválido. Por favor, digite novamente (apenas números).",
+            parse_mode='Markdown',
+            reply_markup=ReplyKeyboardMarkup([["🔙 Voltar"]], resize_keyboard=True)
+        )
+        return SOLICITAR_CPF
+    context.user_data['cpf'] = cpf
+    # Envia dados do usuário para o backend PHP e consulta limite
+    try:
+        user = update.effective_user
+        payload = {
+            "user_id": user.id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "cpf": cpf
+        }
+        url = "https://ghostp2p.squareweb.app/api/user_api.php"
+        headers = {"Content-Type": "application/json"}
+        resp = requests.post(url, data=json.dumps(payload), headers=headers, timeout=5)
+        limite_msg = ""
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                limite = data.get("limite")
+                if limite is not None:
+                    limite_msg = f"\n\n💳 *Seu limite diário:* R$ {float(limite):,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
+            except Exception as e:
+                logger.warning(f"Não foi possível obter limite do backend: {e}")
+        await update.message.reply_text(
+            f"✅ CPF cadastrado com sucesso!{limite_msg}\n\nAgora vamos continuar sua compra.",
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.warning(f"Não foi possível enviar dados do usuário ao backend: {e}")
+        await update.message.reply_text(
+            "⚠️ Não foi possível validar seu CPF no momento, mas você pode continuar.",
+            parse_mode='Markdown'
+        )
+    return await iniciar_compra(update, context)
+
 def get_compra_conversation():
     """Retorna o ConversationHandler para o fluxo de compra."""
     return ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex('^🛒 Comprar$'), iniciar_compra)],
+        entry_points=[MessageHandler(filters.Regex('^🛒 Comprar$'), solicitar_cpf)],
         states={
+            SOLICITAR_CPF: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, processar_cpf)
+            ],
             ESCOLHER_MOEDA: [
                 MessageHandler(filters.Regex('^🔙 Voltar$'), cancelar_compra),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_moeda)
