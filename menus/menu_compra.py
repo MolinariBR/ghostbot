@@ -131,7 +131,7 @@ async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 "first_name": user.first_name,
                 "last_name": user.last_name
             }
-            url = "https://ghostp2p.squareweb.app/api/user_api.php"
+            url = "https://useghost.squareweb.app/api/user_api.php"
             headers = {"Content-Type": "application/json"}
             requests.post(url, data=json.dumps(payload), headers=headers, timeout=5)
         except Exception as e:
@@ -706,7 +706,7 @@ async def registrar_pedido_backend(context: ContextTypes.DEFAULT_TYPE, status: s
         if metodo == PIX:
             url = getattr(Config, 'PIX_API_URL', 'https://basetria.xyz/api/bot_deposit.php')
         else:
-            url = 'https://ghostp2p.squareweb.app/api/bot_register_deposit.php'
+            url = 'https://useghost.squareweb.app/api/bot_register_deposit.php'
         payload = {
             'amount_in_cents': int(round(user_data.get('valor_brl', 0) * 100)),
             'address': user_data.get('endereco_recebimento', 'manual'),
@@ -823,7 +823,7 @@ async def processar_comprovante_ted(update: Update, context: ContextTypes.DEFAUL
             user_data = context.user_data
             chatid = str(context._user_id if hasattr(context, '_user_id') else user_data.get('chatid', ''))
             deposit_id = user_data.get('deposit_id')
-            url = 'https://ghostp2p.squareweb.app/api/upload_comprovante.php'
+            url = 'https://useghost.squareweb.app/api/upload_comprovante.php'
             files = {'comprovante': (file_name, open(file_path, 'rb'))}
             data = {'chatid': chatid}
             if deposit_id:
@@ -1011,7 +1011,7 @@ Prossiga com o pagamento PIX abaixo. Após a confirmação, você receberá auto
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                "https://ghostp2p.squareweb.app/api/bot_register_deposit.php",
+                "https://useghost.squareweb.app/api/bot_register_deposit.php",
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
@@ -1182,7 +1182,7 @@ async def processar_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             "last_name": user.last_name,
             "cpf": cpf
         }
-        url = "https://ghostp2p.squareweb.app/api/user_api.php"
+        url = "https://useghost.squareweb.app/api/user_api.php"
         headers = {"Content-Type": "application/json"}
         resp = requests.post(url, data=json.dumps(payload), headers=headers, timeout=5)
         limite_msg = ""

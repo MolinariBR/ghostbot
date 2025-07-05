@@ -5,7 +5,7 @@ def test_user_api_post():
     """
     Testa o endpoint user_api.php enviando dados simulados de usuário.
     """
-    url = "https://ghostp2p.squareweb.app/api/user_api.php"
+    url = "https://useghost.squareweb.app/api/user_api.php"
     payload = {
         "user_id": 123456789,
         "username": "testuser",

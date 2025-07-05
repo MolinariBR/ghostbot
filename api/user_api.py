@@ -1,6 +1,6 @@
 import requests
 
-BACKEND_URL = "https://ghostp2p.squareweb.app/api/user_api.php"
+BACKEND_URL = "https://useghost.squareweb.app/api/user_api.php"
 
 def enviar_usuario_backend(user_id, username=None, first_name=None, last_name=None, cpf=None, num_compras=None, limite=None):
     payload = {

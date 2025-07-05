@@ -1,7 +1,7 @@
 import requests
 import datetime
 
-BACKEND_URL = "https://ghostp2p.squareweb.app/rest/deposit.php"
+BACKEND_URL = "https://useghost.squareweb.app/rest/deposit.php"
 
 def registrar_deposito(
     chatid,

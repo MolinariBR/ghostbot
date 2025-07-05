@@ -10,12 +10,12 @@ logger = logging.getLogger(__name__)
 class VoltzAPI:
     """Cliente para o backend do Ghost para operações de saque via Lightning Network."""
     
-    def __init__(self, backend_url: str = 'https://ghostp2p.squareweb.app/voltz'):
+    def __init__(self, backend_url: str = 'https://useghost.squareweb.app/voltz'):
         """
         Inicializa o cliente do backend.
         
         Args:
-            backend_url: URL base do backend (ex: https://ghostp2p.squareweb.app/voltz)
+            backend_url: URL base do backend (ex: https://useghost.squareweb.app/voltz)
         """
         self.backend_url = backend_url.rstrip('/')
         self.timeout = 30

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class LightningPaymentManager:
     """Gerenciador de pagamentos Lightning para o bot Ghost"""
     
-    def __init__(self, telegram_bot: Bot, backend_url: str = 'https://ghostp2p.squareweb.app'):
+    def __init__(self, telegram_bot: Bot, backend_url: str = 'https://useghost.squareweb.app'):
         """
         Inicializa o gerenciador de pagamentos Lightning
         
