@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO)
 
 # Configurações
 BACKEND_API_URL = os.getenv("BACKEND_API_URL", "https://useghost.squareweb.app/api/deposit_pendentes.php")
-DEPIX_API_URL = os.getenv("DEPIX_API_URL", "https://api.pix2depix.com/deposit-status")
+DEPIX_API_URL = os.getenv("DEPIX_API_URL", "https://depix.eulen.app/api/deposit-status")
 DEPIX_API_TOKEN = os.getenv("DEPIX_API_TOKEN", "SUA_API_KEY_AQUI")  # Troque para variável de ambiente real
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://useghost.squareweb.app/api/webhook.php")
 
