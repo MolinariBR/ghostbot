@@ -48,4 +48,4 @@ async def fluxo_envio_invoice(depix_id: str, chat_id: str, is_lightning: bool = 
             await acionar_voltz_e_enviar_invoice(dados, chat_id, bot=bot)
             return
         logger.info(f"Tentativa para depix_id={depix_id} chat_id={chat_id} (loop infinito)")
-        # Sem delay entre tentativas, igual ao fallback_blockchaintxid.py
+        await asyncio.sleep(30)  # Aguarda 30 segundos antes da próxima tentativa
