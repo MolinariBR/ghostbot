@@ -19,7 +19,7 @@ DEPIX_API_TOKEN = os.getenv("DEPIX_API_TOKEN", "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpX
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://useghost.squareweb.app/depix/webhook.php")
 BACKEND_API_KEY = os.getenv("BACKEND_API_KEY", "SUA_CHAVE_AQUI")
 
-CHECK_INTERVAL = int(os.getenv("FALLBACK_BLOCKCHAINTXID_INTERVAL", "60"))  # segundos
+CHECK_INTERVAL = 0  # sem espera entre as tentativas
 
 
 def get_pending_deposits() -> List[Dict]:
@@ -82,7 +82,8 @@ async def fallback_blockchaintxid_loop():
             txid = fetch_blockchaintxid_from_depix(depix_id)
             if txid:
                 send_blockchaintxid_to_webhook(depix_id, txid)
-        await asyncio.sleep(CHECK_INTERVAL)
+        if CHECK_INTERVAL > 0:
+            await asyncio.sleep(CHECK_INTERVAL)
 
 if __name__ == "__main__":
     asyncio.run(fallback_blockchaintxid_loop())
