@@ -82,8 +82,7 @@ async def fallback_blockchaintxid_loop():
             txid = fetch_blockchaintxid_from_depix(depix_id)
             if txid:
                 send_blockchaintxid_to_webhook(depix_id, txid)
-        if CHECK_INTERVAL > 0:
-            await asyncio.sleep(CHECK_INTERVAL)
+        await asyncio.sleep(30)  # Aguarda 30 segundos antes da próxima iteração
 
 if __name__ == "__main__":
     asyncio.run(fallback_blockchaintxid_loop())
