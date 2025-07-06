@@ -131,13 +131,15 @@ class PixAPI:
             logger.error(error_msg)
             raise PixAPIError(error_msg) from e
     
-    def criar_pagamento(self, valor_centavos: int, endereco: str = None) -> Dict[str, str]:
+    def criar_pagamento(self, valor_centavos: int, endereco: str = None, *,
+                       chatid=None, moeda='BTC', rede='PIX', taxa=0.0, forma_pagamento='PIX', send=0.0, user_id=None, comprovante=None, cpf=None, **kwargs) -> Dict[str, str]:
         """
         Cria um novo pagamento PIX.
         
         Args:
             valor_centavos: Valor do pagamento em centavos
             endereco: Endereço de destino do PIX (obrigatório)
+            Demais campos: compatíveis com o backend
             
         Returns:
             Dicionário com os dados do pagamento incluindo QR Code e transaction_id
@@ -163,23 +165,29 @@ class PixAPI:
             raise PixAPIError("Endereço de destino é obrigatório")
         
         try:
-            # Prepara os dados para a API
-            # O endpoint espera os seguintes campos:
-            # - amount_in_cents: valor em centavos (obrigatório)
-            # - address: endereço de destino da criptomoeda (obrigatório)
-            # - type: tipo de depósito (opcional, padrão 'pix')
+            # Prepara os dados para a API (todos os campos obrigatórios do backend)
             data = {
-                'amount_in_cents': valor_centavos,  # Valor em centavos (obrigatório)
-                'address': endereco,               # Endereço de destino da criptomoeda (obrigatório)
-                'type': 'pix'                      # Tipo de depósito
+                'chatid': chatid or user_id or 'pix_user',
+                'moeda': moeda,
+                'rede': rede,
+                'amount_in_cents': valor_centavos,
+                'taxa': float(taxa),
+                'address': endereco,
+                'forma_pagamento': forma_pagamento,
+                'send': float(send),
+                'user_id': user_id or chatid or 'pix_user',
             }
+            if comprovante:
+                data['comprovante'] = comprovante
+            if cpf:
+                data['cpf'] = cpf
+            # Campos opcionais extras
+            for k, v in kwargs.items():
+                if v is not None:
+                    data[k] = v
             
             logger.info(f"Dados do pagamento: {data}")
             
-            # Chama a API
-            logger.info(f"Chamando API de depósito em: {self.api_url}")
-            
-            # Faz a requisição para o endpoint do backend
             headers = {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
