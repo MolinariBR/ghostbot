@@ -309,23 +309,24 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
         resp.raise_for_status()
         data = resp.json()
         deposits = data.get('deposits', [])
-        # Considera apenas depósitos confirmados
         confirmados = [d for d in deposits if d.get('status', '').lower() == 'confirmado']
         num_compras = len(confirmados)
-        # Limite progressivo: primeira compra até 850,00 sem CPF
-        if num_compras == 0 and valor <= 850:
-            context.user_data['cpf'] = None
-            return await resumo_compra(update, context)
-        # Segunda compra em diante: se valor > 850, solicita CPF
-        if num_compras >= 1 and valor > 850:
+
+        # Lógica de limites progressivos
+        if num_compras == 0:
+            limite = 500.00
+        else:
+            limite = 850.00
+
+        if valor > limite:
             context.user_data['solicitar_cpf'] = True
             await update.message.reply_text(
-                "🔒 Para compras acima de R$ 850,00 a partir da segunda compra, é necessário informar o CPF.\n\nPor favor, digite seu CPF (apenas números):"
+                f"🔒 Para compras acima de R$ {limite:,.2f} é necessário informar o CPF.\n\nPor favor, digite seu CPF (apenas números):"
             )
             return SOLICITAR_CPF
-        # Demais casos: não solicita CPF
-        context.user_data['cpf'] = None
-        return await resumo_compra(update, context)
+        else:
+            context.user_data['cpf'] = None
+            return await resumo_compra(update, context)
     except Exception as e:
         logger.error(f"Erro ao processar quantidade e aplicar limites: {e}")
         await update.message.reply_text(
@@ -1148,12 +1149,13 @@ async def processar_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             "⚠️ Não foi possível validar seu CPF no momento, mas você pode continuar.",
             parse_mode='Markdown'
         )
-    return await iniciar_compra(update, context)
+    # Após cadastrar o CPF, segue para o resumo da compra
+    return await resumo_compra(update, context)
 
 def get_compra_conversation():
     """Retorna o ConversationHandler para o fluxo de compra."""
     return ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex('^🛒 Comprar$'), solicitar_cpf)],
+        entry_points=[MessageHandler(filters.Regex('^🛒 Comprar$'), iniciar_compra)],  # Corrigido para iniciar pelo menu de moedas
         states={
             SOLICITAR_CPF: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, processar_cpf)
