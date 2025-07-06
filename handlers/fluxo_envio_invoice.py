@@ -1,7 +1,9 @@
 import asyncio
 import logging
-import sqlite3
+import os
+import aiohttp
 from typing import Dict, Optional
+from tokens import Config
 
 logger = logging.getLogger("handlers.fluxo_envio_invoice")
 
@@ -9,24 +11,26 @@ CAMPOS_OBRIGATORIOS = [
     "blockchainTxID", "chat_id", "depix_id", "data", "valor", "taxa", "moeda"
 ]
 
-DB_PATH = "/home/mau/bot/ghostbackend/data/deposit.db"
-
-def get_deposit_row(depix_id: str) -> Optional[Dict]:
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        query = "SELECT * FROM deposit WHERE depix_id = ? LIMIT 1"
-        cursor = conn.execute(query, (depix_id,))
-        row = cursor.fetchone()
-        conn.close()
-        if row:
-            return dict(row)
-    except Exception as e:
-        logger.error(f"Erro ao buscar depósito depix_id={depix_id}: {e}")
-    return None
+API_URL = "https://useghost.squareweb.app/api/deposit_pendentes.php"
+API_TOKEN = getattr(Config, "API_LISTA_PENDENTES_KEY", "SUA_CHAVE_AQUI")
 
 async def buscar_dados_deposito(depix_id: str) -> Optional[Dict]:
-    return get_deposit_row(depix_id)
+    """
+    Busca os dados do depósito via API REST do backend (com header X-API-KEY).
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            params = {"depix_id": depix_id}
+            headers = {"X-API-KEY": API_TOKEN}
+            async with session.get(API_URL, params=params, headers=headers, timeout=10) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    # Espera que a API retorne {'success': True, 'deposit': {...}}
+                    if data.get("success") and data.get("deposit"):
+                        return data["deposit"]
+    except Exception as e:
+        logger.error(f"Erro ao buscar depósito depix_id={depix_id} via API: {e}")
+    return None
 
 async def acionar_voltz_e_enviar_invoice(dados: Dict, chat_id: str, bot=None):
     """
@@ -46,7 +50,7 @@ async def fluxo_envio_invoice(depix_id: str, chat_id: str, is_lightning: bool = 
             return
         tentativas += 1
         logger.info(f"Tentativa {tentativas}/5 para depix_id={depix_id} chat_id={chat_id}")
-        await asyncio.sleep(30)  # Alterado de 3 para 30 segundos
+        await asyncio.sleep(2)  # Reduzido temporariamente para 2 segundos para teste
     # Se não conseguiu, envia mensagem de atendimento manual
     logger.warning(f"Falha após 5 tentativas para depix_id={depix_id} chat_id={chat_id}. Encaminhar para suporte.")
     if bot:
