@@ -12,7 +12,7 @@ class Config:
     # URLs da API
     API_URLS = {
         # True: "https://basetria.xyz/api/bot_deposit.php",    # Produção
-        False: "https://useghost.squareweb.app/api/bot_deposit.php"  # Desenvolvimento
+        False: "https://useghost.squareweb.app/rest/deposit.php"  # Desenvolvimento (corrigido)
     }
     
     # URL base da API de depósito (será definida automaticamente)
