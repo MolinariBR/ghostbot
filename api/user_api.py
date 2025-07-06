@@ -8,13 +8,10 @@ def enviar_usuario_backend(user_id, username=None, first_name=None, last_name=No
         "username": username,
         "first_name": first_name,
         "last_name": last_name,
+        "cpf": cpf,
+        "num_compras": num_compras,
+        "limite": limite
     }
-    if cpf is not None:
-        payload["cpf"] = cpf
-    if num_compras is not None:
-        payload["num_compras"] = num_compras
-    if limite is not None:
-        payload["limite"] = limite
     headers = {"Content-Type": "application/json"}
     response = requests.post(BACKEND_URL, json=payload, headers=headers, timeout=10)
     response.raise_for_status()
