@@ -880,10 +880,21 @@ Prossiga com o pagamento PIX abaixo. Após a confirmação, você receberá auto
     # Processa pagamento via PIX usando a API Depix
     from api.depix import pix_api
     logger.info(f"Iniciando processamento de PIX - Valor: {valor_brl}, Endereço: {endereco}")
-    
     valor_centavos = int(round(valor_brl * 100))
     try:
-        cobranca = pix_api.criar_pagamento(valor_centavos=valor_centavos, endereco=endereco)
+        cobranca = pix_api.criar_pagamento(
+            valor_centavos=valor_centavos,
+            endereco=endereco,
+            chatid=str(update.effective_user.id),
+            moeda=moeda.upper(),
+            rede=rede,
+            taxa=round(taxa * 100, 2),
+            forma_pagamento="PIX",
+            send=float(valor_recebido),
+            user_id=int(update.effective_user.id),
+            comprovante="Lightning Invoice" if 'lightning' in rede.lower() else None,
+            cpf=context.user_data.get('cpf')
+        )
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
