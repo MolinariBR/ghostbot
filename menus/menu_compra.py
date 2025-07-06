@@ -1011,6 +1011,9 @@ Prossiga com o pagamento PIX abaixo. Após a confirmação, você receberá auto
             "status": "pending",
             "user_id": int(chatid),
         }
+        # Adiciona comprovante especial para Lightning
+        if 'lightning' in rede.lower():
+            payload["comprovante"] = "Lightning Invoice"
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 "https://useghost.squareweb.app/rest/deposit.php",
