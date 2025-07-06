@@ -51,3 +51,6 @@ htmlcov/
 # Local development
 .DS_Store
 Thumbs.db
+
+# Ignora o diretório de testes localmente
+/tests/

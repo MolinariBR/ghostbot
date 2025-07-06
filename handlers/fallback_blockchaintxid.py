@@ -1,0 +1,81 @@
+"""
+Fallback automático para buscar blockchainTxID de depósitos on-chain (DePix)
+"""
+import asyncio
+import logging
+import requests
+import os
+from datetime import datetime
+from typing import List, Dict
+
+# Configuração de logging
+logger = logging.getLogger("handlers.fallback_blockchaintxid")
+logging.basicConfig(level=logging.INFO)
+
+# Configurações
+BACKEND_API_URL = os.getenv("BACKEND_API_URL", "https://useghost.squareweb.app/api/deposit_pendentes.php")
+DEPIX_API_URL = os.getenv("DEPIX_API_URL", "https://api.pix2depix.com/deposit-status")
+DEPIX_API_TOKEN = os.getenv("DEPIX_API_TOKEN", "SUA_API_KEY_AQUI")  # Troque para variável de ambiente real
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://useghost.squareweb.app/api/webhook.php")
+
+CHECK_INTERVAL = int(os.getenv("FALLBACK_BLOCKCHAINTXID_INTERVAL", "60"))  # segundos
+
+
+def get_pending_deposits() -> List[Dict]:
+    """Busca depósitos com depix_id mas sem blockchainTxID via API do backend"""
+    try:
+        resp = requests.get(BACKEND_API_URL, timeout=15)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("pendentes", [])
+        else:
+            logger.warning(f"Backend API HTTP {resp.status_code}")
+    except Exception as e:
+        logger.error(f"Erro ao consultar backend pendentes: {e}")
+    return []
+
+
+def fetch_blockchaintxid_from_depix(depix_id: str) -> str:
+    """Consulta a API DePix para buscar o blockchainTxID"""
+    headers = {
+        "Authorization": f"Bearer {DEPIX_API_TOKEN}"
+    }
+    params = {"id": depix_id}
+    try:
+        resp = requests.get(DEPIX_API_URL, headers=headers, params=params, timeout=15)
+        if resp.status_code == 200:
+            data = resp.json()
+            txid = data.get("response", {}).get("blockchainTxID")
+            logger.info(f"Consulta DePix depix_id={depix_id} txid={txid}")
+            return txid
+        else:
+            logger.warning(f"DePix API HTTP {resp.status_code} depix_id={depix_id}")
+    except Exception as e:
+        logger.error(f"Erro ao consultar DePix depix_id={depix_id}: {e}")
+    return None
+
+
+def send_blockchaintxid_to_webhook(depix_id: str, txid: str):
+    """Envia o blockchainTxID para o webhook do backend"""
+    payload = {"id": depix_id, "blockchainTxID": txid}
+    try:
+        resp = requests.post(WEBHOOK_URL, json=payload, timeout=10)
+        logger.info(f"Webhook depix_id={depix_id} txid={txid} HTTP={resp.status_code}")
+    except Exception as e:
+        logger.error(f"Erro ao enviar para webhook depix_id={depix_id}: {e}")
+
+
+async def fallback_blockchaintxid_loop():
+    logger.info("Iniciando fallback_blockchaintxid...")
+    while True:
+        pendentes = get_pending_deposits()
+        logger.info(f"{len(pendentes)} depósitos pendentes para buscar blockchainTxID")
+        for dep in pendentes:
+            depix_id = dep["depix_id"]
+            txid = fetch_blockchaintxid_from_depix(depix_id)
+            if txid:
+                send_blockchaintxid_to_webhook(depix_id, txid)
+        await asyncio.sleep(CHECK_INTERVAL)
+
+if __name__ == "__main__":
+    asyncio.run(fallback_blockchaintxid_loop())
