@@ -41,20 +41,11 @@ async def acionar_voltz_e_enviar_invoice(dados: Dict, chat_id: str, bot=None):
     # Exemplo de envio: await bot.send_message(chat_id, "Seu invoice está aqui: ...")
 
 async def fluxo_envio_invoice(depix_id: str, chat_id: str, is_lightning: bool = False, bot=None):
-    tentativas = 0
-    while tentativas < 5:
+    while True:
         dados = await buscar_dados_deposito(depix_id)
         campos_necessarios = CAMPOS_OBRIGATORIOS + (["rede"] if is_lightning else [])
         if dados and all(dados.get(c) for c in campos_necessarios):
             await acionar_voltz_e_enviar_invoice(dados, chat_id, bot=bot)
             return
-        tentativas += 1
-        logger.info(f"Tentativa {tentativas}/5 para depix_id={depix_id} chat_id={chat_id}")
-        await asyncio.sleep(30)  # Restaurado para 30 segundos para produção
-    # Se não conseguiu, envia mensagem de atendimento manual
-    logger.warning(f"Falha após 5 tentativas para depix_id={depix_id} chat_id={chat_id}. Encaminhar para suporte.")
-    if bot:
-        await bot.send_message(
-            chat_id=chat_id,
-            text="Não foi possível processar automaticamente seu pagamento. Por favor, entre em contato com o suporte: @GhosttP2P"
-        )
+        logger.info(f"Tentativa para depix_id={depix_id} chat_id={chat_id} (loop infinito)")
+        # Sem delay entre tentativas, igual ao fallback_blockchaintxid.py
