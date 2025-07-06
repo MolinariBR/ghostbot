@@ -15,7 +15,10 @@ def registrar_deposito(
     blockchainTxID=None,
     depix_id=None,
     status=None,
-    created_at=None
+    created_at=None,
+    user_id=None,
+    comprovante=None,
+    cpf=None
 ):
     """
     Envia um novo depósito para o backend via REST, compatível com a tabela deposit.
@@ -25,6 +28,9 @@ def registrar_deposito(
     - address: endereço de recebimento
     - forma_pagamento: ex: 'PIX', 'TED', etc
     - blockchainTxID, depix_id, status, created_at: opcionais
+    - user_id: id do usuário (obrigatório para o backend)
+    - comprovante: string do comprovante (opcional)
+    - cpf: CPF do usuário (opcional)
     """
     payload = {
         "chatid": chatid,
@@ -44,6 +50,12 @@ def registrar_deposito(
         payload["status"] = status
     if created_at:
         payload["created_at"] = created_at
+    if user_id:
+        payload["user_id"] = user_id
+    if comprovante:
+        payload["comprovante"] = comprovante
+    if cpf:
+        payload["cpf"] = cpf
     resp = requests.post(BACKEND_URL, json=payload, timeout=10)
     resp.raise_for_status()
     return resp.json()

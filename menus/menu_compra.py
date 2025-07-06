@@ -7,6 +7,7 @@ import json
 import logging
 from typing import Dict, Any, Optional
 import os
+import re
 
 # Importa o módulo para integração com a API Voltz (Lightning Network)
 from api.voltz import VoltzAPI
@@ -294,85 +295,66 @@ async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     return QUANTIDADE
 
 async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Processa a quantidade informada e mostra confirmação."""
+    """Processa a quantidade informada, aplica limites progressivos e solicita CPF se necessário."""
     try:
-        print("\n" + "="*50)
-        print("DEBUG - INÍCIO processar_quantidade")
-        print(f"update.message.text: {update.message.text}")
-        print(f"context.user_data: {context.user_data}")
-        print(f"context.bot_data: {getattr(context, 'bot_data', 'N/A')}")
-        print(f"context.chat_data: {getattr(context, 'chat_data', 'N/A')}")
-        print("-"*50)
-        
-        # Se o usuário clicou em "Digitar valor", pede para digitar
-        if update.message.text == "Digitar valor":
-            try:
-                # Cria um teclado com o botão de voltar
-                teclado_voltar = [["🔙 Voltar"]]
-                reply_markup = ReplyKeyboardMarkup(teclado_voltar, resize_keyboard=True)
-                
-                await update.message.reply_text(
-                    "💵 *Digite o valor desejado*\n\n"
-                    "Exemplos:\n"
-                    "• 150,50\n"
-                    "• 1250,00\n\n"
-                    "*Lembre-se:* Valor entre R$ 10,00 e R$ 5.000,00",
-                    parse_mode='Markdown',
-                    reply_markup=reply_markup
-                )
-            except Exception as e:
-                logger.error(f"Erro ao exibir teclado de digitar valor: {str(e)}")
-                # Tenta enviar sem teclado em caso de erro
-                await update.message.reply_text(
-                    "💵 *Digite o valor desejado*\n\n"
-                    "Exemplos:\n"
-                    "• 150,50\n"
-                    "• 1250,00\n\n"
-                    "*Lembre-se:* Valor entre R$ 10,00 e R$ 5.000,00\n\n"
-                    "Digite 'voltar' para retornar.",
-                    parse_mode='Markdown'
-                )
-            return QUANTIDADE
-            
-        # Remove R$ e espaços em branco
-        valor_texto = update.message.text.replace('R$', '').strip()
-        
-        # Verifica se tem vírgula como separador decimal
-        if ',' in valor_texto:
-            # Se tiver vírgula, remove pontos de milhar e substitui vírgula por ponto
-            valor_texto = valor_texto.replace('.', '').replace(',', '.')
-        
-        print(f"DEBUG - processar_quantidade - Valor convertido: {valor_texto}")
-        valor_brl = float(valor_texto)
-        
-        # Validação dos valores mínimo e máximo (em centavos)
-        if valor_brl < 10.00:
-            raise ValueError("O valor mínimo é R$ 10,00")
-        if valor_brl > 5000.00:
-            raise ValueError("O valor máximo é R$ 5.000,00")
-        
-        # Arredonda para 2 casas decimais
-        valor_brl = round(valor_brl, 2)
-        context.user_data['valor_brl'] = valor_brl
-        
+        user = update.effective_user
+        user_id = user.id
+        valor_str = update.message.text.replace('R$', '').replace(',', '.').strip()
+        valor = float(re.sub(r'[^0-9.]', '', valor_str))
+        context.user_data['valor_brl'] = valor
+
+        # Consulta histórico de depósitos confirmados do usuário
+        url = f"https://useghost.squareweb.app/rest/deposit.php?chatid={user_id}"
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        deposits = data.get('deposits', [])
+        # Considera apenas depósitos confirmados
+        confirmados = [d for d in deposits if d.get('status', '').lower() == 'confirmado']
+        num_compras = len(confirmados)
+        # Limite progressivo: primeira compra até 850,00 sem CPF
+        if num_compras == 0 and valor <= 850:
+            context.user_data['cpf'] = None
+            return await resumo_compra(update, context)
+        # Segunda compra em diante: se valor > 850, solicita CPF
+        if num_compras >= 1 and valor > 850:
+            context.user_data['solicitar_cpf'] = True
+            await update.message.reply_text(
+                "🔒 Para compras acima de R$ 850,00 a partir da segunda compra, é necessário informar o CPF.\n\nPor favor, digite seu CPF (apenas números):"
+            )
+            return SOLICITAR_CPF
+        # Demais casos: não solicita CPF
+        context.user_data['cpf'] = None
+        return await resumo_compra(update, context)
+    except Exception as e:
+        logger.error(f"Erro ao processar quantidade e aplicar limites: {e}")
+        await update.message.reply_text(
+            "❌ Erro ao processar o valor informado. Por favor, tente novamente ou digite um valor válido."
+        )
+        return QUANTIDADE
+
+async def solicitar_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Recebe o CPF do usuário, valida e segue para o resumo da compra."""
+    cpf = re.sub(r'[^0-9]', '', update.message.text)
+    if len(cpf) != 11:
+        await update.message.reply_text("CPF inválido. Por favor, digite um CPF válido (11 dígitos, apenas números):")
+        return SOLICITAR_CPF
+    context.user_data['cpf'] = cpf
+    return await resumo_compra(update, context)
+
+async def resumo_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Mostra o resumo da compra antes da confirmação."""
+    try:
         moeda = context.user_data.get('moeda', 'a moeda selecionada')
         rede = context.user_data.get('rede', 'a rede selecionada')
-        
-        print(f"DEBUG - processar_quantidade - Moeda: {moeda}, Rede: {rede}")
-        print(f"DEBUG - processar_quantidade - Valor BRL: {valor_brl}")
+        valor_brl = context.user_data.get('valor_brl', 0)
         
         # Obtém a cotação e calcula o valor a receber
         cotacao = await obter_cotacao(moeda)
-        print(f"DEBUG - processar_quantidade - Cotação: {cotacao}")
-        # Salva a cotação no user_data para uso posterior
-        context.user_data['cotacao'] = cotacao
-        
         taxa = 0.01  # 1% de taxa de exemplo
         valor_taxa = valor_brl * taxa
         valor_liquido = valor_brl - valor_taxa
         valor_recebido = valor_liquido / cotacao
-        
-        print(f"DEBUG - processar_quantidade - Valor recebido: {valor_recebido}")
         
         # Formata os valores
         valor_brl_formatado = formatar_brl(valor_brl)
@@ -380,106 +362,52 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
         valor_taxa_formatado = formatar_brl(valor_taxa)
         cotacao_formatada = formatar_brl(cotacao)
         
-        print(f"DEBUG - processar_quantidade - Valores formatados:")
-        print(f"- BRL: {valor_brl_formatado}")
-        print(f"- Recebido: {valor_recebido_formatado}")
-        print(f"- Taxa: {valor_taxa_formatado}")
-        print(f"- Cotação: {cotacao_formatada}")
-        
-        try:
-            # Cria o teclado de confirmação
-            teclado_confirmacao = [
-                ["✅ Confirmar Compra"],
-                ["✏️ Alterar Valor", "🔙 Mudar Moeda"]
-            ]
-            reply_markup = ReplyKeyboardMarkup(teclado_confirmacao, resize_keyboard=True)
-            
-            # Monta a mensagem de confirmação
-            mensagem = (
-                f"📋 *RESUMO DA COMPRA*\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"• *Moeda:* {moeda}\n"
-                f"• *Rede:* {rede}\n"
-                f"• *Valor investido:* {valor_brl_formatado}\n"
-                f"• *Taxa (1%):* {valor_taxa_formatado}\n"
-                f"• *Cotação:* {cotacao_formatada}\n"
-                f"• *Você receberá:* {valor_recebido_formatado}\n"  # <-- NOVA LINHA
-                f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                "Confirma os dados da compra?"
-            )
-            
-            print("DEBUG - processar_quantidade - Mensagem de confirmação montada")
-            
-            await update.message.reply_text(
-                mensagem,
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-        except Exception as e:
-            logger.error(f"Erro ao exibir confirmação de compra: {str(e)}")
-            # Tenta enviar sem teclado em caso de erro
-            await update.message.reply_text(
-                "❌ *Ocorreu um erro ao processar sua solicitação.*\n\n"
-                "Por favor, tente novamente mais tarde.",
-                parse_mode='Markdown'
-            )
-            # Volta para o menu de redes
-            moeda = context.user_data.get('moeda', '')
-            opcoes_rede = menu_redes(moeda)
-            reply_markup = ReplyKeyboardMarkup(opcoes_rede, resize_keyboard=True) if opcoes_rede else None
-            await update.message.reply_text(
-                f"🔄 *Rede de {moeda}*\n\n"
-                "Selecione a rede que deseja utilizar:",
-                reply_markup=reply_markup,
-                parse_mode='Markdown'
-            )
-            return ESCOLHER_REDE
-        return RESUMO_COMPRA
-        
-    except ValueError as e:
-        mensagem_erro = str(e)
-        if "could not convert" in mensagem_erro.lower():
-            mensagem_erro = "❌ Formato inválido. Use números com até 2 casas decimais."
-        
-        # Teclado com valores sugeridos
-        teclado = [
-            [
-                KeyboardButton("R$ 50,00"), 
-                KeyboardButton("R$ 100,00"),
-                KeyboardButton("R$ 250,00")
-            ],
-            [
-                KeyboardButton("R$ 500,00"),
-                KeyboardButton("R$ 1.000,00"),
-                KeyboardButton("R$ 2.500,00")
-            ],
-            [
-                KeyboardButton("Digitar valor"),
-                KeyboardButton("🔙 Voltar")
-            ]
+        # Cria o teclado de confirmação
+        teclado_confirmacao = [
+            ["✅ Confirmar Compra"],
+            ["✏️ Alterar Valor", "🔙 Mudar Moeda"]
         ]
+        reply_markup = ReplyKeyboardMarkup(teclado_confirmacao, resize_keyboard=True)
+        
+        # Monta a mensagem de confirmação
+        mensagem = (
+            f"📋 *RESUMO DA COMPRA*\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"• *Moeda:* {moeda}\n"
+            f"• *Rede:* {rede}\n"
+            f"• *Valor investido:* {valor_brl_formatado}\n"
+            f"• *Taxa (1%):* {valor_taxa_formatado}\n"
+            f"• *Cotação:* {cotacao_formatada}\n"
+            f"• *Você receberá:* {valor_recebido_formatado}\n"  # <-- NOVA LINHA
+            f"━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Confirma os dados da compra?"
+        )
         
         await update.message.reply_text(
-            f"{mensagem_erro}\n\n"
-            "💡 Você pode digitar qualquer valor entre R$ 10,00 e R$ 5.000,00\n"
-            "Exemplos: 75,50 ou 1250,00",
+            mensagem,
             parse_mode='Markdown',
-            reply_markup=ReplyKeyboardMarkup(
-                teclado, 
-                resize_keyboard=True
-            )
+            reply_markup=reply_markup
         )
-        return QUANTIDADE
     except Exception as e:
-        logger.error(f"Erro ao processar quantidade: {str(e)}")
+        logger.error(f"Erro ao exibir confirmação de compra: {str(e)}")
+        # Tenta enviar sem teclado em caso de erro
         await update.message.reply_text(
-            "❌ Ocorreu um erro ao processar o valor. Por favor, tente novamente.",
-            reply_markup=ReplyKeyboardMarkup(
-                [[KeyboardButton("🔙 Voltar")]], 
-                resize_keyboard=True
-            )
+            "❌ *Ocorreu um erro ao processar sua solicitação.*\n\n"
+            "Por favor, tente novamente mais tarde.",
+            parse_mode='Markdown'
         )
-        return QUANTIDADE
+        # Volta para o menu de redes
+        moeda = context.user_data.get('moeda', '')
+        opcoes_rede = menu_redes(moeda)
+        reply_markup = ReplyKeyboardMarkup(opcoes_rede, resize_keyboard=True) if opcoes_rede else None
+        await update.message.reply_text(
+            f"🔄 *Rede de {moeda}*\n\n"
+            "Selecione a rede que deseja utilizar:",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        return ESCOLHER_REDE
+    return RESUMO_COMPRA
 
 async def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Confirma os dados e verifica se precisa solicitar endereço ou vai direto para pagamento."""
