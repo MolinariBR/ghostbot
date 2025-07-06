@@ -17,6 +17,7 @@ BACKEND_API_URL = os.getenv("BACKEND_API_URL", "https://useghost.squareweb.app/a
 DEPIX_API_URL = os.getenv("DEPIX_API_URL", "https://depix.eulen.app/api/deposit-status")
 DEPIX_API_TOKEN = os.getenv("DEPIX_API_TOKEN", "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJhbGciOiJSUzI1NiIsImVudiI6InByb2QiLCJleHAiOjE3ODI3NjUzNzcsImlhdCI6MTc1MTY2MTM3NywianRpIjoiNTY4OTlhZTdjMGJlIiwic2NvcGUiOlsiZGVwb3NpdCIsIndpdGhkcmF3Il0sInN1YiI6Imdob3N0IiwidHlwIjoiSldUIn0.fcobx8C6rPyYAYKo1WBhwyvErWHlX_ZOaZM3QvrOtBS5EGip8ofxX2h7lnJjZozNvu_6qI7SK3EsS8sPGYAkBWHvON3huWzXN--NkZV9HK4G5VMIYESdDqTvS7xnBcEJFlKjpq6wbN1siYu8Zp6b7RTfeRBlG4lNYiFVe3DWBJW2lcfTAOhMnpFQ4DPClxek-htU-pDtZcBwwgMfpBVGBIeiGVRV4YAvKFUeKItNijbBIwZtP3qsxslR-W8aaJUQ35OkPkBfrrw6OKz94Ng4xVs9uOZJ64ZBwVNzjKX_r6OIXtjVRbaErU-R4scdMlKYz-yj7bu0NhtmJTccruYyN5ITWtcTwxL9avhEp_ej8Ve3rWaf3ezsKejEol2iVakrHU9JDgLzmWxo7PXxTeipw5GlkXXo5IgtxxI-ViIHzPO3L816ZxdGhMlLS6fHEcZC1slWALUQgFxrS2VOLAfV105K63g4_X7_JKbEH0w7tOpaqd0Fl3VvodtKzH33JPNSfj9AD7hhJwhX6tDQvOtSpoRu10uRwPcVv_wfuqsgyaT6kfBJ5WKUdpyWFvSWWKjI5S907cjj8uXbazycBMQtZaL_aIRuqCEY3x_d8J_UlfS-vPwjC99RsXxMztXIzyQNdper7wIhVA604JiP5kvGN3ipzwIGNYT3jakbDviYNE0")  # JWT real da DePix
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://useghost.squareweb.app/depix/webhook.php")
+BACKEND_API_KEY = os.getenv("BACKEND_API_KEY", "SUA_CHAVE_AQUI")
 
 CHECK_INTERVAL = int(os.getenv("FALLBACK_BLOCKCHAINTXID_INTERVAL", "60"))  # segundos
 
@@ -24,7 +25,7 @@ CHECK_INTERVAL = int(os.getenv("FALLBACK_BLOCKCHAINTXID_INTERVAL", "60"))  # seg
 def get_pending_deposits() -> List[Dict]:
     """Busca depósitos com depix_id mas sem blockchainTxID via API do backend"""
     headers = {
-        "X-API-KEY": "SUA_CHAVE_AQUI"
+        "X-API-KEY": DEPIX_API_TOKEN
     }
     try:
         resp = requests.get(BACKEND_API_URL, headers=headers, timeout=15)
