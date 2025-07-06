@@ -704,22 +704,23 @@ async def registrar_pedido_backend(context: ContextTypes.DEFAULT_TYPE, status: s
         metodo = user_data.get('metodo_pagamento', '')
         # Decide o endpoint conforme o método de pagamento
         if metodo == PIX:
-            url = getattr(Config, 'PIX_API_URL', 'https://basetria.xyz/api/bot_deposit.php')
+            url = getattr(Config, 'PIX_API_URL', 'https://useghost.squareweb.app/rest/deposit.php')
         else:
-            url = 'https://useghost.squareweb.app/api/bot_register_deposit.php'
+            url = 'https://useghost.squareweb.app/rest/deposit.php'
         payload = {
             'amount_in_cents': int(round(user_data.get('valor_brl', 0) * 100)),
             'address': user_data.get('endereco_recebimento', 'manual'),
             'moeda': user_data.get('moeda', ''),
             'rede': user_data.get('rede', ''),
             'chatid': str(context._user_id if hasattr(context, '_user_id') else user_data.get('chatid', '')),
+            'user_id': int(context._user_id if hasattr(context, '_user_id') else user_data.get('chatid', 0)),
             'status': status,
             'metodo_pagamento': metodo,
             'taxa': float(user_data.get('valor_brl', 0)) * 0.01,
             'send': user_data.get('valor_liquido', 0),
         }
         headers = {'Content-Type': 'application/json'}
-        response = requests.post(url, data=json.dumps(payload), headers=headers, timeout=10)
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
         if response.status_code == 200:
             logger.info(f"Pedido registrado no backend: {payload}")
             try:
@@ -1007,11 +1008,12 @@ Prossiga com o pagamento PIX abaixo. Após a confirmação, você receberá auto
             "forma_pagamento": "PIX",
             "send": float(valor_recebido),
             "depix_id": txid,
-            "status": "pending"
+            "status": "pending",
+            "user_id": int(chatid),
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                "https://useghost.squareweb.app/api/bot_register_deposit.php",
+                "https://useghost.squareweb.app/rest/deposit.php",
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
