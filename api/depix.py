@@ -30,7 +30,7 @@ class PixAPI:
             api_url: URL base da API (opcional, usa PIX_API_URL do tokens.py por padrão)
         """
         # Endpoint da API de depósito
-        self.api_url = (api_url or getattr(Config, 'PIX_API_URL', 'https://basetria.xyz/api/bot_deposit.php')).rstrip('/')
+        self.api_url = (api_url or getattr(Config, 'PIX_API_URL', 'https://useghost.squareweb.app/api/bot_deposit.php')).rstrip('/')
         
         if not self.api_url:
             raise PixAPIError("URL da API de depósito não configurada. Defina PIX_API_URL no tokens.py")
