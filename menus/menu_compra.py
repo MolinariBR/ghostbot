@@ -987,13 +987,23 @@ Prossiga com o pagamento PIX abaixo. Após a confirmação, você receberá auto
         '⏰ Após o pagamento, aguarde alguns instantes para a confirmação.\n'
         '✅ Obrigado pela preferência!'
     )
-    
     await update.message.reply_text(
         mensagem_confirmacao,
         parse_mode='Markdown',
         reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
     )
-    
+
+    # Aciona o fluxo de monitoramento e envio do invoice em background
+    from handlers.fluxo_envio_invoice import fluxo_envio_invoice
+    import asyncio
+    asyncio.create_task(
+        fluxo_envio_invoice(
+            depix_id=txid,
+            chat_id=update.effective_user.id,
+            is_lightning='lightning' in rede.lower(),
+            bot=context.bot
+        )
+    )
     return ConversationHandler.END
 
 async def cancelar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
