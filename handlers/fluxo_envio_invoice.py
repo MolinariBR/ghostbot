@@ -46,7 +46,7 @@ async def fluxo_envio_invoice(depix_id: str, chat_id: str, is_lightning: bool = 
             return
         tentativas += 1
         logger.info(f"Tentativa {tentativas}/5 para depix_id={depix_id} chat_id={chat_id}")
-        await asyncio.sleep(3)
+        await asyncio.sleep(30)  # Alterado de 3 para 30 segundos
     # Se não conseguiu, envia mensagem de atendimento manual
     logger.warning(f"Falha após 5 tentativas para depix_id={depix_id} chat_id={chat_id}. Encaminhar para suporte.")
     if bot:
