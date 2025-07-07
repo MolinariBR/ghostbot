@@ -1038,11 +1038,11 @@ async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
     )
 
-    # Aciona o fluxo de monitoramento e envio do invoice em background
-    from handlers.fluxo_envio_invoice import fluxo_envio_invoice
+    # Aciona o fluxo de monitoramento Lightning em background
+    from handlers.lightning_integration import monitorar_pix_e_processar_lightning
     import asyncio
     asyncio.create_task(
-        fluxo_envio_invoice(
+        monitorar_pix_e_processar_lightning(
             depix_id=txid,
             chat_id=update.effective_user.id,
             is_lightning='lightning' in rede.lower(),

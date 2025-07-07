@@ -3,6 +3,8 @@ Integração Lightning Network - Handler para solicitar invoice do cliente
 """
 import logging
 import requests
+import asyncio
+import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
@@ -165,6 +167,111 @@ Verifique sua carteira Lightning - o pagamento deve aparecer em alguns segundos.
             parse_mode='Markdown'
         )
         return False
+
+async def monitorar_pix_e_processar_lightning(depix_id: str, chat_id: int, is_lightning: bool, bot):
+    """
+    Monitora pagamento PIX e inicia fluxo Lightning quando confirmado.
+    Função equivalente ao antigo fluxo_envio_invoice.
+    
+    Args:
+        depix_id: ID do depósito
+        chat_id: ID do chat do usuário
+        is_lightning: Se é transação Lightning
+        bot: Instância do bot
+    """
+    if not is_lightning:
+        logger.info(f"Depix {depix_id} não é Lightning, ignorando monitoramento")
+        return
+    
+    logger.info(f"🔄 Iniciando monitoramento PIX para Lightning - Depix: {depix_id}")
+    
+    max_tentativas = 60  # 30 minutos (30s * 60)
+    tentativa = 0
+    
+    while tentativa < max_tentativas:
+        try:
+            # Verificar status do PIX via API
+            url = "https://useghost.squareweb.app/voltz/voltz_rest.php"
+            payload = {
+                "action": "check_status",
+                "depix_id": depix_id
+            }
+            
+            response = requests.post(url, json=payload, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                status = data.get('status', 'unknown')
+                
+                if status == 'pix_confirmed':
+                    # PIX confirmado, solicitar invoice Lightning
+                    amount_sats = data.get('amount_sats', 0)
+                    
+                    logger.info(f"✅ PIX confirmado para Depix {depix_id}, solicitando invoice Lightning")
+                    
+                    message = f"""
+⚡ **PIX CONFIRMADO - LIGHTNING PENDENTE**
+
+💰 **Valor confirmado:** R$ {amount_sats/500:.2f}
+⚡ **BTC a receber:** {amount_sats:,} sats
+
+🔗 **PRÓXIMO PASSO:**
+Para receber seus bitcoins via Lightning Network, você precisa fornecer um **invoice Lightning** da sua carteira.
+
+📱 **Como gerar invoice:**
+• Abra sua carteira Lightning (Phoenix, Wallet of Satoshi, etc.)
+• Clique em "Receber"
+• Digite o valor: **{amount_sats} sats**
+• Copie o invoice gerado
+• Cole aqui no chat
+
+⏰ **Aguardando seu invoice Lightning...**
+
+💡 **Dica:** O invoice deve começar com "lnbc" ou "lntb"
+                    """
+                    
+                    # Keyboard com opções
+                    keyboard = [
+                        [InlineKeyboardButton("📋 Como gerar invoice", callback_data=f"help_invoice_{depix_id}")],
+                        [InlineKeyboardButton("❓ Não tenho carteira Lightning", callback_data=f"help_wallet_{depix_id}")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=message,
+                        reply_markup=reply_markup,
+                        parse_mode='Markdown'
+                    )
+                    
+                    # TODO: Configurar handler para receber invoice Lightning
+                    # Por enquanto, o usuário deve colar o invoice no chat
+                    
+                    return True
+                    
+                elif status in ['cancelled', 'expired', 'failed']:
+                    # PIX falhou/cancelado
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=f"❌ **PIX não confirmado**\n\nStatus: {status}\n\nTente novamente ou entre em contato com o suporte."
+                    )
+                    return False
+            
+            # Aguardar antes da próxima verificação
+            await asyncio.sleep(30)  # 30 segundos
+            tentativa += 1
+            
+        except Exception as e:
+            logger.error(f"Erro ao monitorar PIX {depix_id}: {e}")
+            await asyncio.sleep(30)
+            tentativa += 1
+    
+    # Timeout - PIX não confirmado
+    await bot.send_message(
+        chat_id=chat_id,
+        text="⏰ **Timeout** - PIX não foi confirmado em 30 minutos.\n\nVerifique o pagamento ou entre em contato com o suporte."
+    )
+    return False
 
 def setup_lightning_integration(application):
     """

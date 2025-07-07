@@ -502,11 +502,7 @@ def setup_handlers(application):
         from handlers.lightning_integration import setup_lightning_integration
         
         # Configura a integração Lightning
-        lightning_integration = setup_lightning_integration(
-            application=application,
-            enable_monitoring=True,  # Ativa monitoramento automático
-            interval_seconds=30      # Verifica a cada 30 segundos
-        )
+        lightning_integration = setup_lightning_integration(application)
         
         if lightning_integration:
             logger.info("✅ Integração Lightning configurada com sucesso!")
