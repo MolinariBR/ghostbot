@@ -366,34 +366,34 @@ def setup_lightning_integration(application):
         if message_text and (message_text.startswith('lnbc') or message_text.startswith('lntb')):
             chat_id = update.effective_chat.id
             
-            # Buscar depósito Lightning pendente para este chat
-            import sqlite3
-            import os
+            # Buscar depósito Lightning pendente para este chat via API REST
+            import requests
             try:
-                # Caminho absoluto para o banco no servidor
-                db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'deposit.db')
-                if not os.path.exists(db_path):
-                    # Fallback para caminho do backend
-                    db_path = '/var/www/html/data/deposit.db'
+                # Usar a API REST em vez do banco SQLite direto
+                url = f"https://useghost.squareweb.app/rest/deposit.php?chatid={chat_id}"
+                response = requests.get(url, timeout=10)
                 
-                conn = sqlite3.connect(db_path)
-                cursor = conn.cursor()
+                if response.status_code != 200:
+                    await update.message.reply_text(
+                        "❌ Erro interno. Tente novamente em alguns instantes."
+                    )
+                    return
                 
-                cursor.execute("""
-                    SELECT * FROM deposit 
-                    WHERE chatid = ? 
-                    AND rede LIKE '%lightning%' 
-                    AND blockchainTxID IS NOT NULL 
-                    AND status NOT IN ('completed', 'cancelled', 'failed')
-                    ORDER BY id DESC LIMIT 1
-                """, (chat_id,))
+                data = response.json()
+                deposits = data.get('deposits', [])
                 
-                deposito = cursor.fetchone()
-                conn.close()
+                # Buscar depósito Lightning pendente
+                deposito = None
+                for dep in deposits:
+                    if (dep.get('rede', '').lower().find('lightning') != -1 and 
+                        dep.get('blockchainTxID') and
+                        dep.get('status') not in ['completed', 'cancelled', 'failed']):
+                        deposito = dep
+                        break
                 
                 if deposito:
-                    # Processar o invoice
-                    await processar_invoice_recebido(update, context, message_text, str(deposito[0]))
+                    # Processar o invoice usando o depix_id do depósito
+                    await processar_invoice_recebido(update, context, message_text, deposito['depix_id'])
                 else:
                     await update.message.reply_text(
                         "❌ Não encontrei nenhum depósito Lightning pendente para você.\n\n"
