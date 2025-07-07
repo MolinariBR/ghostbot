@@ -1,26 +1,5 @@
 """
-Integração Lightning    # Calcular valor em reais baseado na cotação atual (~R$ 600.000 por BTC)
-    amount_reais = amount_sats / 166.67  # ~166 sats por real
-    
-    message = f"""
-⚡ **PIX CONFIRMADO - LIGHTNING PENDENTE**
-
-💰 **Valor confirmado:** R$ {amou                        amount_sats = data.get('amount_sats', 0)
-                        # Se amount_sats não estiver disponível, calcular baseado no valor do depósito
-                        if amount_sats == 0:
-                            # Buscar o valor do depósito via API
-                            dep_response = requests.get(f"https://useghost.squareweb.app/rest/deposit.php?depix_id={depix_id}", timeout=10)
-                            if dep_response.status_code == 200:
-                                dep_data = dep_response.json()
-                                if dep_data.get('deposits'):
-                                    dep = dep_data['deposits'][0]
-                                    amount_cents = dep.get('amount_in_cents', 0)
-                                    # Conversão correta: ~166 sats por real (BTC ~R$ 600.000)
-                                    amount_sats = int((amount_cents / 100) * 166.67)
-                        
-                        # Calcular valor em reais baseado na cotação atual
-                        amount_reais = amount_sats / 166.67
-⚡ **BTC a receber:** {amount_sats:,} satsork - Handler para solicitar invoice do cliente
+Integração Lightning Network - Handler para solicitar invoice do cliente
 """
 import logging
 import requests
@@ -46,7 +25,7 @@ async def solicitar_invoice_lightning(update: Update, context: ContextTypes.DEFA
     message = f"""
 ⚡ **PIX CONFIRMADO - LIGHTNING PENDENTE**
 
-💰 **Valor confirmado:** R$ {amount_sats/166:.2f}
+💰 **Valor confirmado:** R$ {amount_sats/166.67:.2f}
 ⚡ **BTC a receber:** {amount_sats:,} sats
 
 🔗 **PRÓXIMO PASSO:**
@@ -276,6 +255,7 @@ async def monitorar_pix_e_processar_lightning(depix_id: str, chat_id: int, is_li
                         message_text == 'Invoice do cliente necessário para pagamento'):
                         
                         amount_sats = data.get('amount_sats', 0)
+                        
                         # Se amount_sats não estiver disponível, calcular baseado no valor do depósito
                         if amount_sats == 0:
                             # Buscar o valor do depósito via API
@@ -285,16 +265,16 @@ async def monitorar_pix_e_processar_lightning(depix_id: str, chat_id: int, is_li
                                 if dep_data.get('deposits'):
                                     dep = dep_data['deposits'][0]
                                     amount_cents = dep.get('amount_in_cents', 0)
-                                    amount_sats = int(amount_cents * 1.66)  # Aproximação: 166 sats por real (BTC ~R$ 600k)
+                                    # Conversão correta: ~166.67 sats por real (BTC ~R$ 600.000)
+                                    amount_sats = int((amount_cents / 100) * 166.67)
+                                    logger.info(f"Calculado amount_sats: {amount_sats} para {amount_cents} centavos")
                         
-                        amount_reais = amount_sats / 166  # Converter sats para reais (BTC ~R$ 600k)
-                        
-                        logger.info(f"✅ Solicitando invoice Lightning para Depix {depix_id} - R$ {amount_reais:.2f} ({amount_sats} sats)")
+                        logger.info(f"✅ Solicitando invoice Lightning para Depix {depix_id} - {amount_sats} sats")
                         
                         message = f"""
 ⚡ **PIX CONFIRMADO - LIGHTNING PENDENTE**
 
-💰 **Valor confirmado:** R$ {amount_reais:.2f}
+💰 **Valor confirmado:** R$ {amount_sats/166.67:.2f}
 ⚡ **BTC a receber:** {amount_sats:,} sats
 
 🔗 **PRÓXIMO PASSO:**
