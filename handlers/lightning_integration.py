@@ -356,6 +356,55 @@ def setup_lightning_integration(application):
     Args:
         application: A aplicação do bot Telegram
     """
+    from telegram.ext import MessageHandler, filters
+    
+    # Handler para capturar invoices Lightning enviados pelo usuário
+    async def handle_lightning_invoice(update, context):
+        message_text = update.message.text
+        
+        # Verificar se é um invoice Lightning
+        if message_text and (message_text.startswith('lnbc') or message_text.startswith('lntb')):
+            chat_id = update.effective_chat.id
+            
+            # Buscar depósito Lightning pendente para este chat
+            import sqlite3
+            try:
+                conn = sqlite3.connect('data/deposit.db')
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT * FROM deposit 
+                    WHERE chatid = ? 
+                    AND rede LIKE '%lightning%' 
+                    AND blockchainTxID IS NOT NULL 
+                    AND status NOT IN ('completed', 'cancelled', 'failed')
+                    ORDER BY id DESC LIMIT 1
+                """, (chat_id,))
+                
+                deposito = cursor.fetchone()
+                conn.close()
+                
+                if deposito:
+                    # Processar o invoice
+                    await processar_invoice_recebido(update, context, message_text, str(deposito[0]))
+                else:
+                    await update.message.reply_text(
+                        "❌ Não encontrei nenhum depósito Lightning pendente para você.\n\n"
+                        "Use /start para fazer uma nova compra."
+                    )
+                    
+            except Exception as e:
+                logger.error(f"Erro ao buscar depósito Lightning: {e}")
+                await update.message.reply_text(
+                    "❌ Erro interno. Tente novamente em alguns instantes."
+                )
+    
+    # Registrar o handler
+    application.add_handler(MessageHandler(
+        filters.TEXT & filters.Regex(r'^ln(bc|tb)[a-zA-Z0-9]+$'), 
+        handle_lightning_invoice
+    ))
+    
     logger.info("✅ Integração Lightning configurada - fluxo PIX → solicitar invoice → pagar Lightning")
     
     # Novo fluxo:
