@@ -134,7 +134,7 @@ async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             }
             url = "https://useghost.squareweb.app/api/user_api.php"
             headers = {"Content-Type": "application/json"}
-            requests.post(url, data=json.dumps(payload), headers=headers, timeout=5)
+            requests.post(url, data=json.dumps(payload), headers=headers, timeout=10)
         except Exception as e:
             logger.warning(f"Não foi possível enviar dados do usuário ao backend: {e}")
         
@@ -899,7 +899,7 @@ async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
                 callback=monitor_lightning_status,
                 interval=30,  # Verifica a cada 30 segundos
                 first=10,     # Primeira verificação em 10 segundos
-                context={
+                data={
                     'depix_id': result['depix_id'],
                     'chat_id': chatid,
                     'amount_sats': int(valor_recebido * 100000000) if 'BTC' in moeda.upper() else int(valor_recebido),
@@ -1189,7 +1189,7 @@ async def processar_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         }
         url = "https://useghost.squareweb.app/api/user_api.php"
         headers = {"Content-Type": "application/json"}
-        resp = requests.post(url, data=json.dumps(payload), headers=headers, timeout=5)
+        resp = requests.post(url, data=json.dumps(payload), headers=headers, timeout=10)
         limite_msg = ""
         if resp.status_code == 200:
             try:
@@ -1274,7 +1274,7 @@ async def monitor_lightning_status(context):
     """
     Job que monitora o status de depósitos Lightning via Voltz.
     """
-    job_context = context.job.context
+    job_context = context.job.data
     depix_id = job_context['depix_id']
     chat_id = job_context['chat_id']
     amount_sats = job_context['amount_sats']
@@ -1324,8 +1324,8 @@ async def monitor_lightning_status(context):
             return
                 
         # Incrementar contador e parar após 10 minutos (20 verificações * 30seg)
-        if not hasattr(context.job, 'data') or not context.job.data:
-            context.job.data = {'attempts': 0}
+        if 'attempts' not in context.job.data:
+            context.job.data['attempts'] = 0
         
         context.job.data['attempts'] += 1
         
@@ -1340,10 +1340,10 @@ async def monitor_lightning_status(context):
         logger.error(f"Erro ao verificar status Lightning: {e}")
         
         # Incrementar contador de erros
-        if not hasattr(context.job, 'data') or not context.job.data:
-            context.job.data = {'error_count': 0}
+        if 'error_count' not in context.job.data:
+            context.job.data['error_count'] = 0
         
-        context.job.data['error_count'] = context.job.data.get('error_count', 0) + 1
+        context.job.data['error_count'] += 1
         
         if context.job.data['error_count'] > 5:
             await context.bot.send_message(
