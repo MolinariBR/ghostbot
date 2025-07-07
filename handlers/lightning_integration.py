@@ -368,8 +368,15 @@ def setup_lightning_integration(application):
             
             # Buscar depósito Lightning pendente para este chat
             import sqlite3
+            import os
             try:
-                conn = sqlite3.connect('data/deposit.db')
+                # Caminho absoluto para o banco no servidor
+                db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'deposit.db')
+                if not os.path.exists(db_path):
+                    # Fallback para caminho do backend
+                    db_path = '/var/www/html/data/deposit.db'
+                
+                conn = sqlite3.connect(db_path)
                 cursor = conn.cursor()
                 
                 cursor.execute("""
