@@ -204,15 +204,14 @@ async def monitorar_pix_e_processar_lightning(depix_id: str, chat_id: int, is_li
                 status = data.get('status', 'unknown')
                 message_text = data.get('message', '')
                 
-                if data.get('success') and status == 'completed':
-                    # PIX confirmado e já processado
-                    logger.info(f"✅ PIX confirmado e processado para Depix {depix_id}")
-                    return True
+                logger.info(f"Status recebido para Depix {depix_id}: {status}, Success: {data.get('success')}, Message: {message_text}")
+                
+                # Condição 1: PIX confirmado, aguardando invoice do cliente
+                if (status == 'awaiting_client_invoice' or 
+                    'Invoice do cliente necessário' in message_text or
+                    message_text == 'Invoice do cliente necessário para pagamento'):
                     
-                elif status == 'awaiting_client_invoice' or 'Invoice do cliente necessário' in message_text:
-                    # PIX confirmado, solicitar invoice Lightning
                     amount_sats = data.get('amount_sats', 0)
-                    
                     logger.info(f"✅ PIX confirmado para Depix {depix_id}, solicitando invoice Lightning")
                     
                     message = f"""
@@ -254,6 +253,24 @@ Para receber seus bitcoins via Lightning Network, você precisa fornecer um **in
                     # Por enquanto, o usuário deve colar o invoice no chat
                     
                     return True
+                
+                # Condição 2: Pagamento já completado (Lightning já enviado)
+                elif data.get('success') and status == 'completed':
+                    logger.info(f"✅ Lightning já processado para Depix {depix_id}")
+                    return True
+                    
+                # Condição 3: Erro ou status inválido
+                elif not data.get('success'):
+                    error_msg = data.get('error', f'Status: {status}')
+                    logger.warning(f"Erro ao processar Depix {depix_id}: {error_msg}")
+                    
+                    # Se é erro de depósito não encontrado ou não Lightning, falhar
+                    if 'não encontrado' in error_msg or 'não é Lightning' in error_msg:
+                        await bot.send_message(
+                            chat_id=chat_id,
+                            text=f"❌ **Erro no processamento**\n\nDetalhes: {error_msg}\n\nEntre em contato com o suporte."
+                        )
+                        return False
                     
                 elif status in ['cancelled', 'expired', 'failed'] or not data.get('success'):
                     # PIX falhou/cancelado ou erro no processamento
