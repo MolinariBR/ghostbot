@@ -10,8 +10,8 @@ import json
 
 # Usar 2 depix_ids reais para teste (R$ 10,00 cada = ~1667 sats cada = 3334 sats total)
 DEPIX_IDS_REAIS = [
-    "0197e737ad6e7dfca9dfff7ade384549",  # Depósito real de R$ 10,00 encontrado
-    "voltz_1751930874_8876",  # Segundo depósito real de R$ 10,00
+    "teste_1751898619",  # Depósito real de R$ 10,00 no banco local
+    "teste_1751898574",  # Segundo depósito real de R$ 10,00 no banco local
 ]
 
 def simular_pix_confirmado(depix_id):
@@ -19,29 +19,36 @@ def simular_pix_confirmado(depix_id):
     
     timestamp = int(time.time())
     
-    payload = {
-        "action": "update_status",
-        "depix_id": depix_id,
-        "chatid": "7910260237",  # Seu chat ID necessário para a API
-        "status": "confirmed",
-        "blockchainTxID": f"pix_confirmado_{timestamp}_{depix_id[-6:]}"
-    }
-    
+    # Tentar direto via SQLite se a API não funcionar
     try:
-        url = "https://useghost.squareweb.app/rest/deposit.php"
-        response = requests.post(url, json=payload, timeout=15)
+        import sqlite3
+        conn = sqlite3.connect('../ghostbackend/data/deposit.db')
+        cursor = conn.cursor()
         
-        if response.status_code == 200:
-            print(f"✅ PIX confirmado: {depix_id}")
-            print(f"   🔗 TxID: {payload['blockchainTxID']}")
+        # Atualizar status e blockchainTxID
+        blockchain_txid = f"pix_confirmado_{timestamp}_{depix_id[-6:]}"
+        
+        cursor.execute("""
+            UPDATE deposit 
+            SET status = 'confirmed', blockchainTxID = ?
+            WHERE depix_id = ?
+        """, (blockchain_txid, depix_id))
+        
+        if cursor.rowcount > 0:
+            conn.commit()
+            print(f"✅ PIX confirmado via SQLite: {depix_id}")
+            print(f"   🔗 TxID: {blockchain_txid}")
             return True
         else:
-            print(f"❌ Erro API {response.status_code}: {response.text}")
+            print(f"❌ Depósito {depix_id} não encontrado no banco")
             return False
             
     except Exception as e:
         print(f"❌ Erro ao confirmar PIX {depix_id}: {e}")
         return False
+    finally:
+        if 'conn' in locals():
+            conn.close()
 
 def main():
     print("🚀 SIMULANDO CONFIRMAÇÃO PIX PARA DEPÓSITO LIGHTNING REAL")
@@ -57,7 +64,7 @@ def main():
         
         if simular_pix_confirmado(depix_id):
             depositos_confirmados.append(depix_id)
-            time.sleep(2)  # Aguardar entre requisições
+            time.sleep(1)  # Aguardar entre operações
         
         print()
     

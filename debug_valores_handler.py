@@ -62,19 +62,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-        cursor.execute("SELECT id, blockchainTxID, status, rede, chatid, depix_id FROM deposit WHERE rede LIKE '%lightning%' ORDER BY id DESC LIMIT 5")
-        debug_deps = cursor.fetchall()
-        
-        for dep in debug_deps:
-            print(f"ID: {dep[0]}")
-            print(f"  TxID: '{dep[1]}' (NULL: {dep[1] is None}, Empty: {dep[1] == ''})")
-            print(f"  Status: '{dep[2]}'")
-            print(f"  Rede: '{dep[3]}'")
-            print(f"  ChatID: '{dep[4]}' (NULL: {dep[4] is None})")
-            print(f"  DepixID: '{dep[5]}' (NULL: {dep[5] is None})")
-            print()
-    
-    conn.close()
-    
-except Exception as e:
-    print(f"❌ Erro: {e}")
