@@ -1015,8 +1015,18 @@ async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             f'• *ID:* `{txid}`\n\n'
             '📱 *Código Copia e Cola:*\n\n'
             f'`{copia_e_cola}`\n\n'
-            '⚡ *IMPORTANTE:* Após o pagamento PIX, você receberá automaticamente o invoice Lightning!\n'
-            '✅ Aguarde a confirmação e o envio do invoice.'
+            '⚡ *IMPORTANTE - LEIA COM ATENÇÃO:*\n'
+            '1️⃣ Pague o PIX usando o código acima\n'
+            '2️⃣ *AGUARDE a confirmação do pagamento PIX*\n'
+            '3️⃣ *SOMENTE APÓS* a confirmação, o bot solicitará seu invoice Lightning\n'
+            '4️⃣ Você receberá os sats automaticamente em sua carteira\n\n'
+            '⚠️ *NÃO ENVIE SEU INVOICE AGORA!*\n'
+            '🤖 O bot solicitará automaticamente após confirmar o PIX\n\n'
+            '📋 *Prepare sua carteira Lightning:*\n'
+            '• Tenha sua carteira Lightning pronta\n'
+            '• O bot pedirá um invoice quando o PIX for confirmado\n'
+            '• Aguarde as instruções automáticas\n\n'
+            '✅ Primeiro: Pague o PIX e aguarde!'
         )
     else:
         mensagem_confirmacao = (
