@@ -881,42 +881,22 @@ async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
                 send_amount=int(valor_recebido * 100000000) if 'BTC' in moeda.upper() else valor_recebido  # sats para BTC
             )
             
-            # Exibe confirmação Lightning
-            confirmation_msg = voltz.format_deposit_confirmation_message(
-                depix_id=result['depix_id'],
-                amount_in_cents=int(valor_brl * 100),
-                moeda=moeda.upper(),
-                send_amount=int(valor_recebido * 100000000) if 'BTC' in moeda.upper() else valor_recebido
-            )
-            
+            # Para Lightning: primeiro mostrar PIX, depois monitorar invoice
             await update.message.reply_text(
-                confirmation_msg,
+                f"⚡ *COMPRA LIGHTNING NETWORK* ⚡\n\n"
+                f"💰 *Valor:* {valor_formatado}\n"
+                f"⚡ *Você receberá:* {int(valor_recebido * 100000000)} sats\n"
+                f"🆔 *ID:* `{result['depix_id']}`\n\n"
+                f"📋 *PRÓXIMOS PASSOS:*\n"
+                f"1️⃣ Pague o PIX abaixo\n"
+                f"2️⃣ Após confirmação, receberá o invoice Lightning\n"
+                f"3️⃣ Use sua carteira Lightning para receber\n\n"
+                f"� O invoice será enviado automaticamente após o pagamento!",
                 parse_mode='Markdown'
             )
             
-            # Agenda monitoramento do status Lightning
-            context.job_queue.run_repeating(
-                callback=monitor_lightning_status,
-                interval=30,  # Verifica a cada 30 segundos
-                first=10,     # Primeira verificação em 10 segundos
-                data={
-                    'depix_id': result['depix_id'],
-                    'chat_id': chatid,
-                    'amount_sats': int(valor_recebido * 100000000) if 'BTC' in moeda.upper() else int(valor_recebido),
-                    'voltz': voltz
-                },
-                name=f"lightning_monitor_{result['depix_id']}"
-            )
-            
-            await update.message.reply_text(
-                "🔄 *Processamento iniciado!*\n\n"
-                "Aguarde alguns instantes enquanto geramos seu invoice Lightning...",
-                parse_mode='Markdown',
-                reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
-            )
-            
-            context.user_data.clear()
-            return ConversationHandler.END
+            # Continua com o fluxo normal do PIX
+            # Após o pagamento PIX, o Voltz irá gerar o invoice automaticamente
             
         except Exception as e:
             logger.error(f"Erro no fluxo Lightning Voltz: {e}")
@@ -1024,19 +1004,34 @@ async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         parse_mode='Markdown'
     )
     
-    mensagem_confirmacao = (
-        '✅ *SOLICITAÇÃO DE COMPRA RECEBIDA!*\n'
-        '━━━━━━━━━━━━━━━━━━━━\n'
-        f'• *Valor:* {valor_formatado}\n'
-        f'• *Criptomoeda:* {moeda.upper()}\n'
-        f'• *Rede:* {rede}\n'
-        f'• *Endereço:* `{endereco}`\n'
-        f'• *ID da transação:* `{txid}`\n\n'
-        '📱 *Código Copia e Cola:*\n\n'
-        f'`{copia_e_cola}`\n\n'
-        '⏰ Após o pagamento, aguarde alguns instantes para a confirmação.\n'
-        '✅ Obrigado pela preferência!'
-    )
+    
+    # Mensagem específica para Lightning
+    if 'lightning' in rede.lower():
+        mensagem_confirmacao = (
+            '⚡ *PAGAMENTO PIX → LIGHTNING* ⚡\n'
+            '━━━━━━━━━━━━━━━━━━━━\n'
+            f'• *Valor PIX:* {valor_formatado}\n'
+            f'• *Receberá:* {int(valor_recebido * 100000000)} sats\n'
+            f'• *ID:* `{txid}`\n\n'
+            '📱 *Código Copia e Cola:*\n\n'
+            f'`{copia_e_cola}`\n\n'
+            '⚡ *IMPORTANTE:* Após o pagamento PIX, você receberá automaticamente o invoice Lightning!\n'
+            '✅ Aguarde a confirmação e o envio do invoice.'
+        )
+    else:
+        mensagem_confirmacao = (
+            '✅ *SOLICITAÇÃO DE COMPRA RECEBIDA!*\n'
+            '━━━━━━━━━━━━━━━━━━━━\n'
+            f'• *Valor:* {valor_formatado}\n'
+            f'• *Criptomoeda:* {moeda.upper()}\n'
+            f'• *Rede:* {rede}\n'
+            f'• *Endereço:* `{endereco}`\n'
+            f'• *ID da transação:* `{txid}`\n\n'
+            '📱 *Código Copia e Cola:*\n\n'
+            f'`{copia_e_cola}`\n\n'
+            '⏰ Após o pagamento, aguarde alguns instantes para a confirmação.\n'
+            '✅ Obrigado pela preferência!'
+        )
     await update.message.reply_text(
         mensagem_confirmacao,
         parse_mode='Markdown',
@@ -1270,84 +1265,4 @@ def set_menu_principal(menu_func):
     
     return menu_principal
 
-async def monitor_lightning_status(context):
-    """
-    Job que monitora o status de depósitos Lightning via Voltz.
-    """
-    job_context = context.job.data
-    depix_id = job_context['depix_id']
-    chat_id = job_context['chat_id']
-    amount_sats = job_context['amount_sats']
-    voltz = job_context['voltz']
-    
-    try:
-        # Verifica status no backend Voltz
-        status = voltz.check_deposit_status(depix_id)
-        logger.info(f"Status check para {depix_id}: {status}")
-        
-        if status.get('success') and status.get('invoice'):
-            # Encontrou invoice - enviar para o usuário
-            invoice = status['invoice']
-            
-            # Formatar mensagem com invoice Lightning
-            invoice_msg = f"""⚡ *INVOICE LIGHTNING GERADO!*
-
-💰 *Valor:* {amount_sats} sats
-🆔 *ID:* `{depix_id}`
-
-📋 *Payment Request:*
-```
-{invoice}
-```
-
-📱 Escaneie o QR Code ou copie o payment request acima na sua carteira Lightning.
-
-✅ Pagamento será confirmado automaticamente após recebimento."""
-
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=invoice_msg,
-                parse_mode='Markdown'
-            )
-            
-            # Parar monitoramento - invoice enviado
-            context.job.schedule_removal()
-            logger.info(f"Invoice Lightning enviado para chat {chat_id}: {depix_id}")
-            return
-                
-        elif status.get('status') == 'error':
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"❌ Erro no processamento do pedido Lightning {depix_id}"
-            )
-            context.job.schedule_removal()
-            return
-                
-        # Incrementar contador e parar após 10 minutos (20 verificações * 30seg)
-        if 'attempts' not in context.job.data:
-            context.job.data['attempts'] = 0
-        
-        context.job.data['attempts'] += 1
-        
-        if context.job.data['attempts'] > 20:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="⏰ Timeout: Invoice Lightning não foi gerado. Tente novamente ou contate o suporte."
-            )
-            context.job.schedule_removal()
-            
-    except Exception as e:
-        logger.error(f"Erro ao verificar status Lightning: {e}")
-        
-        # Incrementar contador de erros
-        if 'error_count' not in context.job.data:
-            context.job.data['error_count'] = 0
-        
-        context.job.data['error_count'] += 1
-        
-        if context.job.data['error_count'] > 5:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="❌ Erro persistente no monitoramento Lightning. Contate o suporte."
-            )
-            context.job.schedule_removal()
+# Função removida - Lightning agora usa fluxo PIX + webhook automático
