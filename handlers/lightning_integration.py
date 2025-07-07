@@ -193,17 +193,23 @@ async def monitorar_pix_e_processar_lightning(depix_id: str, chat_id: int, is_li
             # Verificar status do PIX via API
             url = "https://useghost.squareweb.app/voltz/voltz_rest.php"
             payload = {
-                "action": "check_status",
+                "action": "process_deposit",
                 "depix_id": depix_id
             }
             
-            response = requests.post(url, json=payload, timeout=10)
+            response = requests.post(url, json=payload, timeout=30)
             
             if response.status_code == 200:
                 data = response.json()
                 status = data.get('status', 'unknown')
+                message_text = data.get('message', '')
                 
-                if status == 'pix_confirmed':
+                if data.get('success') and status == 'completed':
+                    # PIX confirmado e já processado
+                    logger.info(f"✅ PIX confirmado e processado para Depix {depix_id}")
+                    return True
+                    
+                elif status == 'awaiting_client_invoice' or 'Invoice do cliente necessário' in message_text:
                     # PIX confirmado, solicitar invoice Lightning
                     amount_sats = data.get('amount_sats', 0)
                     
@@ -249,18 +255,29 @@ Para receber seus bitcoins via Lightning Network, você precisa fornecer um **in
                     
                     return True
                     
-                elif status in ['cancelled', 'expired', 'failed']:
-                    # PIX falhou/cancelado
+                elif status in ['cancelled', 'expired', 'failed'] or not data.get('success'):
+                    # PIX falhou/cancelado ou erro no processamento
+                    error_msg = data.get('error', f'Status: {status}')
                     await bot.send_message(
                         chat_id=chat_id,
-                        text=f"❌ **PIX não confirmado**\n\nStatus: {status}\n\nTente novamente ou entre em contato com o suporte."
+                        text=f"❌ **PIX não confirmado**\n\nDetalhes: {error_msg}\n\nTente novamente ou entre em contato com o suporte."
                     )
                     return False
+            else:
+                logger.warning(f"Resposta HTTP {response.status_code} ao verificar Depix {depix_id}")
             
             # Aguardar antes da próxima verificação
             await asyncio.sleep(30)  # 30 segundos
             tentativa += 1
             
+        except requests.exceptions.Timeout:
+            logger.warning(f"Timeout ao verificar PIX {depix_id} (tentativa {tentativa + 1}/{max_tentativas})")
+            await asyncio.sleep(30)
+            tentativa += 1
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erro de rede ao monitorar PIX {depix_id}: {e}")
+            await asyncio.sleep(30)
+            tentativa += 1
         except Exception as e:
             logger.error(f"Erro ao monitorar PIX {depix_id}: {e}")
             await asyncio.sleep(30)
