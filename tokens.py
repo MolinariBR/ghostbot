@@ -15,8 +15,15 @@ class Config:
         False: "https://useghost.squareweb.app/api/bot_deposit.php"  # Desenvolvimento
     }
     
+    # URL base para o backend
+    BACKEND_URLS = {
+        True: "https://basetria.xyz",        # Produção
+        False: "https://useghost.squareweb.app"  # Desenvolvimento
+    }
+    
     # URL base da API de depósito (será definida automaticamente)
     PIX_API_URL = API_URLS[IS_PRODUCTION]  # URL do endpoint de depósito no backend
+    BACKEND_BASE_URL = BACKEND_URLS[IS_PRODUCTION]  # URL base do servidor
     
     # Configurações de Transferência Bancária
     TED_BANCO = "Banco do Brasil"

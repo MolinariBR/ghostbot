@@ -1021,12 +1021,13 @@ async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             '3️⃣ *SOMENTE APÓS* a confirmação, o bot solicitará seu invoice Lightning\n'
             '4️⃣ Você receberá os sats automaticamente em sua carteira\n\n'
             '⚠️ *NÃO ENVIE SEU INVOICE AGORA!*\n'
-            '🤖 O bot solicitará automaticamente após confirmar o PIX\n\n'
+            '🤖 O bot solicitará automaticamente quando o PIX for confirmado\n'
+            '⏱️ Tempo estimado: 5-10 minutos após o pagamento PIX\n\n'
             '📋 *Prepare sua carteira Lightning:*\n'
-            '• Tenha sua carteira Lightning pronta\n'
+            '• Baixe uma carteira Lightning (recomendamos Phoenix ou Wallet of Satoshi)\n'
             '• O bot pedirá um invoice quando o PIX for confirmado\n'
-            '• Aguarde as instruções automáticas\n\n'
-            '✅ Primeiro: Pague o PIX e aguarde!'
+            '• Aguarde a notificação automática\n\n'
+            '✅ Primeiro: Pague o PIX e aguarde a confirmação!'
         )
     else:
         mensagem_confirmacao = (
@@ -1048,17 +1049,12 @@ async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
     )
 
-    # Aciona o fluxo de monitoramento Lightning em background
-    from handlers.lightning_integration import monitorar_pix_e_processar_lightning
-    import asyncio
-    asyncio.create_task(
-        monitorar_pix_e_processar_lightning(
-            depix_id=txid,
-            chat_id=update.effective_user.id,
-            is_lightning='lightning' in rede.lower(),
-            bot=context.bot
-        )
-    )
+    # Para Lightning: O monitoramento será acionado automaticamente pelo cron
+    # após a confirmação do PIX (presença de blockchainTxID)
+    if 'lightning' in rede.lower():
+        logger.info(f"Lightning PIX criado - depix_id: {txid}, chat_id: {update.effective_user.id}")
+        logger.info("Aguardando confirmação PIX para disparar invoice Lightning")
+    
     return ConversationHandler.END
 
 async def cancelar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

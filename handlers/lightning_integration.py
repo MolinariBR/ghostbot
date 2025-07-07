@@ -171,7 +171,7 @@ Verifique sua carteira Lightning - o pagamento deve aparecer em alguns segundos.
 async def monitorar_pix_e_processar_lightning(depix_id: str, chat_id: int, is_lightning: bool, bot):
     """
     Monitora pagamento PIX e inicia fluxo Lightning quando confirmado.
-    Função equivalente ao antigo fluxo_envio_invoice.
+    APENAS executa quando blockchainTxID estiver presente (PIX confirmado).
     
     Args:
         depix_id: ID do depósito
@@ -183,38 +183,81 @@ async def monitorar_pix_e_processar_lightning(depix_id: str, chat_id: int, is_li
         logger.info(f"Depix {depix_id} não é Lightning, ignorando monitoramento")
         return
     
-    logger.info(f"🔄 Iniciando monitoramento PIX para Lightning - Depix: {depix_id}")
+    logger.info(f"🔄 Verificando se PIX foi confirmado para Lightning - Depix: {depix_id}")
     
     max_tentativas = 60  # 30 minutos (30s * 60)
     tentativa = 0
     
     while tentativa < max_tentativas:
         try:
-            # Verificar status do PIX via API
-            url = "https://useghost.squareweb.app/voltz/voltz_rest.php"
-            payload = {
-                "action": "process_deposit",
-                "depix_id": depix_id
-            }
+            # PASSO 1: Verificar se PIX foi confirmado (blockchainTxID presente)
+            url_check = "https://useghost.squareweb.app/rest/deposit.php"
+            params = {"depix_id": depix_id}
             
-            response = requests.post(url, json=payload, timeout=30)
+            response = requests.get(url_check, params=params, timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
-                status = data.get('status', 'unknown')
-                message_text = data.get('message', '')
+                deposit_found = False
+                blockchain_txid = None
                 
-                logger.info(f"Status recebido para Depix {depix_id}: {status}, Success: {data.get('success')}, Message: {message_text}")
+                # Buscar o depósito específico
+                if 'deposits' in data:
+                    for deposit in data['deposits']:
+                        if deposit.get('depix_id') == depix_id:
+                            deposit_found = True
+                            blockchain_txid = deposit.get('blockchainTxID')
+                            status = deposit.get('status', '')
+                            rede = deposit.get('rede', '')
+                            
+                            logger.info(f"Depósito encontrado - Status: {status}, BlockchainTxID: {blockchain_txid}, Rede: {rede}")
+                            break
                 
-                # Condição 1: PIX confirmado, aguardando invoice do cliente
-                if (status == 'awaiting_client_invoice' or 
-                    'Invoice do cliente necessário' in message_text or
-                    message_text == 'Invoice do cliente necessário para pagamento'):
+                if not deposit_found:
+                    logger.warning(f"Depósito {depix_id} não encontrado")
+                    await asyncio.sleep(30)
+                    tentativa += 1
+                    continue
+                
+                # CONDIÇÃO CRÍTICA: Só prosseguir se blockchainTxID estiver presente
+                if not blockchain_txid or blockchain_txid.strip() == '':
+                    logger.info(f"PIX ainda não confirmado para {depix_id} - blockchainTxID vazio (tentativa {tentativa + 1}/{max_tentativas})")
+                    await asyncio.sleep(30)
+                    tentativa += 1
+                    continue
+                
+                # PASSO 2: PIX confirmado! Verificar se é Lightning
+                if 'lightning' not in rede.lower():
+                    logger.info(f"Depósito {depix_id} não é Lightning: {rede}")
+                    return False
+                
+                logger.info(f"✅ PIX CONFIRMADO para Lightning - Depix: {depix_id}, BlockchainTxID: {blockchain_txid}")
+                
+                # PASSO 3: Solicitar invoice do cliente via Voltz
+                url_voltz = "https://useghost.squareweb.app/voltz/voltz_rest.php"
+                payload = {
+                    "action": "process_deposit",
+                    "depix_id": depix_id
+                }
+                
+                response_voltz = requests.post(url_voltz, json=payload, timeout=30)
+                
+                if response_voltz.status_code == 200:
+                    data = response_voltz.json()
+                    status = data.get('status', 'unknown')
+                    message_text = data.get('message', '')
                     
-                    amount_sats = data.get('amount_sats', 0)
-                    logger.info(f"✅ PIX confirmado para Depix {depix_id}, solicitando invoice Lightning")
+                    logger.info(f"Status Voltz para Depix {depix_id}: {status}, Success: {data.get('success')}, Message: {message_text}")
                     
-                    message = f"""
+                    # Condição 1: PIX confirmado, aguardando invoice do cliente
+                    if (status == 'awaiting_client_invoice' or 
+                        'Invoice do cliente necessário' in message_text or
+                        message_text == 'Invoice do cliente necessário para pagamento'):
+                        
+                        amount_sats = data.get('amount_sats', 0)
+                        logger.info(f"✅ Solicitando invoice Lightning para Depix {depix_id}")
+                        
+                        message = f"""
 ⚡ **PIX CONFIRMADO - LIGHTNING PENDENTE**
 
 💰 **Valor confirmado:** R$ {amount_sats/500:.2f}
@@ -233,53 +276,52 @@ Para receber seus bitcoins via Lightning Network, você precisa fornecer um **in
 ⏰ **Aguardando seu invoice Lightning...**
 
 💡 **Dica:** O invoice deve começar com "lnbc" ou "lntb"
-                    """
-                    
-                    # Keyboard com opções
-                    keyboard = [
-                        [InlineKeyboardButton("📋 Como gerar invoice", callback_data=f"help_invoice_{depix_id}")],
-                        [InlineKeyboardButton("❓ Não tenho carteira Lightning", callback_data=f"help_wallet_{depix_id}")]
-                    ]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text=message,
-                        reply_markup=reply_markup,
-                        parse_mode='Markdown'
-                    )
-                    
-                    # TODO: Configurar handler para receber invoice Lightning
-                    # Por enquanto, o usuário deve colar o invoice no chat
-                    
-                    return True
-                
-                # Condição 2: Pagamento já completado (Lightning já enviado)
-                elif data.get('success') and status == 'completed':
-                    logger.info(f"✅ Lightning já processado para Depix {depix_id}")
-                    return True
-                    
-                # Condição 3: Erro ou status inválido
-                elif not data.get('success'):
-                    error_msg = data.get('error', f'Status: {status}')
-                    logger.warning(f"Erro ao processar Depix {depix_id}: {error_msg}")
-                    
-                    # Se é erro de depósito não encontrado ou não Lightning, falhar
-                    if 'não encontrado' in error_msg or 'não é Lightning' in error_msg:
+                        """
+                        
+                        # Keyboard com opções
+                        keyboard = [
+                            [InlineKeyboardButton("📋 Como gerar invoice", callback_data=f"help_invoice_{depix_id}")],
+                            [InlineKeyboardButton("❓ Não tenho carteira Lightning", callback_data=f"help_wallet_{depix_id}")]
+                        ]
+                        reply_markup = InlineKeyboardMarkup(keyboard)
+                        
                         await bot.send_message(
                             chat_id=chat_id,
-                            text=f"❌ **Erro no processamento**\n\nDetalhes: {error_msg}\n\nEntre em contato com o suporte."
+                            text=message,
+                            reply_markup=reply_markup,
+                            parse_mode='Markdown'
+                        )
+                        
+                        return True
+                    
+                    # Condição 2: Pagamento já completado (Lightning já enviado)
+                    elif data.get('success') and status == 'completed':
+                        logger.info(f"✅ Lightning já processado para Depix {depix_id}")
+                        return True
+                        
+                    # Condição 3: Erro ou status inválido
+                    elif not data.get('success'):
+                        error_msg = data.get('error', f'Status: {status}')
+                        logger.warning(f"Erro ao processar Depix {depix_id}: {error_msg}")
+                        
+                        # Se é erro de depósito não encontrado ou não Lightning, falhar
+                        if 'não encontrado' in error_msg or 'não é Lightning' in error_msg:
+                            await bot.send_message(
+                                chat_id=chat_id,
+                                text=f"❌ **Erro no processamento**\n\nDetalhes: {error_msg}\n\nEntre em contato com o suporte."
+                            )
+                            return False
+                        
+                    elif status in ['cancelled', 'expired', 'failed'] or not data.get('success'):
+                        # PIX falhou/cancelado ou erro no processamento
+                        error_msg = data.get('error', f'Status: {status}')
+                        await bot.send_message(
+                            chat_id=chat_id,
+                            text=f"❌ **PIX não confirmado**\n\nDetalhes: {error_msg}\n\nTente novamente ou entre em contato com o suporte."
                         )
                         return False
-                    
-                elif status in ['cancelled', 'expired', 'failed'] or not data.get('success'):
-                    # PIX falhou/cancelado ou erro no processamento
-                    error_msg = data.get('error', f'Status: {status}')
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text=f"❌ **PIX não confirmado**\n\nDetalhes: {error_msg}\n\nTente novamente ou entre em contato com o suporte."
-                    )
-                    return False
+                else:
+                    logger.warning(f"Resposta HTTP {response_voltz.status_code} ao verificar Voltz para Depix {depix_id}")
             else:
                 logger.warning(f"Resposta HTTP {response.status_code} ao verificar Depix {depix_id}")
             
