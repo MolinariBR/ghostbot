@@ -10,9 +10,8 @@ import time
 import sys
 import os
 from datetime import datetime
-
-# Adiciona o diretório do projeto ao path
-sys.path.append('/home/mau/bot/ghost')
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from ghost.api.lightning_address import LightningAddressResolver
 
 class TesteFluxoCompleto:
     def __init__(self):
@@ -277,6 +276,42 @@ class TesteFluxoCompleto:
         
         return False
     
+    def enviar_btc_lightning_real(self):
+        """Envia BTC real para o Lightning Address usando Voltz"""
+        try:
+            print("\n🚀 Enviando BTC real via Lightning Address (Voltz)...")
+            # 1. Resolver Lightning Address para invoice BOLT11
+            valor_sats = int(float(self.valor_compra) * 100_000_000 / 200_000)  # Aproximadamente 5 reais em sats (ajuste conforme cotação)
+            if valor_sats < 1000:
+                valor_sats = 1000  # valor mínimo para LNURL
+            resolver = LightningAddressResolver()
+            result = resolver.resolve_to_bolt11(self.lightning_address, valor_sats)
+            if not result['success']:
+                print(f"❌ Erro ao resolver Lightning Address: {result['error']}")
+                return False
+            bolt11 = result['bolt11']
+            print(f"✅ Invoice BOLT11 obtido: {bolt11[:60]}...")
+            # 2. Chamar backend Voltz para pagar a invoice
+            payload = {
+                'action': 'pay_invoice',
+                'depix_id': self.depix_id,
+                'client_invoice': bolt11
+            }
+            response = requests.post(f"{self.backend_url}/voltz/voltz_rest.php", json=payload, timeout=30)
+            print(f"[DEBUG] Resposta Voltz pay_invoice: HTTP {response.status_code} - {response.text}")
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    print(f"🎉 Pagamento Lightning enviado com sucesso! Hash: {data.get('payment_hash')}")
+                    return True
+                else:
+                    print(f"❌ Erro Voltz: {data.get('error', data)}")
+            else:
+                print(f"❌ HTTP {response.status_code}: {response.text}")
+        except Exception as e:
+            print(f"❌ Erro no envio Lightning real: {e}")
+        return False
+
     def executar_teste_completo(self):
         """Executa o teste completo do fluxo de compra"""
         
@@ -365,6 +400,12 @@ class TesteFluxoCompleto:
                 print(f"⚠️ Webhook Depix retornou HTTP {response.status_code}")
         except Exception as e:
             print(f"❌ Erro simulando webhook Depix: {e}")
+
+        # NOVO: PASSO 10.1.2 - Envio real de BTC via Lightning Address (Voltz)
+        self.log_passo("10.1.2", "Enviando BTC real via Lightning Address (Voltz)")
+        if not self.enviar_btc_lightning_real():
+            print("❌ FALHA: Não foi possível enviar BTC real via Lightning")
+            return False
 
         # NOVO: PASSO 10.2 - Simular envio de blockchainTxID (BTC enviado)
         self.log_passo("10.2", "Simulando envio de blockchainTxID (BTC enviado)")
