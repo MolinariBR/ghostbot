@@ -5,6 +5,7 @@ import logging
 import requests
 import asyncio
 import time
+import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
@@ -243,7 +244,21 @@ async def monitorar_pix_e_processar_lightning(depix_id: str, chat_id: int, is_li
                 response_voltz = requests.post(url_voltz, json=payload, timeout=30)
                 
                 if response_voltz.status_code == 200:
-                    data = response_voltz.json()
+                    # Corrigir problema de JSONs concatenados na resposta Voltz
+                    try:
+                        data = response_voltz.json()
+                    except json.JSONDecodeError:
+                        # Se falhar, tentar separar JSONs concatenados
+                        content = response_voltz.text
+                        split_point = content.find('}{"success"')
+                        if split_point != -1:
+                            # Pegar o segundo JSON (que tem os dados que precisamos)
+                            second_json = content[split_point + 1:]
+                            data = json.loads(second_json)
+                        else:
+                            logger.error(f"Erro ao parsear resposta Voltz: {content}")
+                            continue
+                    
                     status = data.get('status', 'unknown')
                     message_text = data.get('message', '')
                     
