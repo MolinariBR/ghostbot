@@ -486,21 +486,98 @@ class EventTriggerSystem:
     # ============================================================================
     
     def generate_pix_payment(self, order: Dict[str, Any]) -> Optional[Dict]:
-        """Gera pagamento PIX"""
-        # Implementar geração PIX real
-        return {
-            'depix_id': f"dep_{int(time.time())}",
-            'qr_code': "fake_qr_code_data",
-            'copy_paste': "fake_copy_paste_data"
-        }
+        """Gera pagamento PIX via API real"""
+        try:
+            # Preparar dados do pedido
+            pix_data = {
+                'chat_id': order['chat_id'],
+                'amount': int(order['amount'] * 100),  # Converter para centavos
+                'currency': order['currency'],
+                'network': order['network'],
+                'description': f"Compra {order['currency'].upper()} via {order['network'].upper()}"
+            }
+            
+            logger.info(f"🔗 Gerando PIX via API: {pix_data}")
+            
+            # Chamar API de depósito real
+            response = requests.post(
+                'https://useghost.squareweb.app/api/bot_deposit.php',
+                json=pix_data,
+                headers={'Content-Type': 'application/json'},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"✅ PIX gerado com sucesso: {result}")
+                
+                return {
+                    'depix_id': result.get('depix_id'),
+                    'qr_code': result.get('qr_code_data'),
+                    'copy_paste': result.get('pix_copy_paste'),
+                    'amount': order['amount']
+                }
+            else:
+                logger.error(f"❌ Erro na API de PIX: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao gerar PIX: {e}")
+            return None
     
     def call_voltz_api(self, order: Dict[str, Any]) -> Optional[Dict]:
-        """Chama API da Voltz para envio"""
-        # Implementar chamada real à Voltz
-        return {
-            'success': True,
-            'txid': f"voltz_{int(time.time())}"
-        }
+        """Chama API da Voltz para envio real"""
+        try:
+            # Preparar dados para Voltz
+            voltz_data = {
+                'currency': order['currency'],
+                'network': order['network'], 
+                'amount': order['amount'],
+                'address': order['user_address'],
+                'chat_id': order['chat_id'],
+                'depix_id': order['depix_id']
+            }
+            
+            logger.info(f"🚀 Enviando via Voltz: {voltz_data}")
+            
+            # Determinar endpoint baseado na moeda/rede
+            if order['currency'] == 'bitcoin' and order['network'] == 'lightning':
+                endpoint = 'https://useghost.squareweb.app/voltz/send_lightning.php'
+            elif order['currency'] == 'bitcoin' and order['network'] == 'onchain':
+                endpoint = 'https://useghost.squareweb.app/voltz/send_bitcoin.php'
+            elif order['currency'] == 'tether':
+                endpoint = 'https://useghost.squareweb.app/voltz/send_usdt.php'
+            elif order['currency'] == 'depix':
+                endpoint = 'https://useghost.squareweb.app/voltz/send_depix.php'
+            else:
+                logger.error(f"❌ Combinação não suportada: {order['currency']}/{order['network']}")
+                return None
+            
+            response = requests.post(
+                endpoint,
+                json=voltz_data,
+                headers={'Content-Type': 'application/json'},
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"✅ Envio via Voltz bem-sucedido: {result}")
+                
+                return {
+                    'success': True,
+                    'txid': result.get('transaction_id'),
+                    'amount_sent': result.get('amount_sent'),
+                    'fee': result.get('fee'),
+                    'network': order['network']
+                }
+            else:
+                logger.error(f"❌ Erro na API Voltz: {response.status_code} - {response.text}")
+                return {'success': False, 'error': response.text}
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao chamar Voltz: {e}")
+            return {'success': False, 'error': str(e)}
 
 # ============================================================================
 # INSTÂNCIA GLOBAL DO SISTEMA

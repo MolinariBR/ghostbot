@@ -9,8 +9,10 @@ from typing import Dict, Any, Optional
 import os
 import re
 
-# Importa o módulo para integração com a API Voltz (Lightning Network)
 from api.voltz import VoltzAPI
+
+# 🚀 NOVA INTEGRAÇÃO: Smart PIX Monitor (substitui cron externo)
+from smart_pix_monitor import register_pix_payment
 
 # Variável para armazenar a função do menu principal
 menu_principal_func = None
@@ -997,6 +999,14 @@ async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     except Exception as e:
         logger.error(f"Erro ao registrar depósito no backend: {e}")
     # --- FIM REGISTRO BACKEND ---
+
+    # 🚀 SMART PIX MONITOR: Registra pagamento para monitoramento inteligente
+    # Substitui o cron externo por sistema interno mais eficiente
+    try:
+        register_pix_payment(txid, str(update.effective_user.id), valor_brl)
+        logger.info(f"✅ PIX {txid} registrado no Smart Monitor")
+    except Exception as e:
+        logger.error(f"Erro ao registrar no Smart Monitor: {e}")
 
     # Exibe QR Code e informações para o cliente
     await update.message.reply_photo(
