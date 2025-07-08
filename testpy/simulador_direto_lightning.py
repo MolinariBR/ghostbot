@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 async def simulate_lightning_request():
     """Simula solicitação de endereço Lightning diretamente via bot"""
     
-    # Dados do teste
+    # Dados do teste - USANDO DEPÓSITO REAL CRIADO
     chat_id = 7910260237
-    depix_id = "teste_5reais_" + str(int(time.time()))  # Novo depix_id para R$ 5
+    depix_id = "0197eae225117dfc85fe31ea03c518a4"  # Depósito real criado pelo bot
     amount_sats = 806  # Valor em sats para R$ 5 (aproximadamente)
     
     print("\n🚀 SIMULADOR DIRETO DE SOLICITAÇÃO LIGHTNING")
