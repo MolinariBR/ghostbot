@@ -8,10 +8,10 @@ import requests
 import time
 import json
 
-# Usar 2 depix_ids reais para teste (R$ 10,00 cada = ~1667 sats cada = 3334 sats total)
+# Criar novos depix_ids únicos para testar a correção
 DEPIX_IDS_REAIS = [
-    "0197e737ad6e7dfca9dfff7ade384549",  # Depósito real de R$ 10,00 encontrado
-    "voltz_1751930874_8876",  # Segundo depósito real de R$ 10,00
+    f"teste_correcao_{int(time.time())}_001",
+    f"teste_correcao_{int(time.time())}_002",
 ]
 
 def simular_pix_confirmado(depix_id):
@@ -23,7 +23,15 @@ def simular_pix_confirmado(depix_id):
         "action": "update_status",
         "depix_id": depix_id,
         "chatid": "7910260237",  # Seu chat ID necessário para a API
+        "user_id": "7910260237",  # Mesmo valor do chatid
         "status": "confirmed",
+        "moeda": "BTC",  # Campo obrigatório para Lightning
+        "rede": "lightning",  # Campo obrigatório para Lightning
+        "amount_in_cents": 1000,  # R$ 10,00 em centavos
+        "taxa": 0,  # Taxa para Lightning (0%)
+        "address": "lightning_address",  # Placeholder para Lightning
+        "forma_pagamento": "PIX",  # Como foi pago
+        "send": True,  # Enviar para o cliente
         "blockchainTxID": f"pix_confirmado_{timestamp}_{depix_id[-6:]}"
     }
     
