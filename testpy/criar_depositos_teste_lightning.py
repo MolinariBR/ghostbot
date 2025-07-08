@@ -40,7 +40,9 @@ def criar_deposito_teste_local(dados_real, chat_id_teste="7910260237"):
     
     # Gerar novo depix_id para teste
     timestamp = int(time.time())
-    depix_id_teste = f"teste_real_{timestamp}_{dados_real['depix_id'][-6:]}"
+    depix_original = dados_real.get('depix_id') or 'unknown'
+    depix_suffix = depix_original[-6:] if len(depix_original) > 6 else str(timestamp)[-6:]
+    depix_id_teste = f"teste_real_{timestamp}_{depix_suffix}"
     
     dados_teste = {
         'depix_id': depix_id_teste,
@@ -54,7 +56,7 @@ def criar_deposito_teste_local(dados_real, chat_id_teste="7910260237"):
         'send': dados_real['send'],
         'status': 'pending',  # Manter pending para teste
         'blockchainTxID': dados_real.get('blockchainTxID') or f"teste_txid_{timestamp}",
-        'comprovante': f"Teste Lightning baseado em {dados_real['depix_id']}",
+        'comprovante': f"Teste Lightning baseado em {depix_original}",
         'user_id': chat_id_teste
     }
     

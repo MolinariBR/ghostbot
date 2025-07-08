@@ -30,7 +30,7 @@ DEPOSITOS_TESTE = [
 def conectar_banco():
     """Conecta ao banco SQLite local"""
     try:
-        conn = sqlite3.connect('/home/mau/bot/ghostbackend/data/admin.db')
+        conn = sqlite3.connect('/home/mau/bot/ghostbackend/data/deposit.db')
         return conn
     except Exception as e:
         print(f"❌ Erro ao conectar banco: {e}")
