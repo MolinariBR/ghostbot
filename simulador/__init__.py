@@ -1,0 +1,1 @@
+# Simulador do Bot Lightning

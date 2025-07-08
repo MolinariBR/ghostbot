@@ -28,7 +28,11 @@ print("\n=== [2] Consultando endpoint robusto (cron) ===")
 url_cron = f"https://useghost.squareweb.app/api/lightning_cron_endpoint_final.php?chat_id={chat_id}"
 resp_cron = requests.get(url_cron, timeout=10)
 print(f"Status: {resp_cron.status_code}")
-print(json.dumps(resp_cron.json(), indent=2, ensure_ascii=False))
+try:
+    print(json.dumps(resp_cron.json(), indent=2, ensure_ascii=False))
+except Exception as e:
+    print(f"Erro JSON: {e}")
+    print(f"Resposta bruta: {resp_cron.text}")
 
 print("\n=== [3] Chamando notifier manualmente ===")
 url_notifier = f"https://useghost.squareweb.app/api/lightning_notifier.php?chat_id={chat_id}"
@@ -49,3 +53,11 @@ print("- O endpoint cron deve retornar o depósito em 'results'.")
 print("- O notifier deve retornar 'success' e 'notified'.")
 print("- Se tudo OK, o bot deve exibir a solicitação de endereço Lightning para o chat_id.")
 print("- Se não aparecer, verifique logs do bot e se o chat_id está correto.")
+
+print("\n=== [6] Rodando o endpoint cron para disparar o bot ===")
+resp_cron_final = requests.get(url_cron, timeout=10)
+print(f"Status: {resp_cron_final.status_code}")
+try:
+    print(json.dumps(resp_cron_final.json(), indent=2, ensure_ascii=False))
+except Exception:
+    print(resp_cron_final.text)

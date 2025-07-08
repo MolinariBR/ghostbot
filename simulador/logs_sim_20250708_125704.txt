@@ -1,0 +1,33 @@
+Logs do Simulador Bot Lightning
+Gerado em: 2025-07-08 12:57:04.804340
+============================================================
+
+[2025-07-08 12:57:00] [INFO] 🚀 INICIANDO TESTE COMPLETO DO FLUXO LIGHTNING
+[2025-07-08 12:57:00] [INFO] ============================================================
+[2025-07-08 12:57:00] [INFO] 🤖 Usuário digitou: /lightning 50.0
+[2025-07-08 12:57:00] [INFO] ✅ Valor válido: R$ 50.00
+[2025-07-08 12:57:01] [INFO] 💰 Cotação BTC atual: R$ 590,980.00
+[2025-07-08 12:57:01] [INFO] 📊 Valor bruto: R$ 50.00
+[2025-07-08 12:57:01] [INFO] 📊 Taxa (5%): R$ 2.50
+[2025-07-08 12:57:01] [INFO] 📊 Valor líquido: R$ 47.50
+[2025-07-08 12:57:01] [INFO] 📊 Sats aproximados: 8,037
+[2025-07-08 12:57:01] [INFO] ✅ Depósito criado com ID: sim_1751990221_260237
+[2025-07-08 12:57:01] [INFO] 📤 Enviando para backend: https://useghost.squareweb.app/rest/deposit.php
+[2025-07-08 12:57:01] [INFO] ✅ Backend simulado: depósito registrado
+[2025-07-08 12:57:01] [INFO] 📤 Simulando webhook PIX: https://useghost.squareweb.app/depix/webhook.php
+[2025-07-08 12:57:01] [INFO] ✅ PIX confirmado via webhook simulado
+[2025-07-08 12:57:01] [INFO] ✅ PIX confirmado! TxID: pix_sim_1751990221_1_260237
+[2025-07-08 12:57:01] [INFO] ⏳ Aguardando cron Lightning processar...
+[2025-07-08 12:57:04] [INFO] 🔄 Executando cron: https://useghost.squareweb.app/api/lightning_cron_endpoint_final.php?chat_id=7910260237
+[2025-07-08 12:57:04] [INFO] 📊 Cron Status: 200
+[2025-07-08 12:57:04] [INFO] 📋 Cron Response: {
+  "success": true,
+  "total_pending": 0,
+  "processed": 0,
+  "results": [],
+  "timestamp": "2025-07-08 15:57:04"
+}
+[2025-07-08 12:57:04] [INFO] ⚠️  Cron não retornou resultados
+[2025-07-08 12:57:04] [ERROR] ❌ Cron não processou o depósito
+[2025-07-08 12:57:04] [INFO] ============================================================
+[2025-07-08 12:57:04] [INFO] ❌ TESTE COMPLETO - FALHOU! (Duração: 3.97s)
