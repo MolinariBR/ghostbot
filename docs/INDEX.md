@@ -74,6 +74,7 @@ Bem-vindo à documentação centralizada do projeto Ghost Bot! Esta é a central
 |-----------|-----------|
 | [README_VOLTZ.md](README_VOLTZ.md) | Integração Voltz |
 | [VOLTZREADME.md](VOLTZREADME.md) | Documentação completa |
+| [envio.md](envio.md) | Sistema de envio LNURL-withdraw |
 | [LIGHTNING_ADDRESS_VOLTZ_ANALISE.md](LIGHTNING_ADDRESS_VOLTZ_ANALISE.md) | Análise Lightning Address |
 
 ### 💰 **Pagamentos**
