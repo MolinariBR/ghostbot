@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Teste simples do bot Lightning - verificar se consegue acessar API e enviar mensagem
+Teste completo: Cria um depósito Lightning com PIX confirmado para testar o bot
 """
 
 import sys
@@ -8,6 +8,9 @@ import os
 import asyncio
 import logging
 import requests
+import json
+import time
+import sqlite3
 from datetime import datetime
 
 # Detectar o diretório do projeto automaticamente

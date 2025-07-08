@@ -647,6 +647,7 @@ async def registrar_pedido_backend(context: ContextTypes.DEFAULT_TYPE, status: s
             'user_id': int(context._user_id if hasattr(context, '_user_id') else user_data.get('chatid', 0)),
             'status': status,
             'metodo_pagamento': metodo,
+            'forma_pagamento': metodo,  # 🚀 CAMPO OBRIGATÓRIO ADICIONADO
             'taxa': float(user_data.get('valor_brl', 0)) * 0.01,
             'send': user_data.get('valor_liquido', 0),
         }
@@ -977,8 +978,7 @@ async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             "amount_in_cents": valor_centavos,
             "taxa": round(taxa * 100, 2),
             "address": endereco,
-            "metodo_pagamento": "PIX",
-            "forma_pagamento": "PIX",
+            "forma_pagamento": "PIX",  # ✅ CAMPO OBRIGATÓRIO ÚNICO
             "send": float(valor_recebido),
             "depix_id": txid,
             "status": "pending",
