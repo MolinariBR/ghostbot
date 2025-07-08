@@ -386,7 +386,7 @@ class TesteFluxoCompleto:
                 f"{self.backend_url}/depix/webhook.php",
                 json=payload,
                 headers=headers,
-                timeout=10
+                timeout=30  # Aumenta timeout para 30 segundos
             )
             print(f"[DEBUG] Resposta webhook blockchainTxID: HTTP {response.status_code} - {response.text}")
             if response.status_code == 200:
