@@ -881,7 +881,7 @@ async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
                 send_amount=int(valor_recebido * 100000000) if 'BTC' in moeda.upper() else valor_recebido  # sats para BTC
             )
             
-            # Para Lightning: primeiro mostrar PIX, depois monitorar invoice
+            # Para Lightning: primeiro mostrar PIX, depois solicitar Lightning Address/Invoice
             await update.message.reply_text(
                 f"⚡ *COMPRA LIGHTNING NETWORK* ⚡\n\n"
                 f"💰 *Valor:* {valor_formatado}\n"
@@ -889,9 +889,10 @@ async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
                 f"🆔 *ID:* `{result['depix_id']}`\n\n"
                 f"📋 *PRÓXIMOS PASSOS:*\n"
                 f"1️⃣ Pague o PIX abaixo\n"
-                f"2️⃣ Após confirmação, receberá o invoice Lightning\n"
-                f"3️⃣ Use sua carteira Lightning para receber\n\n"
-                f"� O invoice será enviado automaticamente após o pagamento!",
+                f"2️⃣ Após confirmação, forneça seu Lightning Address ou Invoice\n"
+                f"3️⃣ Receba os bitcoins instantaneamente!\n\n"
+                f"🎯 *Formatos aceitos:* Lightning Address (`usuario@wallet.com`) ou BOLT11 Invoice (`lnbc...`)\n\n"
+                f"💡 *O sistema detectará automaticamente o formato e processará o pagamento!*",
                 parse_mode='Markdown'
             )
             

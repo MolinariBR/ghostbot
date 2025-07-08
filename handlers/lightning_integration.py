@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 async def solicitar_invoice_lightning(update: Update, context: ContextTypes.DEFAULT_TYPE, depix_id: str, amount_sats: int):
     """
-    Solicita invoice Lightning do cliente após PIX confirmado.
+    Solicita Lightning Address ou invoice Lightning do cliente após PIX confirmado.
     
     Args:
         update: Update do Telegram
@@ -30,22 +30,26 @@ async def solicitar_invoice_lightning(update: Update, context: ContextTypes.DEFA
 ⚡ **BTC a receber:** {amount_sats:,} sats
 
 🔗 **PRÓXIMO PASSO:**
-Para receber seus bitcoins via Lightning Network, você precisa fornecer um **invoice Lightning** da sua carteira.
+Para receber seus bitcoins via Lightning Network, você pode usar:
 
-📱 **Como gerar invoice:**
-• Abra sua carteira Lightning (Phoenix, Wallet of Satoshi, etc.)
+🎯 **OPÇÃO 1 - Lightning Address (Mais Fácil):**
+• Digite seu endereço Lightning: `usuario@walletofsatoshi.com`
+• Funciona com: Wallet of Satoshi, Strike, CashApp, etc.
+
+⚡ **OPÇÃO 2 - Invoice BOLT11 (Tradicional):**
+• Abra sua carteira Lightning (Phoenix, Muun, etc.)
 • Clique em "Receber"
 • Digite o valor: **{amount_sats} sats**
-• Copie o invoice gerado
-• Cole aqui no chat
+• Copie o invoice gerado (começa com `lnbc...`)
 
-⏰ **Aguardando seu invoice Lightning...**
+💡 **Digite aqui seu Lightning Address ou invoice:**
     """
     
-    # Keyboard com opções
+    # Keyboard com opções de ajuda
     keyboard = [
-        [InlineKeyboardButton("📋 Como gerar invoice", callback_data=f"help_invoice_{depix_id}")],
-        [InlineKeyboardButton("❓ Não tenho carteira Lightning", callback_data=f"help_wallet_{depix_id}")]
+        [InlineKeyboardButton("🏆 Lightning Address", callback_data=f"help_address_{depix_id}")],
+        [InlineKeyboardButton("📋 Invoice BOLT11", callback_data=f"help_invoice_{depix_id}")],
+        [InlineKeyboardButton("❓ Não tenho carteira", callback_data=f"help_wallet_{depix_id}")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -380,20 +384,20 @@ Para receber seus bitcoins via Lightning Network, você precisa fornecer um **in
 
 def setup_lightning_integration(application):
     """
-    Configura a integração Lightning Network.
+    Configura a integração Lightning Network com suporte a Lightning Address.
     
     Args:
         application: A aplicação do bot Telegram
     """
-    from telegram.ext import MessageHandler, filters
+    from telegram.ext import MessageHandler, CallbackQueryHandler, filters
     
-    # Handler para capturar invoices Lightning enviados pelo usuário
-    async def handle_lightning_invoice(update, context):
-        message_text = update.message.text
+    # Handler para capturar Lightning Address ou invoices Lightning enviados pelo usuário
+    async def handle_lightning_input(update, context):
+        message_text = update.message.text.strip()
+        chat_id = update.effective_chat.id
         
-        # Verificar se é um invoice Lightning
-        if message_text and (message_text.startswith('lnbc') or message_text.startswith('lntb')):
-            chat_id = update.effective_chat.id
+        # Verificar se é Lightning Address ou BOLT11 invoice
+        if is_lightning_address(message_text) or is_valid_bolt11(message_text):
             
             # Buscar depósito Lightning pendente para este chat via API REST
             import requests
@@ -421,17 +425,11 @@ def setup_lightning_integration(application):
                         break
                 
                 if deposito:
-                    # Calcular valores reais do depósito
-                    amount_cents = deposito.get('amount_in_cents', 0)
-                    amount_reais = amount_cents / 100
-                    # Estimar sats baseado no valor em reais (aproximação: R$ 1 = ~500 sats)
-                    estimated_sats = int(amount_cents * 5)  # 500 sats por real
-                    
-                    # Processar o invoice usando o depix_id do depósito
-                    await processar_invoice_recebido(update, context, message_text, deposito['depix_id'])
+                    # Processar Lightning Address ou BOLT11
+                    await processar_endereco_lightning(update, context, deposito['depix_id'], message_text)
                     
                     # Log para debug
-                    logger.info(f"Lightning invoice processado - Depix: {deposito['depix_id']}, Valor: R$ {amount_reais:.2f}, Est. Sats: {estimated_sats}")
+                    logger.info(f"Lightning Address/BOLT11 processado - Depix: {deposito['depix_id']}, Endereço: {message_text[:50]}...")
                 else:
                     await update.message.reply_text(
                         "❌ Não encontrei nenhum depósito Lightning pendente para você.\n\n"
@@ -444,19 +442,329 @@ def setup_lightning_integration(application):
                     "❌ Erro interno. Tente novamente em alguns instantes."
                 )
     
-    # Registrar o handler
+    # Registrar o handler para Lightning Address e BOLT11
     application.add_handler(MessageHandler(
-        filters.TEXT & filters.Regex(r'^ln(bc|tb)[a-zA-Z0-9]+$'), 
-        handle_lightning_invoice
+        filters.TEXT & (
+            filters.Regex(r'^ln(bc|tb)[a-zA-Z0-9]+$') |  # BOLT11
+            filters.Regex(r'^[a-zA-Z0-9\-_\.+]+@[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}$')  # Lightning Address
+        ), 
+        handle_lightning_input
     ))
     
-    logger.info("✅ Integração Lightning configurada - fluxo PIX → solicitar invoice → pagar Lightning")
+    # Registrar callbacks para ajuda
+    application.add_handler(CallbackQueryHandler(
+        callback_help_address, pattern=r'^help_address_'
+    ))
+    application.add_handler(CallbackQueryHandler(
+        callback_help_invoice, pattern=r'^help_invoice_'
+    ))
+    application.add_handler(CallbackQueryHandler(
+        callback_help_wallet, pattern=r'^help_wallet_'
+    ))
+    
+    logger.info("✅ Integração Lightning configurada com suporte a Lightning Address e BOLT11")
     
     # Novo fluxo:
     # 1. PIX payment → Depix webhook confirma
-    # 2. Bot solicita invoice Lightning do cliente
-    # 3. Cliente fornece invoice
-    # 4. Ghost paga invoice via Voltz
-    # 5. Cliente recebe BTC na carteira Lightning
+    # 2. Bot solicita Lightning Address ou invoice Lightning do cliente
+    # 3. Cliente fornece Lightning Address (user@domain.com) ou BOLT11 (lnbc...)
+    # 4. Sistema detecta automaticamente o formato
+    # 5. Ghost resolve Lightning Address → BOLT11 e paga via Voltz
+    # 6. Cliente recebe BTC na carteira Lightning
     
     return True
+
+def is_lightning_address(address):
+    """
+    Valida se o endereço é um Lightning Address válido
+    
+    Args:
+        address: String a ser validada
+        
+    Returns:
+        bool: True se for Lightning Address válido
+    """
+    import re
+    
+    address = address.strip()
+    
+    # Formato: username@domain.com (seguindo LUD-16)
+    pattern = r'^[a-z0-9\-_\.+]+@[a-z0-9\-\.]+\.[a-z]{2,}$'
+    return bool(re.match(pattern, address, re.IGNORECASE))
+
+def is_valid_bolt11(invoice):
+    """
+    Valida se o invoice é um BOLT11 válido
+    
+    Args:
+        invoice: String do invoice
+        
+    Returns:
+        bool: True se for BOLT11 válido
+    """
+    invoice = invoice.strip()
+    
+    # BOLT11 começa com 'ln' seguido de 'bc' (mainnet) ou 'tb' (testnet)
+    if not (invoice.startswith('lnbc') or invoice.startswith('lntb')):
+        return False
+    
+    # Deve ter pelo menos 50 caracteres
+    if len(invoice) < 50:
+        return False
+    
+    return True
+
+async def processar_endereco_lightning(update: Update, context: ContextTypes.DEFAULT_TYPE, depix_id: str, address: str):
+    """
+    Processa Lightning Address ou BOLT11 fornecido pelo usuário
+    
+    Args:
+        update: Update do Telegram
+        context: Context do bot
+        depix_id: ID do depósito
+        address: Lightning Address ou BOLT11 fornecido
+    """
+    chat_id = update.effective_chat.id
+    address = address.strip()
+    
+    logger.info(f"Processando endereço Lightning para {depix_id}: {address}")
+    
+    # Validar formato
+    if is_lightning_address(address):
+        # Lightning Address detectado
+        await processar_lightning_address(update, context, depix_id, address)
+    elif is_valid_bolt11(address):
+        # BOLT11 invoice detectado
+        await processar_bolt11_invoice(update, context, depix_id, address)
+    else:
+        # Formato inválido
+        await enviar_erro_formato_invalido(update, context, address)
+
+async def processar_lightning_address(update: Update, context: ContextTypes.DEFAULT_TYPE, depix_id: str, lightning_address: str):
+    """
+    Processa Lightning Address fornecido pelo usuário
+    """
+    chat_id = update.effective_chat.id
+    
+    # Mensagem de confirmação e processamento
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"""
+🎯 **Lightning Address Detectado**
+
+📧 **Endereço:** `{lightning_address}`
+🔄 **Status:** Validando e processando...
+
+💡 O sistema irá resolver automaticamente seu Lightning Address para um invoice BOLT11 e efetuar o pagamento.
+        """,
+        parse_mode='Markdown'
+    )
+    
+    # Salvar no banco de dados
+    await salvar_endereco_no_banco(depix_id, lightning_address, 'lightning_address')
+    
+    # Notificar que foi processado
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="✅ **Lightning Address salvo!** O pagamento será processado automaticamente pelo sistema.",
+        parse_mode='Markdown'
+    )
+
+async def processar_bolt11_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE, depix_id: str, bolt11: str):
+    """
+    Processa BOLT11 invoice fornecido pelo usuário
+    """
+    chat_id = update.effective_chat.id
+    
+    # Mensagem de confirmação
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"""
+⚡ **BOLT11 Invoice Detectado**
+
+📄 **Invoice:** `{bolt11[:50]}...`
+🔄 **Status:** Validando e processando...
+
+💡 O sistema irá processar seu invoice BOLT11 automaticamente.
+        """,
+        parse_mode='Markdown'
+    )
+    
+    # Salvar no banco de dados
+    await salvar_endereco_no_banco(depix_id, bolt11, 'bolt11')
+    
+    # Notificar que foi processado
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="✅ **Invoice BOLT11 salvo!** O pagamento será processado automaticamente pelo sistema.",
+        parse_mode='Markdown'
+    )
+
+async def enviar_erro_formato_invalido(update: Update, context: ContextTypes.DEFAULT_TYPE, address: str):
+    """
+    Envia mensagem de erro para formato inválido
+    """
+    chat_id = update.effective_chat.id
+    
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"""
+❌ **Formato de Endereço Inválido**
+
+🔍 **Endereço fornecido:** `{address}`
+
+📝 **Formatos aceitos:**
+
+🎯 **Lightning Address:**
+• Exemplo: `usuario@walletofsatoshi.com`
+• Exemplo: `seunome@strike.me`
+
+⚡ **BOLT11 Invoice:**
+• Exemplo: `lnbc1234567...`
+• Deve começar com `lnbc` ou `lntb`
+
+💡 **Por favor, forneça um endereço no formato correto.**
+        """,
+        parse_mode='Markdown'
+    )
+
+async def salvar_endereco_no_banco(depix_id: str, address: str, address_type: str):
+    """
+    Salva endereço Lightning no banco de dados
+    
+    Args:
+        depix_id: ID do depósito
+        address: Lightning Address ou BOLT11
+        address_type: Tipo do endereço ('lightning_address' ou 'bolt11')
+    """
+    try:
+        url = "https://useghost.squareweb.app/api/save_lightning_address.php"
+        payload = {
+            "action": "update_lightning_address",
+            "depix_id": depix_id,
+            "address": address,
+            "address_type": address_type
+        }
+        
+        response = requests.post(url, json=payload, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                logger.info(f"Endereço Lightning salvo para {depix_id}: {address_type}")
+                return True
+            else:
+                logger.error(f"Erro API ao salvar endereço para {depix_id}: {data.get('error')}")
+                return False
+        else:
+            logger.error(f"Erro HTTP ao salvar endereço para {depix_id}: {response.status_code}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Erro ao salvar endereço Lightning: {str(e)}")
+        return False
+
+# Callbacks para botões de ajuda
+async def callback_help_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Callback para ajuda com Lightning Address
+    """
+    query = update.callback_query
+    await query.answer()
+    
+    depix_id = query.data.split('_')[-1]
+    
+    await query.message.reply_text(
+        text="""
+🏆 **Lightning Address - Guia Completo**
+
+📧 **O que é Lightning Address?**
+É um endereço amigável para receber Bitcoin via Lightning Network, similar ao email.
+
+🎯 **Formato:** `usuario@dominio.com`
+
+💡 **Carteiras compatíveis:**
+• Wallet of Satoshi: `seunome@walletofsatoshi.com`
+• Strike: `seunome@strike.me`
+• CashApp: `$seunome@cash.app`
+• Alby: `seunome@getalby.com`
+
+📱 **Como obter:**
+1. Baixe uma carteira compatível
+2. Crie sua conta
+3. Encontre seu Lightning Address
+4. Cole aqui no chat
+
+🔥 **Vantagem:** Não precisa gerar invoice a cada pagamento!
+        """,
+        parse_mode='Markdown'
+    )
+
+async def callback_help_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Callback para ajuda com BOLT11 invoice
+    """
+    query = update.callback_query
+    await query.answer()
+    
+    depix_id = query.data.split('_')[-1]
+    
+    await query.message.reply_text(
+        text="""
+📋 **BOLT11 Invoice - Guia Completo**
+
+⚡ **O que é BOLT11?**
+É um invoice (fatura) Lightning que especifica o valor exato a ser pago.
+
+🎯 **Formato:** Começa com `lnbc` ou `lntb`
+
+📱 **Como gerar:**
+1. Abra sua carteira Lightning
+2. Clique em "Receber" ou "Receive"
+3. Digite o valor em sats
+4. Gere o invoice
+5. Copie e cole aqui
+
+💡 **Carteiras compatíveis:**
+• Phoenix Wallet
+• Muun Wallet
+• Blue Wallet
+• Zeus LN
+• Breez
+
+⏰ **Atenção:** Invoices têm prazo de validade (normalmente 24h)
+        """,
+        parse_mode='Markdown'
+    )
+
+async def callback_help_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Callback para ajuda sobre carteiras Lightning
+    """
+    query = update.callback_query
+    await query.answer()
+    
+    await query.message.reply_text(
+        text="""
+❓ **Não tem carteira Lightning? Vamos resolver!**
+
+🏆 **Recomendadas (Lightning Address):**
+• **Wallet of Satoshi** - Mais fácil para iniciantes
+• **Strike** - Popular nos EUA
+• **CashApp** - Se disponível no Brasil
+
+⚡ **Recomendadas (BOLT11 Invoice):**
+• **Phoenix Wallet** - Boa para iniciantes
+• **Muun Wallet** - Interface simples
+• **Blue Wallet** - Muitas funcionalidades
+
+📱 **Passos para começar:**
+1. Baixe uma carteira da lista
+2. Crie sua conta/carteira
+3. Faça backup das palavras-chave
+4. Volte aqui para receber seus bitcoins
+
+💡 **Dica:** Lightning Address é mais prático!
+        """,
+        parse_mode='Markdown'
+    )
