@@ -22,7 +22,35 @@ async def solicitar_invoice_lightning(update: Update, context: ContextTypes.DEFA
         amount_sats: Valor em satoshis a enviar
     """
     chat_id = update.effective_chat.id
-    
+
+    # NOVO: Consultar endpoint robusto para garantir que só depósitos completos sejam processados
+    try:
+        url = f"https://useghost.squareweb.app/api/lightning_cron_endpoint_final.php?chat_id={chat_id}"
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            # O endpoint retorna 'results' com depósitos processáveis
+            results = data.get('results', [])
+            if not results:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="❌ Nenhum depósito PIX completo e confirmado encontrado para seu usuário. Aguarde a confirmação do PIX ou tente novamente mais tarde."
+                )
+                return
+        else:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="❌ Erro ao consultar status do seu depósito. Tente novamente em instantes."
+            )
+            return
+    except Exception as e:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"❌ Erro ao consultar status do seu depósito: {e}"
+        )
+        return
+
+    # Se chegou aqui, pode solicitar Lightning Address normalmente
     message = f"""
 ⚡ **PIX CONFIRMADO - LIGHTNING PENDENTE**
 
