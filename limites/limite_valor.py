@@ -22,24 +22,24 @@ class LimitesValor:
     PIX_VENDA_MAX = 4999.99     # Valor máximo: R$ 4.999,99
     
     # ========================================
-    # LIMITES LIGHTNING
+    # LIMITES LIGHTNING (COMENTADO - NÃO USADO)
     # ========================================
     
-    # Limites para Lightning Network (em satoshis)
-    LIGHTNING_MIN_SATS = 1000      # 1.000 satoshis (~R$ 3,50)
-    LIGHTNING_MAX_SATS = 1500000   # 1.500.000 satoshis (~R$ 5.250,00)
+    # # Limites para Lightning Network (em satoshis)
+    # LIGHTNING_MIN_SATS = 1000      # 1.000 satoshis (~R$ 3,50)
+    # LIGHTNING_MAX_SATS = 1500000   # 1.500.000 satoshis (~R$ 5.250,00)
     
-    # Limites Lightning em reais (conversão aproximada)
-    LIGHTNING_MIN_BRL = 3.50       # Valor mínimo em reais
-    LIGHTNING_MAX_BRL = 5250.00    # Valor máximo em reais
+    # # Limites Lightning em reais (conversão aproximada)
+    # LIGHTNING_MIN_BRL = 3.50       # Valor mínimo em reais
+    # LIGHTNING_MAX_BRL = 5250.00    # Valor máximo em reais
     
     # ========================================
-    # LIMITES TED/DOC
+    # LIMITES TED/DOC (COMENTADO - NÃO USADO)
     # ========================================
     
-    # Limites para transferência bancária
-    TED_MIN = 100.00       # Valor mínimo: R$ 100,00
-    TED_MAX = 50000.00     # Valor máximo: R$ 50.000,00
+    # # Limites para transferência bancária
+    # TED_MIN = 100.00       # Valor mínimo: R$ 100,00
+    # TED_MAX = 50000.00     # Valor máximo: R$ 50.000,00
     
     # ========================================
     # MÉTODOS DE VALIDAÇÃO
@@ -61,6 +61,7 @@ class LimitesValor:
                 "valido": False,
                 "erro": "VALOR_MINIMO",
                 "mensagem": f"Valor mínimo para compra via PIX: R$ {cls.PIX_COMPRA_MIN:.2f}",
+                "dica": f"Digite um valor entre R$ {cls.PIX_COMPRA_MIN:.2f} e R$ {cls.PIX_COMPRA_MAX:.2f}",
                 "limite_min": cls.PIX_COMPRA_MIN,
                 "limite_max": cls.PIX_COMPRA_MAX
             }
@@ -70,6 +71,7 @@ class LimitesValor:
                 "valido": False,
                 "erro": "VALOR_MAXIMO",
                 "mensagem": f"Valor máximo para compra via PIX: R$ {cls.PIX_COMPRA_MAX:.2f}",
+                "dica": f"Digite um valor entre R$ {cls.PIX_COMPRA_MIN:.2f} e R$ {cls.PIX_COMPRA_MAX:.2f}",
                 "limite_min": cls.PIX_COMPRA_MIN,
                 "limite_max": cls.PIX_COMPRA_MAX
             }
@@ -97,6 +99,7 @@ class LimitesValor:
                 "valido": False,
                 "erro": "VALOR_MINIMO",
                 "mensagem": f"Valor mínimo para venda via PIX: R$ {cls.PIX_VENDA_MIN:.2f}",
+                "dica": f"Digite um valor entre R$ {cls.PIX_VENDA_MIN:.2f} e R$ {cls.PIX_VENDA_MAX:.2f}",
                 "limite_min": cls.PIX_VENDA_MIN,
                 "limite_max": cls.PIX_VENDA_MAX
             }
@@ -106,6 +109,7 @@ class LimitesValor:
                 "valido": False,
                 "erro": "VALOR_MAXIMO",
                 "mensagem": f"Valor máximo para venda via PIX: R$ {cls.PIX_VENDA_MAX:.2f}",
+                "dica": f"Digite um valor entre R$ {cls.PIX_VENDA_MIN:.2f} e R$ {cls.PIX_VENDA_MAX:.2f}",
                 "limite_min": cls.PIX_VENDA_MIN,
                 "limite_max": cls.PIX_VENDA_MAX
             }
@@ -117,77 +121,77 @@ class LimitesValor:
             "limite_max": cls.PIX_VENDA_MAX
         }
     
-    @classmethod
-    def validar_lightning(cls, valor_sats: int) -> dict:
-        """
-        Valida se o valor em satoshis está dentro dos limites Lightning.
-        
-        Args:
-            valor_sats (int): Valor em satoshis
-            
-        Returns:
-            dict: Resultado da validação com status e mensagem
-        """
-        if valor_sats < cls.LIGHTNING_MIN_SATS:
-            return {
-                "valido": False,
-                "erro": "VALOR_MINIMO",
-                "mensagem": f"Valor mínimo Lightning: {cls.LIGHTNING_MIN_SATS:,} satoshis",
-                "limite_min": cls.LIGHTNING_MIN_SATS,
-                "limite_max": cls.LIGHTNING_MAX_SATS
-            }
-        
-        if valor_sats > cls.LIGHTNING_MAX_SATS:
-            return {
-                "valido": False,
-                "erro": "VALOR_MAXIMO",
-                "mensagem": f"Valor máximo Lightning: {cls.LIGHTNING_MAX_SATS:,} satoshis",
-                "limite_min": cls.LIGHTNING_MIN_SATS,
-                "limite_max": cls.LIGHTNING_MAX_SATS
-            }
-        
-        return {
-            "valido": True,
-            "mensagem": "Valor dentro dos limites Lightning",
-            "limite_min": cls.LIGHTNING_MIN_SATS,
-            "limite_max": cls.LIGHTNING_MAX_SATS
-        }
+    # @classmethod
+    # def validar_lightning(cls, valor_sats: int) -> dict:
+    #     """
+    #     Valida se o valor em satoshis está dentro dos limites Lightning.
+    #     
+    #     Args:
+    #         valor_sats (int): Valor em satoshis
+    #         
+    #     Returns:
+    #         dict: Resultado da validação com status e mensagem
+    #     """
+    #     if valor_sats < cls.LIGHTNING_MIN_SATS:
+    #         return {
+    #             "valido": False,
+    #             "erro": "VALOR_MINIMO",
+    #             "mensagem": f"Valor mínimo Lightning: {cls.LIGHTNING_MIN_SATS:,} satoshis",
+    #             "limite_min": cls.LIGHTNING_MIN_SATS,
+    #             "limite_max": cls.LIGHTNING_MAX_SATS
+    #         }
+    #     
+    #     if valor_sats > cls.LIGHTNING_MAX_SATS:
+    #         return {
+    #             "valido": False,
+    #             "erro": "VALOR_MAXIMO",
+    #             "mensagem": f"Valor máximo Lightning: {cls.LIGHTNING_MAX_SATS:,} satoshis",
+    #             "limite_min": cls.LIGHTNING_MIN_SATS,
+    #             "limite_max": cls.LIGHTNING_MAX_SATS
+    #         }
+    #     
+    #     return {
+    #         "valido": True,
+    #         "mensagem": "Valor dentro dos limites Lightning",
+    #         "limite_min": cls.LIGHTNING_MIN_SATS,
+    #         "limite_max": cls.LIGHTNING_MAX_SATS
+    #     }
     
-    @classmethod
-    def validar_ted(cls, valor: float) -> dict:
-        """
-        Valida se o valor está dentro dos limites para TED.
-        
-        Args:
-            valor (float): Valor a ser validado
-            
-        Returns:
-            dict: Resultado da validação com status e mensagem
-        """
-        if valor < cls.TED_MIN:
-            return {
-                "valido": False,
-                "erro": "VALOR_MINIMO",
-                "mensagem": f"Valor mínimo para TED: R$ {cls.TED_MIN:.2f}",
-                "limite_min": cls.TED_MIN,
-                "limite_max": cls.TED_MAX
-            }
-        
-        if valor > cls.TED_MAX:
-            return {
-                "valido": False,
-                "erro": "VALOR_MAXIMO",
-                "mensagem": f"Valor máximo para TED: R$ {cls.TED_MAX:.2f}",
-                "limite_min": cls.TED_MIN,
-                "limite_max": cls.TED_MAX
-            }
-        
-        return {
-            "valido": True,
-            "mensagem": "Valor dentro dos limites TED",
-            "limite_min": cls.TED_MIN,
-            "limite_max": cls.TED_MAX
-        }
+    # @classmethod
+    # def validar_ted(cls, valor: float) -> dict:
+    #     """
+    #     Valida se o valor está dentro dos limites para TED.
+    #     
+    #     Args:
+    #         valor (float): Valor a ser validado
+    #         
+    #     Returns:
+    #         dict: Resultado da validação com status e mensagem
+    #     """
+    #     if valor < cls.TED_MIN:
+    #         return {
+    #             "valido": False,
+    #             "erro": "VALOR_MINIMO",
+    #             "mensagem": f"Valor mínimo para TED: R$ {cls.TED_MIN:.2f}",
+    #             "limite_min": cls.TED_MIN,
+    #             "limite_max": cls.TED_MAX
+    #         }
+    #     
+    #     if valor > cls.TED_MAX:
+    #         return {
+    #             "valido": False,
+    #             "erro": "VALOR_MAXIMO",
+    #             "mensagem": f"Valor máximo para TED: R$ {cls.TED_MAX:.2f}",
+    #             "limite_min": cls.TED_MIN,
+    #             "limite_max": cls.TED_MAX
+    #         }
+    #     
+    #     return {
+    #         "valido": True,
+    #         "mensagem": "Valor dentro dos limites TED",
+    #         "limite_min": cls.TED_MIN,
+    #         "limite_max": cls.TED_MAX
+    #     }
     
     @classmethod
     def obter_limites_formatados(cls) -> dict:
@@ -209,24 +213,25 @@ class LimitesValor:
                     "max": f"R$ {cls.PIX_VENDA_MAX:.2f}",
                     "range": f"R$ {cls.PIX_VENDA_MIN:.2f} - R$ {cls.PIX_VENDA_MAX:.2f}"
                 }
-            },
-            "lightning": {
-                "satoshis": {
-                    "min": f"{cls.LIGHTNING_MIN_SATS:,} sats",
-                    "max": f"{cls.LIGHTNING_MAX_SATS:,} sats",
-                    "range": f"{cls.LIGHTNING_MIN_SATS:,} - {cls.LIGHTNING_MAX_SATS:,} sats"
-                },
-                "reais": {
-                    "min": f"R$ {cls.LIGHTNING_MIN_BRL:.2f}",
-                    "max": f"R$ {cls.LIGHTNING_MAX_BRL:.2f}",
-                    "range": f"R$ {cls.LIGHTNING_MIN_BRL:.2f} - R$ {cls.LIGHTNING_MAX_BRL:.2f}"
-                }
-            },
-            "ted": {
-                "min": f"R$ {cls.TED_MIN:.2f}",
-                "max": f"R$ {cls.TED_MAX:.2f}",
-                "range": f"R$ {cls.TED_MIN:.2f} - R$ {cls.TED_MAX:.2f}"
             }
+            # Lightning e TED comentados (desabilitados)
+            # "lightning": {
+            #     "satoshis": {
+            #         "min": f"{cls.LIGHTNING_MIN_SATS:,} sats",
+            #         "max": f"{cls.LIGHTNING_MAX_SATS:,} sats",
+            #         "range": f"{cls.LIGHTNING_MIN_SATS:,} - {cls.LIGHTNING_MAX_SATS:,} sats"
+            #     },
+            #     "reais": {
+            #         "min": f"R$ {cls.LIGHTNING_MIN_BRL:.2f}",
+            #         "max": f"R$ {cls.LIGHTNING_MAX_BRL:.2f}",
+            #         "range": f"R$ {cls.LIGHTNING_MIN_BRL:.2f} - R$ {cls.LIGHTNING_MAX_BRL:.2f}"
+            #     }
+            # },
+            # "ted": {
+            #     "min": f"R$ {cls.TED_MIN:.2f}",
+            #     "max": f"R$ {cls.TED_MAX:.2f}",
+            #     "range": f"R$ {cls.TED_MIN:.2f} - R$ {cls.TED_MAX:.2f}"
+            # }
         }
 
 # ========================================

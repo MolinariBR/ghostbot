@@ -14,6 +14,9 @@ from api.voltz import VoltzAPI
 # 🚀 NOVA INTEGRAÇÃO: Smart PIX Monitor (substitui cron externo)
 from smart_pix_monitor import register_pix_payment
 
+# 🚀 NOVA INTEGRAÇÃO: Sistema de Limites de Valor
+from limites.limite_valor import LimitesValor
+
 # Variável para armazenar a função do menu principal
 menu_principal_func = None
 
@@ -303,6 +306,18 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
         user_id = user.id
         valor_str = update.message.text.replace('R$', '').replace(',', '.').strip()
         valor = float(re.sub(r'[^0-9.]', '', valor_str))
+        
+        # 🚀 NOVA INTEGRAÇÃO: Validação de Limites PIX
+        validacao = LimitesValor.validar_pix_compra(valor)
+        if not validacao['valido']:
+            await update.message.reply_text(
+                f"❌ {validacao['mensagem']}\n\n"
+                f"💡 {validacao['dica']}\n\n"
+                "💵 *Digite o valor desejado* (ex: 150,50) ou use os valores sugeridos abaixo:",
+                parse_mode='Markdown'
+            )
+            return QUANTIDADE
+        
         context.user_data['valor_brl'] = valor
 
         # Consulta histórico de depósitos confirmados do usuário
@@ -329,6 +344,14 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
         else:
             context.user_data['cpf'] = None
             return await resumo_compra(update, context)
+    except ValueError:
+        # Trata erro de conversão de valor
+        await update.message.reply_text(
+            "❌ Formato de valor inválido. Por favor, digite um valor numérico válido (ex: 150,50).\n\n"
+            "💵 *Digite o valor desejado* (ex: 150,50) ou use os valores sugeridos abaixo:",
+            parse_mode='Markdown'
+        )
+        return QUANTIDADE
     except Exception as e:
         logger.error(f"Erro ao processar quantidade e aplicar limites: {e}")
         await update.message.reply_text(

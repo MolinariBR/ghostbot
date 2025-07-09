@@ -2,6 +2,9 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import MessageHandler, ConversationHandler, CommandHandler, filters
 from telegram.ext import ContextTypes
 
+# 🚀 NOVA INTEGRAÇÃO: Sistema de Limites de Valor
+from limites.limite_valor import LimitesValor
+
 # Variável para armazenar a função do menu principal
 menu_principal_func = None
 
@@ -50,6 +53,20 @@ async def processar_quantidade_venda(update: Update, context: ContextTypes.DEFAU
         quantidade = float(update.message.text.replace(',', '.'))
         if quantidade <= 0:
             raise ValueError("Quantidade inválida")
+        
+        # 🚀 NOVA INTEGRAÇÃO: Validação de Limites PIX para Venda
+        # Assumindo que o valor é em BRL para validação dos limites
+        validacao = LimitesValor.validar_pix_venda(quantidade)
+        if not validacao['valido']:
+            await update.message.reply_text(
+                f"❌ {validacao['mensagem']}\n\n"
+                f"💡 {validacao['dica']}\n\n"
+                "💰 Digite a quantidade que deseja vender:",
+                parse_mode='Markdown',
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("🔙 Voltar")]], resize_keyboard=True)
+            )
+            return QUANTIDADE
+        
         moeda = context.user_data.get('moeda_venda', '')
         # Arredondamento conforme moeda
         if "BTC" in moeda.upper():
