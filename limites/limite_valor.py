@@ -36,12 +36,11 @@ class LimitesValor:
         3500.00,  # 7ª compra
         4000.00,  # 8ª compra
         4500.00,  # 9ª compra
-        5000.00   # 10ª compra ou mais
+        4999.99   # 10ª compra ou mais
     ]
     
     # Limite máximo para usuários com CPF validado
-    LIMITE_MAXIMO_CPF = 5000.00
-    
+    LIMITE_MAXIMO_CPF = 4999.99
     # ========================================
     # LIMITES LIGHTNING (COMENTADO - NÃO USADO)
     # ========================================

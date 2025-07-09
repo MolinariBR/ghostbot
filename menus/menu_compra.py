@@ -16,6 +16,7 @@ from smart_pix_monitor import register_pix_payment
 
 # 🚀 NOVA INTEGRAÇÃO: Sistema de Limites de Valor
 from limites.limite_valor import LimitesValor
+from limites.gerenciador_usuario import validar_compra_usuario, registrar_compra_usuario
 
 # Variável para armazenar a função do menu principal
 menu_principal_func = None
@@ -304,67 +305,62 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
     try:
         user = update.effective_user
         user_id = user.id
+        chatid = str(user_id)
         valor_str = update.message.text.replace('R$', '').replace(',', '.').strip()
         valor = float(re.sub(r'[^0-9.]', '', valor_str))
-        
-        # Consulta histórico de depósitos confirmados do usuário
-        url = f"https://useghost.squareweb.app/rest/deposit.php?chatid={user_id}"
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        deposits = data.get('deposits', [])
-        confirmados = [d for d in deposits if d.get('status', '').lower() == 'confirmado']
-        num_compras = len(confirmados)
         
         # Obtém CPF se já foi fornecido anteriormente
         cpf = context.user_data.get('cpf')
         
-        # 🚀 NOVA INTEGRAÇÃO: Validação de Limites PIX + Progressivos
-        validacao = LimitesValor.validar_compra_progressiva(valor, num_compras, cpf)
+        # 🚀 NOVA INTEGRAÇÃO: Validação com sistema de usuário
+        validacao = validar_compra_usuario(chatid, valor, cpf)
+        
         if not validacao['valido']:
-            if validacao['erro'] == 'LIMITE_PROGRESSIVO':
-                # Mensagem específica para limite progressivo
+            if validacao['erro'] == 'LIMITE_DIARIO':
+                # Mensagem específica para limite diário
                 mensagem = f"❌ {validacao['mensagem']}\n\n"
                 mensagem += f"💡 {validacao['dica']}\n\n"
                 
-                # Adiciona informações sobre o limite atual
-                info_limite = LimitesValor.obter_info_limite_progressivo(num_compras, cpf)
-                mensagem += f"📊 *Seus Limites Atuais*\n"
-                mensagem += f"🔹 Limite atual: R$ {info_limite['limite_atual']:.2f}\n"
-                mensagem += f"🔹 Compras realizadas: {info_limite['num_compras']}\n"
+                if validacao['primeira_compra']:
+                    mensagem += "🎯 *Primeira compra*\n"
+                    mensagem += "• Limite: R$ 500,00\n"
+                    mensagem += "• Para valores maiores, forneça seu CPF\n\n"
+                else:
+                    mensagem += f"� *Compras realizadas*: {validacao['num_compras']}\n"
+                    mensagem += f"🎯 *Limite atual*: R$ {validacao['limite_atual']:.2f}\n\n"
                 
-                if info_limite['proximo_limite']:
-                    mensagem += f"🎯 Próximo limite: R$ {info_limite['proximo_limite']:.2f}\n"
+                if validacao['precisa_cpf']:
+                    mensagem += "🔒 *Para aumentar o limite*:\n"
+                    mensagem += "• Forneça seu CPF válido\n"
+                    mensagem += "• Limite será liberado para R$ 4.999,99\n\n"
                 
-                if validacao.get('cpf_necessario', False):
-                    mensagem += f"\n🔒 Para aumentar o limite, forneça seu CPF."
+                mensagem += "💵 *Digite o valor desejado* (ex: 150,50):"
                 
                 await update.message.reply_text(
                     mensagem,
                     parse_mode='Markdown'
                 )
             else:
-                # Mensagem para limites PIX básicos
+                # Mensagem para outros erros (PIX, etc.)
                 await update.message.reply_text(
                     f"❌ {validacao['mensagem']}\n\n"
                     f"💡 {validacao['dica']}\n\n"
-                    "💵 *Digite o valor desejado* (ex: 150,50) ou use os valores sugeridos abaixo:",
+                    "💵 *Digite o valor desejado* (ex: 150,50):",
                     parse_mode='Markdown'
                 )
             return QUANTIDADE
         
         context.user_data['valor_brl'] = valor
-
-        # Lógica de limites progressivos legada (mantida para compatibilidade)
-        if num_compras == 0:
-            limite_legado = 500.00
-        else:
-            limite_legado = 850.00
-
-        if valor > limite_legado:
+        context.user_data['validacao_limite'] = validacao
+        
+        # Se valor está acima do limite e ainda não tem CPF, solicita CPF
+        if validacao.get('precisa_cpf', False) and not cpf:
             context.user_data['solicitar_cpf'] = True
             await update.message.reply_text(
-                f"🔒 Para compras acima de R$ {limite_legado:,.2f} é necessário informar o CPF.\n\nPor favor, digite seu CPF (apenas números):"
+                f"🔒 Para compras acima do seu limite atual, é necessário informar o CPF.\n\n"
+                f"💡 Seu limite atual: R$ {validacao['limite_atual']:.2f}\n"
+                f"💡 Com CPF: R$ 4.999,99\n\n"
+                "Por favor, digite seu CPF (apenas números):"
             )
             return SOLICITAR_CPF
         else:

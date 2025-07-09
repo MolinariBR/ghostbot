@@ -2,8 +2,8 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import MessageHandler, ConversationHandler, CommandHandler, filters
 from telegram.ext import ContextTypes
 
-# 🚀 NOVA INTEGRAÇÃO: Sistema de Limites de Valor
-from limites.limite_valor import LimitesValor
+# 🚀 NOVA INTEGRAÇÃO: Sistema de Redirecionamentos
+from limites.redirecionamentos import redirecionar_para_venda
 
 # Variável para armazenar a função do menu principal
 menu_principal_func = None
@@ -22,14 +22,10 @@ def menu_moedas_venda():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
 async def iniciar_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Inicia o fluxo de venda mostrando as moedas disponíveis."""
-    await update.message.reply_text(
-        "💱 *ESCOLHA A MOEDA PARA VENDA*\n\n"
-        "Selecione uma das opções abaixo:",
-        reply_markup=menu_moedas_venda(),
-        parse_mode='Markdown'
-    )
-    return ESCOLHER_MOEDA
+    """Inicia o fluxo de venda redirecionando para @GhosttP2P."""
+    # � REDIRECIONAMENTO AUTOMÁTICO: Todas as vendas vão para @GhosttP2P
+    await redirecionar_para_venda(update, context)
+    return ConversationHandler.END
 
 async def escolher_moeda_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa a escolha da moeda e pede a quantidade."""
