@@ -20,12 +20,24 @@ BOT_TOKEN = Config.TELEGRAM_BOT_TOKEN
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "ghost_webhook_secret_2025")
 
 # URL onde o webhook estará disponível (container do bot)
-# Em produção, será a URL pública do container do bot
 WEBHOOK_HOST = os.getenv("WEBHOOK_HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", 8080))
 
-# URL pública do webhook (deve ser configurada na produção)
+# URL pública do webhook - configurada automaticamente pelo serviço de deploy
+# Exemplos: Railway, Heroku, SquareCloud, etc.
 WEBHOOK_PUBLIC_URL = os.getenv("WEBHOOK_PUBLIC_URL", "")
+
+# Para desenvolvimento local, use ngrok ou similar
+if not WEBHOOK_PUBLIC_URL:
+    # Tenta detectar automaticamente se está em algum serviço conhecido
+    if os.getenv("RAILWAY_STATIC_URL"):
+        WEBHOOK_PUBLIC_URL = f"https://{os.getenv('RAILWAY_STATIC_URL')}"
+    elif os.getenv("HEROKU_APP_NAME"):
+        WEBHOOK_PUBLIC_URL = f"https://{os.getenv('HEROKU_APP_NAME')}.herokuapp.com"
+    elif os.getenv("RENDER_EXTERNAL_URL"):
+        WEBHOOK_PUBLIC_URL = os.getenv("RENDER_EXTERNAL_URL")
+    else:
+        WEBHOOK_PUBLIC_URL = ""
 
 logging.basicConfig(
     level=logging.INFO,
@@ -137,7 +149,7 @@ async def set_webhook_endpoint(request):
     """Configura o webhook no Telegram"""
     if not WEBHOOK_PUBLIC_URL:
         return web.json_response({
-            "error": "WEBHOOK_PUBLIC_URL não configurada. Configure a variável de ambiente."
+            "error": "URL pública não detectada. Configure WEBHOOK_PUBLIC_URL ou use um serviço como Railway/Heroku que forneça URL automática."
         }, status=400)
     
     webhook_url = f"{WEBHOOK_PUBLIC_URL}/webhook/{WEBHOOK_SECRET}"
@@ -177,8 +189,13 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     logging.info(f"Iniciando servidor webhook de teste na porta {port}")
     logging.info(f"Webhook estará disponível em: http://{WEBHOOK_HOST}:{port}/webhook/{WEBHOOK_SECRET}")
+    
     if WEBHOOK_PUBLIC_URL:
-        logging.info(f"URL pública configurada: {WEBHOOK_PUBLIC_URL}/webhook/{WEBHOOK_SECRET}")
+        logging.info(f"URL pública detectada: {WEBHOOK_PUBLIC_URL}/webhook/{WEBHOOK_SECRET}")
+        logging.info("Para configurar webhook: faça POST para /set_webhook")
     else:
-        logging.warning("WEBHOOK_PUBLIC_URL não configurada! Configure para usar em produção.")
+        logging.warning("URL pública não detectada!")
+        logging.warning("Para produção, configure WEBHOOK_PUBLIC_URL ou use Railway/Heroku")
+        logging.warning("Para desenvolvimento local, use ngrok: ngrok http 8080")
+    
     web.run_app(app, host=WEBHOOK_HOST, port=port)
