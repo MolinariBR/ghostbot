@@ -45,114 +45,6 @@ logger = logging.getLogger(__name__)
 
 # Importa as funções de cotação
 from api.cotacao import get_btc_price_brl, get_usdt_price_brl, get_depix_price_brl
-from limites.comissao import calcular_comissao
-
-def gerar_resumo_compra(context: ContextTypes.DEFAULT_TYPE) -> str:
-    """
-    Gera um resumo detalhado da compra com todos os campos solicitados.
-    
-    Args:
-        context: Contexto do usuário contendo os dados da compra
-        
-    Returns:
-        str: Resumo formatado da compra
-    """
-    try:
-        # Extrai dados do contexto
-        moeda = context.user_data.get('moeda', 'N/A')
-        rede = context.user_data.get('rede', 'N/A')
-        valor_investido = context.user_data.get('valor_brl', 0.0)
-        cotacao = context.user_data.get('cotacao', 0.0)
-        metodo_pagamento = context.user_data.get('metodo_pagamento', 'N/A')
-        
-        # Mapeia métodos de pagamento
-        metodos_mapeados = {
-            '💰 PIX': 'PIX',
-            '🏦 TED': 'TED',
-            '📄 Boleto': 'BOLETO',
-            'PIX': 'PIX',
-            'TED': 'TED',
-            'BOLETO': 'BOLETO'
-        }
-        
-        metodo_normalizado = metodos_mapeados.get(metodo_pagamento, metodo_pagamento)
-        
-        # Calcula comissão usando o sistema implementado
-        resultado_comissao = calcular_comissao(valor_investido, moeda)
-        
-        # Valores padrão se a comissão não puder ser calculada
-        if resultado_comissao:
-            comissao_total = resultado_comissao['comissao']['total']
-            valor_liquido = resultado_comissao['valor_liquido']
-        else:
-            comissao_total = 0.0
-            valor_liquido = valor_investido
-        
-        # Define taxa do parceiro (R$ 1,00 apenas para PIX/DEPIX)
-        taxa_parceiro = 1.00 if metodo_normalizado in ['PIX', 'DEPIX'] else 0.00
-        
-        # Calcula o valor final que o usuário receberá
-        valor_final = valor_liquido - taxa_parceiro
-        
-        # Calcula quantidade de cripto que o usuário receberá
-        quantidade_cripto = valor_final / cotacao if cotacao > 0 else 0.0
-        
-        # Formata o nome da rede/camada por moeda
-        redes_formatadas = {
-            'BTC': {
-                'ONCHAIN': 'Bitcoin (On-Chain)',
-                'LIQUID': 'Liquid Network',
-                'LNT': 'Lightning Network',
-                'LIGHTNING': 'Lightning Network'
-            },
-            'DEPIX': {
-                'STABLE': 'Depix (Stablecoin BRL)',
-                'MAIN': 'Depix (Stablecoin BRL)'
-            },
-            'USDT': {
-                'LIQUID': 'Liquid Network',
-                'POLYGON': 'Polygon Network',
-                'MAIN': 'Ethereum Network'
-            }
-        }
-        
-        rede_formatada = redes_formatadas.get(moeda, {}).get(rede, rede)
-        
-        # Formata símbolos das moedas
-        simbolos_moedas = {
-            'BTC': '₿',
-            'DEPIX': 'Ð',
-            'USDT': '₮'
-        }
-        
-        simbolo = simbolos_moedas.get(moeda, moeda)
-        
-        # Gera o resumo formatado
-        resumo = f"""📊 **RESUMO DA COMPRA**
-
-🪙 **Moeda:** {moeda}
-🌐 **Rede:** {rede_formatada}
-💰 **Valor Investido:** R$ {valor_investido:.2f}
-🤝 **Parceiro:** R$ {taxa_parceiro:.2f}
-💼 **Comissão:** R$ {comissao_total:.2f}
-📈 **Cotação:** R$ {cotacao:.2f}
-💎 **Você receberá:** {quantidade_cripto:.8f} {moeda}
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-
-💡 **Detalhes:**
-• Taxa do parceiro aplicada apenas em PIX/DEPIX
-• Cotação baseada no mercado atual
-• Quantidade calculada: (R$ {valor_final:.2f} ÷ R$ {cotacao:.2f})
-• Método de pagamento: {metodo_normalizado}
-
-✅ **Confirmar compra?**"""
-        
-        return resumo
-        
-    except Exception as e:
-        logger.error(f"Erro ao gerar resumo da compra: {e}")
-        return "❌ Erro ao gerar resumo da compra. Tente novamente."
 
 async def obter_cotacao(moeda: str) -> float:
     """
@@ -502,13 +394,65 @@ async def solicitar_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 async def resumo_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Mostra o resumo da compra antes da confirmação."""
     try:
-        # Obtém a cotação atual
-        moeda = context.user_data.get('moeda', 'BTC')
-        cotacao = await obter_cotacao(moeda)
-        context.user_data['cotacao'] = cotacao
+        moeda = context.user_data.get('moeda', 'a moeda selecionada')
+        rede = context.user_data.get('rede', 'a rede selecionada')
+        valor_brl = context.user_data.get('valor_brl', 0)
         
-        # Gera o resumo detalhado usando a nova função
-        resumo_detalhado = gerar_resumo_compra(context)
+        # Obtém a cotação
+        cotacao = await obter_cotacao(moeda)
+        
+        # 🚀 NOVA INTEGRAÇÃO: Sistema de Comissões
+        from limites.comissao import calcular_comissao
+        
+        # Calcula a comissão baseada na moeda e valor
+        resultado_comissao = calcular_comissao(valor_brl, moeda)
+        
+        if resultado_comissao:
+            # Usa os valores calculados pelo sistema de comissões
+            comissao_total = resultado_comissao['comissao']['total']
+            valor_liquido = resultado_comissao['valor_liquido']
+            valor_recebido = valor_liquido / cotacao
+            
+            # Informações da comissão
+            comissao_info = resultado_comissao['comissao']
+            percentual = comissao_info['percentual']
+            taxa_fixa = comissao_info['fixo']
+        else:
+            # Fallback para o sistema antigo se não conseguir calcular comissão
+            logger.warning(f"Não foi possível calcular comissão para {moeda} valor R$ {valor_brl}")
+            taxa = 0.01  # 1% de taxa de exemplo
+            comissao_total = valor_brl * taxa
+            valor_liquido = valor_brl - comissao_total
+            valor_recebido = valor_liquido / cotacao
+            percentual = 1.0
+            taxa_fixa = 0.0
+        
+        # Formata os valores
+        valor_brl_formatado = formatar_brl(valor_brl)
+        valor_recebido_formatado = formatar_cripto(valor_recebido, moeda)
+        comissao_formatada = formatar_brl(comissao_total)
+        cotacao_formatada = formatar_brl(cotacao)
+        
+        # 💡 NOVA FUNCIONALIDADE: Verifica se método de pagamento já foi escolhido
+        metodo_pagamento = context.user_data.get('metodo_pagamento', '')
+        
+        # Mapeia métodos de pagamento para taxa do parceiro
+        mapeamento_taxas = {
+            'PIX': 1.00,
+            '💠 PIX': 1.00,
+            'DEPIX': 1.00,
+            'TED': 0.00,  # Será redirecionado
+            'Boleto': 0.00,  # Será redirecionado
+            'Lightning': 0.00  # Sem taxa adicional
+        }
+        
+        # Determina a taxa do parceiro
+        if metodo_pagamento in mapeamento_taxas:
+            taxa_parceiro = mapeamento_taxas[metodo_pagamento]
+            taxa_parceiro_info = f"R$ {taxa_parceiro:.2f}"
+        else:
+            # Método não escolhido ainda - mostra informação transparente
+            taxa_parceiro_info = "Definida após escolha do pagamento"
         
         # Cria o teclado de confirmação
         teclado_confirmacao = [
@@ -517,13 +461,34 @@ async def resumo_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         ]
         reply_markup = ReplyKeyboardMarkup(teclado_confirmacao, resize_keyboard=True)
         
-        # Envia o resumo detalhado
+        # 📋 NOVO RESUMO DETALHADO DA COMPRA
+        mensagem = (
+            f"📋 *RESUMO DA COMPRA*\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"• *Moeda:* {moeda}\n"
+            f"• *Rede:* {rede}\n"
+            f"• *Valor Investido:* {valor_brl_formatado}\n"
+            f"• *Parceiro:* {taxa_parceiro_info}\n"
+            f"• *Comissão:* {percentual:.1f}% + R$ {taxa_fixa:.2f} = {comissao_formatada}\n"
+            f"• *Cotação:* {cotacao_formatada}\n"
+            f"• *Você receberá:* {valor_recebido_formatado}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        )
+        
+        # Adiciona nota explicativa se método não foi escolhido
+        if not metodo_pagamento or metodo_pagamento not in mapeamento_taxas:
+            mensagem += (
+                "ℹ️ *Nota:* A taxa do parceiro (R$ 1,00 para PIX) será "
+                "exibida após a escolha do método de pagamento.\n\n"
+            )
+        
+        mensagem += "Confirma os dados da compra?"
+        
         await update.message.reply_text(
-            resumo_detalhado,
+            mensagem,
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
-        
     except Exception as e:
         logger.error(f"Erro ao exibir confirmação de compra: {str(e)}")
         # Tenta enviar sem teclado em caso de erro
