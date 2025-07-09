@@ -674,16 +674,13 @@ async def main():
                             drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
                             allowed_updates=BotConfig.ALLOWED_UPDATES,
                             timeout=BotConfig.POLLING_TIMEOUT,
-                            bootstrap_retries=BotConfig.BOOTSTRAP_RETRIES,
-                            read_latency=BotConfig.READ_LATENCY,
-                            poll_interval=BotConfig.POLL_INTERVAL
+                            bootstrap_retries=BotConfig.BOOTSTRAP_RETRIES
                         )
                         
                         # Se chegou aqui, o polling está funcionando
                         logger.info("Polling otimizado iniciado com sucesso!")
                         logger.info(f"Configurações: timeout={BotConfig.POLLING_TIMEOUT}s, "
-                                  f"read_latency={BotConfig.READ_LATENCY}s, "
-                                  f"poll_interval={BotConfig.POLL_INTERVAL}s")
+                                  f"allowed_updates={BotConfig.ALLOWED_UPDATES}")
                         
                         # Mantém o bot rodando indefinidamente
                         while True:
