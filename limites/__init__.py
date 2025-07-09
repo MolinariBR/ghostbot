@@ -25,6 +25,16 @@ from .gerenciador_usuario import (
     obter_limite_atual_usuario
 )
 
+from .comissao import (
+    ComissaoCalculator,
+    comissao_calculator,
+    calcular_comissao,
+    obter_faixas_moeda,
+    validar_valor_minimo,
+    obter_valor_minimo,
+    formatar_resumo_comissao
+)
+
 __all__ = [
     'LimitesValor',
     'validar_valor_pix_compra',
@@ -41,5 +51,12 @@ __all__ = [
     'validar_compra_usuario',
     'registrar_compra_usuario',
     'obter_estatisticas_usuario',
-    'obter_limite_atual_usuario'
+    'obter_limite_atual_usuario',
+    'ComissaoCalculator',
+    'comissao_calculator',
+    'calcular_comissao',
+    'obter_faixas_moeda',
+    'validar_valor_minimo',
+    'obter_valor_minimo',
+    'formatar_resumo_comissao'
 ]
