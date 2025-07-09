@@ -281,9 +281,7 @@ class TesteFluxoCompleto:
         try:
             print("\n🚀 Enviando BTC real via Lightning Address (Voltz)...")
             # 1. Resolver Lightning Address para invoice BOLT11
-            valor_sats = int(float(self.valor_compra) * 100_000_000 / 200_000)  # Aproximadamente 5 reais em sats (ajuste conforme cotação)
-            if valor_sats < 1000:
-                valor_sats = 1000  # valor mínimo para LNURL
+            valor_sats = 3500  # Valor fixo de 3500 sats
             resolver = LightningAddressResolver()
             result = resolver.resolve_to_bolt11(self.lightning_address, valor_sats)
             if not result['success']:
@@ -321,6 +319,7 @@ class TesteFluxoCompleto:
         print(f"⚡ Rede: Lightning")
         print(f"📱 Chat ID: {self.chat_id}")
         print(f"🌐 Backend: {self.backend_url}")
+        print(f"🔢 Valor Lightning a ser enviado: 3500 sats")
         print("=" * 70)
         
         # PASSO 1: Iniciar conversa com bot
