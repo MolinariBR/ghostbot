@@ -668,17 +668,22 @@ async def main():
                         while True:
                             await asyncio.sleep(3600)  # Dorme por 1 hora
                     else:
-                        # Configura o polling com timeouts otimizados
-                        logger.info("Iniciando polling...")
+                        # Configura o polling com configurações otimizadas para SquareCloud
+                        logger.info("Iniciando polling otimizado...")
                         await updater.start_polling(
                             drop_pending_updates=BotConfig.DROP_PENDING_UPDATES,
-                            allowed_updates=Update.ALL_TYPES,
+                            allowed_updates=BotConfig.ALLOWED_UPDATES,
                             timeout=BotConfig.POLLING_TIMEOUT,
-                            bootstrap_retries=3
+                            bootstrap_retries=BotConfig.BOOTSTRAP_RETRIES,
+                            read_latency=BotConfig.READ_LATENCY,
+                            poll_interval=BotConfig.POLL_INTERVAL
                         )
                         
                         # Se chegou aqui, o polling está funcionando
-                        logger.info("Polling iniciado com sucesso!")
+                        logger.info("Polling otimizado iniciado com sucesso!")
+                        logger.info(f"Configurações: timeout={BotConfig.POLLING_TIMEOUT}s, "
+                                  f"read_latency={BotConfig.READ_LATENCY}s, "
+                                  f"poll_interval={BotConfig.POLL_INTERVAL}s")
                         
                         # Mantém o bot rodando indefinidamente
                         while True:

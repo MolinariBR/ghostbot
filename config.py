@@ -14,24 +14,26 @@ class BotConfig:
     MAX_RETRIES = 15  # Número máximo de tentativas de reconexão
     BASE_RETRY_DELAY = 5  # segundos
     
-    # Configurações de polling
-    POLLING_TIMEOUT = 30.0  # segundos
-    READ_LATENCY = 10.0  # segundos
-    BOOTSTRAP_RETRIES = 3  # Tentativas de inicialização
+    # Configurações de polling (otimizadas para SquareCloud)
+    POLLING_TIMEOUT = 60.0  # Aumentado para reduzir requests
+    READ_LATENCY = 30.0     # Aumentado para menos overhead
+    BOOTSTRAP_RETRIES = 3   # Tentativas de inicialização
     
-    # Configurações de conexão
-    CONNECTION_TIMEOUT = 60.0  # segundos
-    READ_TIMEOUT = 60.0  # segundos
-    WRITE_TIMEOUT = 60.0  # segundos
-    POOL_TIMEOUT = 60.0  # segundos
-    POOL_SIZE = 10  # Tamanho do pool de conexões
+    # Configurações de conexão (otimizadas)
+    CONNECTION_TIMEOUT = 30.0  # Reduzido para conexões mais rápidas
+    READ_TIMEOUT = 30.0        # Reduzido para menos espera
+    WRITE_TIMEOUT = 30.0       # Reduzido para menos espera
+    POOL_TIMEOUT = 30.0        # Reduzido para menos espera
+    POOL_SIZE = 5              # Reduzido para menos conexões simultâneas
     
-    # Configurações de reconexão
-    MAX_POLLING_RETRIES = 10  # Tentativas de reconexão no polling
-    MAX_RECONNECT_ATTEMPTS = 5  # Tentativas totais de reconexão
+    # Configurações de reconexão (otimizadas)
+    MAX_POLLING_RETRIES = 5    # Reduzido para menos tentativas
+    MAX_RECONNECT_ATTEMPTS = 3 # Reduzido para menos tentativas
     
     # Outras configurações
     DROP_PENDING_UPDATES = True
+    ALLOWED_UPDATES = ["message", "callback_query"]  # Apenas essenciais
+    POLL_INTERVAL = 2.0  # Intervalo entre polls para reduzir CPU
     
     @classmethod
     def get_retry_delay(cls, attempt: int) -> float:
