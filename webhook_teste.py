@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Webhook Telegram integrado com o bot principal
-Substitui o método de polling por webhook para melhor performance e menor uso de recursos.
+Webhook Telegram - Substitui polling no container do bot
+Webhook standalone que roda no container do bot para evitar sobrecarga do servidor.
 """
 
 from aiohttp import web
@@ -18,15 +18,14 @@ from tokens import Config
 # Configurações
 BOT_TOKEN = Config.TELEGRAM_BOT_TOKEN
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "ghost_webhook_secret_2025")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://useghost.squareweb.app")  # URL do servidor em produção
+
+# URL onde o webhook estará disponível (container do bot)
+# Em produção, será a URL pública do container do bot
+WEBHOOK_HOST = os.getenv("WEBHOOK_HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", 8080))
 
-# Para desenvolvimento local, usar ngrok ou similar
-if Config.IS_PRODUCTION:
-    WEBHOOK_BASE_URL = WEBHOOK_URL
-else:
-    # Em desenvolvimento, você pode usar ngrok: https://your-ngrok-url.ngrok.io
-    WEBHOOK_BASE_URL = os.getenv("NGROK_URL", "http://localhost:8080")
+# URL pública do webhook (deve ser configurada na produção)
+WEBHOOK_PUBLIC_URL = os.getenv("WEBHOOK_PUBLIC_URL", "")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -118,9 +117,8 @@ async def health_check(request):
         "status": "ok",
         "bot_integrado": BOT_INTEGRADO,
         "timestamp": asyncio.get_event_loop().time(),
-        "webhook_url": f"{WEBHOOK_BASE_URL}/webhook/{WEBHOOK_SECRET}",
-        "production": Config.IS_PRODUCTION,
-        "server_url": WEBHOOK_BASE_URL
+        "webhook_url": f"{WEBHOOK_PUBLIC_URL}/webhook/{WEBHOOK_SECRET}" if WEBHOOK_PUBLIC_URL else "Não configurada",
+        "production": getattr(Config, 'IS_PRODUCTION', False)
     })
 
 @routes.get("/webhook_info")
@@ -137,12 +135,12 @@ async def webhook_info(request):
 @routes.post("/set_webhook")
 async def set_webhook_endpoint(request):
     """Configura o webhook no Telegram"""
-    if not WEBHOOK_BASE_URL:
+    if not WEBHOOK_PUBLIC_URL:
         return web.json_response({
-            "error": "WEBHOOK_BASE_URL não configurada"
+            "error": "WEBHOOK_PUBLIC_URL não configurada. Configure a variável de ambiente."
         }, status=400)
     
-    webhook_url = f"{WEBHOOK_BASE_URL}/webhook/{WEBHOOK_SECRET}"
+    webhook_url = f"{WEBHOOK_PUBLIC_URL}/webhook/{WEBHOOK_SECRET}"
     
     async with aiohttp.ClientSession() as session:
         telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
@@ -172,28 +170,15 @@ async def remove_webhook_endpoint(request):
             logging.info(f"Webhook removido: {result}")
             return web.json_response(result)
 
-@routes.get("/test_webhook_config")
-async def test_webhook_config(request):
-    """Testa a configuração do webhook para produção"""
-    webhook_url = f"{WEBHOOK_BASE_URL}/webhook/{WEBHOOK_SECRET}"
-    
-    return web.json_response({
-        "webhook_url": webhook_url,
-        "production": Config.IS_PRODUCTION,
-        "server_base": WEBHOOK_BASE_URL,
-        "bot_token_configured": bool(BOT_TOKEN and BOT_TOKEN != "COLOQUE_SEU_TOKEN_AQUI"),
-        "ready_for_production": Config.IS_PRODUCTION and bool(BOT_TOKEN),
-        "instructions": {
-            "1": "Configure o webhook usando POST /set_webhook",
-            "2": f"Telegram enviará updates para: {webhook_url}",
-            "3": "Verifique status com GET /webhook_info"
-        }
-    })
-
 app = web.Application()
 app.add_routes(routes)
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     logging.info(f"Iniciando servidor webhook de teste na porta {port}")
-    web.run_app(app, host="0.0.0.0", port=port)
+    logging.info(f"Webhook estará disponível em: http://{WEBHOOK_HOST}:{port}/webhook/{WEBHOOK_SECRET}")
+    if WEBHOOK_PUBLIC_URL:
+        logging.info(f"URL pública configurada: {WEBHOOK_PUBLIC_URL}/webhook/{WEBHOOK_SECRET}")
+    else:
+        logging.warning("WEBHOOK_PUBLIC_URL não configurada! Configure para usar em produção.")
+    web.run_app(app, host=WEBHOOK_HOST, port=port)
