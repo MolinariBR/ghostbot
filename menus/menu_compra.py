@@ -17,6 +17,7 @@ from smart_pix_monitor import register_pix_payment
 # 🚀 NOVA INTEGRAÇÃO: Sistema de Limites de Valor
 from limites.limite_valor import LimitesValor
 from limites.gerenciador_usuario import validar_compra_usuario, registrar_compra_usuario
+from limites.redirecionamentos import redirecionar_para_ted_boleto
 
 # Variável para armazenar a função do menu principal
 menu_principal_func = None
@@ -650,13 +651,15 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
     metodo_pagamento = update.message.text
     context.user_data['metodo_pagamento'] = metodo_pagamento
     
-    # FLUXO TED
+    # FLUXO TED - Redirecionamento para @GhosttP2P
     if metodo_pagamento == TED:
-        return await processar_ted(update, context)
+        await redirecionar_para_ted_boleto(update, context)
+        return ConversationHandler.END
     
-    # FLUXO BOLETO
+    # FLUXO BOLETO - Redirecionamento para @GhosttP2P
     elif metodo_pagamento == BOLETO:
-        return await processar_boleto(update, context)
+        await redirecionar_para_ted_boleto(update, context)
+        return ConversationHandler.END
     
     # FLUXO PIX (padrão)
     elif metodo_pagamento == PIX:
@@ -711,189 +714,192 @@ async def registrar_pedido_backend(context: ContextTypes.DEFAULT_TYPE, status: s
     except Exception as e:
         logger.error(f"Falha ao registrar pedido no backend: {e}")
 
-async def processar_ted(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await registrar_pedido_backend(context, status="pending")
-    """Processa pagamento via TED."""
-    try:
-        # Importa as configurações TED dos tokens
-        from tokens import Config
-        
-        # Dados bancários para TED
-        ted_info = f"""🏦 *DADOS PARA TED*
+# FUNÇÃO COMENTADA - Substituída por redirecionamento para @GhosttP2P
+# async def processar_ted(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+#     await registrar_pedido_backend(context, status="pending")
+#     """Processa pagamento via TED."""
+#     try:
+#         # Importa as configurações TED dos tokens
+#         from tokens import Config
+#         
+#         # Dados bancários para TED
+#         ted_info = f"""🏦 *DADOS PARA TED*
+#
+# 👤 *Favorecido:* {getattr(Config, 'TED_FAVORECIDO', 'Ghost P2P LTDA')}
+# 🏦 *Banco:* {getattr(Config, 'TED_BANCO', 'Banco do Brasil')}
+# 🏢 *Agência:* {getattr(Config, 'TED_AGENCIA', '0000-1')}
+# 💳 *Conta:* {getattr(Config, 'TED_CONTA', '12345-6')}
+# 📄 *CPF/CNPJ:* {getattr(Config, 'TED_CPF_CNPJ', '000.000.000-00')}
+#
+# 💰 *Valor a transferir:* {formatar_brl(context.user_data.get('valor_brl', 0))}
+#
+# 📋 *INSTRUÇÕES:*
+# 1. Faça a TED usando os dados acima
+# 2. Após o pagamento, envie o comprovante
+# 3. Aguarde a confirmação
+#
+# ⚠️ *IMPORTANTE:* O comprovante deve ser em formato .PDF, .JPG, .PNG ou .JPEG"""
+#
+#         # Teclado para aguardar comprovante
+#         teclado = [["📎 Enviar Comprovante"], ["🔙 Voltar"]]
+#         reply_markup = ReplyKeyboardMarkup(teclado, resize_keyboard=True)
+#         
+#         await update.message.reply_text(
+#             ted_info,
+#             parse_mode='Markdown',
+#             reply_markup=reply_markup
+#         )
+#         
+#         # Envia segunda mensagem
+#         await update.message.reply_text(
+#             "📨 *Após o pagamento, envie o comprovante do TED para agilizar o processo.*",
+#             parse_mode='Markdown'
+#         )
+#         
+#         return AGUARDAR_TED_COMPROVANTE
+#         
+#     except Exception as e:
+#         logger.error(f"Erro ao processar TED: {e}")
+#         await update.message.reply_text(
+#             "❌ Erro ao processar TED. Tente outro método de pagamento.",
+#             reply_markup=ReplyKeyboardMarkup(menu_metodos_pagamento(), resize_keyboard=True)
+#         )
+#         return ESCOLHER_PAGAMENTO
 
-👤 *Favorecido:* {getattr(Config, 'TED_FAVORECIDO', 'Ghost P2P LTDA')}
-🏦 *Banco:* {getattr(Config, 'TED_BANCO', 'Banco do Brasil')}
-🏢 *Agência:* {getattr(Config, 'TED_AGENCIA', '0000-1')}
-💳 *Conta:* {getattr(Config, 'TED_CONTA', '12345-6')}
-📄 *CPF/CNPJ:* {getattr(Config, 'TED_CPF_CNPJ', '000.000.000-00')}
+# FUNÇÃO COMENTADA - Substituída por redirecionamento para @GhosttP2P
+# async def processar_comprovante_ted(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+#     """Processa o comprovante de TED enviado."""
+#     if update.message.text == "🔙 Voltar":
+#         return await mostrar_metodos_pagamento(update, context)
+# 
+#     # Verifica se é um documento/foto
+#     if update.message.document or update.message.photo:
+#         try:
+#             # Salva informações do arquivo
+#             if update.message.document:
+#                 file_info = update.message.document
+#                 file_name = file_info.file_name or "comprovante_ted"
+#                 file_id = file_info.file_id
+#             else:
+#                 file_info = update.message.photo[-1]  # Maior resolução
+#                 file_name = "comprovante_ted.jpg"
+#                 file_id = file_info.file_id
+# 
+#             # Verifica extensão do arquivo
+#             extensoes_validas = ['.pdf', '.jpg', '.jpeg', '.png']
+#             file_ext = '.' + file_name.split('.')[-1].lower() if '.' in file_name else '.jpg'
+#             if file_ext not in extensoes_validas:
+#                 await update.message.reply_text(
+#                     "❌ *Formato não suportado*\n\n"
+#                     "Por favor, envie o comprovante em formato PDF, JPG, PNG ou JPEG.",
+#                     parse_mode='Markdown'
+#                 )
+#                 return AGUARDAR_TED_COMPROVANTE
+# 
+#             # Baixa o arquivo do Telegram
+#             bot = context.bot
+#             new_file = await bot.get_file(file_id)
+#             file_path = f"/tmp/{file_name}"
+#             await new_file.download_to_drive(file_path)
+# 
+#             # Prepara dados para upload
+#             user_data = context.user_data
+#             chatid = str(context._user_id if hasattr(context, '_user_id') else user_data.get('chatid', ''))
+#             deposit_id = user_data.get('deposit_id')
+#             url = 'https://useghost.squareweb.app/api/upload_comprovante.php'
+#             files = {'comprovante': (file_name, open(file_path, 'rb'))}
+#             data = {'chatid': chatid}
+#             if deposit_id:
+#                 data['deposit_id'] = str(deposit_id)
+#             try:
+#                 import requests
+#                 response = requests.post(url, files=files, data=data, timeout=20)
+#                 if response.status_code == 200 and 'success' in response.text:
+#                     await update.message.reply_text(
+#                         "✅ *Comprovante recebido e enviado para análise!*\n\n"
+#                         "🔄 Transação em processamento, aguarde a confirmação.\n\n"
+#                         "Você receberá uma notificação assim que o pagamento for confirmado.",
+#                         parse_mode='Markdown',
+#                         reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+#                     )
+#                 else:
+#                     await update.message.reply_text(
+#                         "⚠️ *Comprovante recebido, mas houve um erro ao enviar ao sistema.*\n\n"
+#                         "Tente novamente ou contate o suporte.",
+#                         parse_mode='Markdown',
+#                         reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+#                     )
+#             except Exception as e:
+#                 logger.error(f"Erro ao enviar comprovante para backend: {e}")
+#                 await update.message.reply_text(
+#                     "❌ Erro ao enviar comprovante ao sistema. Tente novamente ou envie para o suporte.",
+#                     parse_mode='Markdown',
+#                     reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+#                 )
+#             finally:
+#                 try:
+#                     os.remove(file_path)
+#                 except Exception:
+#                     pass
+#             context.user_data.clear()
+#             return ConversationHandler.END
+#         except Exception as e:
+#             logger.error(f"Erro ao processar comprovante: {e}")
+#             await update.message.reply_text(
+#                 "❌ Erro ao processar o comprovante. Tente novamente.",
+#                 parse_mode='Markdown'
+#             )
+#             return AGUARDAR_TED_COMPROVANTE
+#     else:
+#         await update.message.reply_text(
+#             "📎 *Por favor, envie o comprovante como arquivo ou foto.*\n\n"
+#             "Formatos aceitos: PDF, JPG, PNG, JPEG",
+#             parse_mode='Markdown'
+#         )
+#         return AGUARDAR_TED_COMPROVANTE
 
-💰 *Valor a transferir:* {formatar_brl(context.user_data.get('valor_brl', 0))}
-
-📋 *INSTRUÇÕES:*
-1. Faça a TED usando os dados acima
-2. Após o pagamento, envie o comprovante
-3. Aguarde a confirmação
-
-⚠️ *IMPORTANTE:* O comprovante deve ser em formato .PDF, .JPG, .PNG ou .JPEG"""
-
-        # Teclado para aguardar comprovante
-        teclado = [["📎 Enviar Comprovante"], ["🔙 Voltar"]]
-        reply_markup = ReplyKeyboardMarkup(teclado, resize_keyboard=True)
-        
-        await update.message.reply_text(
-            ted_info,
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
-        
-        # Envia segunda mensagem
-        await update.message.reply_text(
-            "📨 *Após o pagamento, envie o comprovante do TED para agilizar o processo.*",
-            parse_mode='Markdown'
-        )
-        
-        return AGUARDAR_TED_COMPROVANTE
-        
-    except Exception as e:
-        logger.error(f"Erro ao processar TED: {e}")
-        await update.message.reply_text(
-            "❌ Erro ao processar TED. Tente outro método de pagamento.",
-            reply_markup=ReplyKeyboardMarkup(menu_metodos_pagamento(), resize_keyboard=True)
-        )
-        return ESCOLHER_PAGAMENTO
-
-async def processar_comprovante_ted(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Processa o comprovante de TED enviado."""
-    if update.message.text == "🔙 Voltar":
-        return await mostrar_metodos_pagamento(update, context)
-
-    # Verifica se é um documento/foto
-    if update.message.document or update.message.photo:
-        try:
-            # Salva informações do arquivo
-            if update.message.document:
-                file_info = update.message.document
-                file_name = file_info.file_name or "comprovante_ted"
-                file_id = file_info.file_id
-            else:
-                file_info = update.message.photo[-1]  # Maior resolução
-                file_name = "comprovante_ted.jpg"
-                file_id = file_info.file_id
-
-            # Verifica extensão do arquivo
-            extensoes_validas = ['.pdf', '.jpg', '.jpeg', '.png']
-            file_ext = '.' + file_name.split('.')[-1].lower() if '.' in file_name else '.jpg'
-            if file_ext not in extensoes_validas:
-                await update.message.reply_text(
-                    "❌ *Formato não suportado*\n\n"
-                    "Por favor, envie o comprovante em formato PDF, JPG, PNG ou JPEG.",
-                    parse_mode='Markdown'
-                )
-                return AGUARDAR_TED_COMPROVANTE
-
-            # Baixa o arquivo do Telegram
-            bot = context.bot
-            new_file = await bot.get_file(file_id)
-            file_path = f"/tmp/{file_name}"
-            await new_file.download_to_drive(file_path)
-
-            # Prepara dados para upload
-            user_data = context.user_data
-            chatid = str(context._user_id if hasattr(context, '_user_id') else user_data.get('chatid', ''))
-            deposit_id = user_data.get('deposit_id')
-            url = 'https://useghost.squareweb.app/api/upload_comprovante.php'
-            files = {'comprovante': (file_name, open(file_path, 'rb'))}
-            data = {'chatid': chatid}
-            if deposit_id:
-                data['deposit_id'] = str(deposit_id)
-            try:
-                import requests
-                response = requests.post(url, files=files, data=data, timeout=20)
-                if response.status_code == 200 and 'success' in response.text:
-                    await update.message.reply_text(
-                        "✅ *Comprovante recebido e enviado para análise!*\n\n"
-                        "🔄 Transação em processamento, aguarde a confirmação.\n\n"
-                        "Você receberá uma notificação assim que o pagamento for confirmado.",
-                        parse_mode='Markdown',
-                        reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
-                    )
-                else:
-                    await update.message.reply_text(
-                        "⚠️ *Comprovante recebido, mas houve um erro ao enviar ao sistema.*\n\n"
-                        "Tente novamente ou contate o suporte.",
-                        parse_mode='Markdown',
-                        reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
-                    )
-            except Exception as e:
-                logger.error(f"Erro ao enviar comprovante para backend: {e}")
-                await update.message.reply_text(
-                    "❌ Erro ao enviar comprovante ao sistema. Tente novamente ou envie para o suporte.",
-                    parse_mode='Markdown',
-                    reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
-                )
-            finally:
-                try:
-                    os.remove(file_path)
-                except Exception:
-                    pass
-            context.user_data.clear()
-            return ConversationHandler.END
-        except Exception as e:
-            logger.error(f"Erro ao processar comprovante: {e}")
-            await update.message.reply_text(
-                "❌ Erro ao processar o comprovante. Tente novamente.",
-                parse_mode='Markdown'
-            )
-            return AGUARDAR_TED_COMPROVANTE
-    else:
-        await update.message.reply_text(
-            "📎 *Por favor, envie o comprovante como arquivo ou foto.*\n\n"
-            "Formatos aceitos: PDF, JPG, PNG, JPEG",
-            parse_mode='Markdown'
-        )
-        return AGUARDAR_TED_COMPROVANTE
-
-async def processar_boleto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await registrar_pedido_backend(context, status="pending")
-    """Processa pagamento via Boleto - direciona para admin."""
-    try:
-        # Importa as configurações do boleto
-        from tokens import Config
-        admin_contact = getattr(Config, 'BOLETO_CHAT_ID', '@triacorelabs')
-        
-        mensagem = f"""📄 *PAGAMENTO VIA BOLETO*
-
-Para efetuar o pagamento via boleto bancário, entre em contato com nosso administrador:
-
-👤 *Contato:* {admin_contact}
-
-💰 *Valor:* {formatar_brl(context.user_data.get('valor_brl', 0))}
-💎 *Moeda:* {context.user_data.get('moeda', '')}
-⚡ *Rede:* {context.user_data.get('rede', '')}
-
-📋 *O administrador irá:*
-• Gerar o boleto bancário
-• Enviar as instruções de pagamento
-• Processar sua compra após confirmação
-
-⏰ *Prazo:* Até 2 dias úteis para processamento"""
-
-        await update.message.reply_text(
-            mensagem,
-            parse_mode='Markdown',
-            reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
-        )
-        
-        context.user_data.clear()
-        return ConversationHandler.END
-        
-    except Exception as e:
-        logger.error(f"Erro ao processar boleto: {e}")
-        await update.message.reply_text(
-            "❌ Erro ao processar boleto. Tente outro método de pagamento.",
-            reply_markup=ReplyKeyboardMarkup(menu_metodos_pagamento(), resize_keyboard=True)
-        )
-        return ESCOLHER_PAGAMENTO
+# FUNÇÃO COMENTADA - Substituída por redirecionamento para @GhosttP2P
+# async def processar_boleto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+#     await registrar_pedido_backend(context, status="pending")
+#     """Processa pagamento via Boleto - direciona para admin."""
+#     try:
+#         # Importa as configurações do boleto
+#         from tokens import Config
+#         admin_contact = getattr(Config, 'BOLETO_CHAT_ID', '@triacorelabs')
+#         
+#         mensagem = f"""📄 *PAGAMENTO VIA BOLETO*
+# 
+# Para efetuar o pagamento via boleto bancário, entre em contato com nosso administrador:
+# 
+# 👤 *Contato:* {admin_contact}
+# 
+# 💰 *Valor:* {formatar_brl(context.user_data.get('valor_brl', 0))}
+# 💎 *Moeda:* {context.user_data.get('moeda', '')}
+# ⚡ *Rede:* {context.user_data.get('rede', '')}
+# 
+# 📋 *O administrador irá:*
+# • Gerar o boleto bancário
+# • Enviar as instruções de pagamento
+# • Processar sua compra após confirmação
+# 
+# ⏰ *Prazo:* Até 2 dias úteis para processamento"""
+# 
+#         await update.message.reply_text(
+#             mensagem,
+#             parse_mode='Markdown',
+#             reply_markup=ReplyKeyboardMarkup([['/start']], resize_keyboard=True)
+#         )
+#         
+#         context.user_data.clear()
+#         return ConversationHandler.END
+#         
+#     except Exception as e:
+#         logger.error(f"Erro ao processar boleto: {e}")
+#         await update.message.reply_text(
+#             "❌ Erro ao processar boleto. Tente outro método de pagamento.",
+#             reply_markup=ReplyKeyboardMarkup(menu_metodos_pagamento(), resize_keyboard=True)
+#         )
+#         return ESCOLHER_PAGAMENTO
 
 async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa pagamento via PIX."""
@@ -1303,11 +1309,11 @@ def get_compra_conversation():
                 MessageHandler(filters.Regex('^🔙 Voltar$'), lambda u, c: solicitar_endereco(u, c) if 'endereco_recebimento' not in c.user_data else confirmar_compra(u, c)),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, processar_metodo_pagamento)
             ],
-            AGUARDAR_TED_COMPROVANTE: [
-                MessageHandler(filters.Regex('^🔙 Voltar$'), mostrar_metodos_pagamento),
-                MessageHandler(filters.PHOTO | filters.Document.ALL, processar_comprovante_ted),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, processar_comprovante_ted)
-            ]
+            # AGUARDAR_TED_COMPROVANTE: [
+            #     MessageHandler(filters.Regex('^🔙 Voltar$'), mostrar_metodos_pagamento),
+            #     MessageHandler(filters.PHOTO | filters.Document.ALL, processar_comprovante_ted),
+            #     MessageHandler(filters.TEXT & ~filters.COMMAND, processar_comprovante_ted)
+            # ]
         },
         fallbacks=[
             CommandHandler('start', cancelar_compra),
