@@ -1,7 +1,7 @@
 # Configurações do Bot
 class Config:
     # Configuração de Ambiente (True para produção, False para desenvolvimento)
-    IS_PRODUCTION = False  # Mude para False em desenvolvimento
+    IS_PRODUCTION = True  # Ativado para produção - webhook
     
     # Token do Bot do Telegram
     TELEGRAM_BOT_TOKEN = "7105509014:AAENhZArthrysOBoEmdA6vaxE72pobliahI"
