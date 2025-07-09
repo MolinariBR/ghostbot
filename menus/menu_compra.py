@@ -404,8 +404,17 @@ async def resumo_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         # 🚀 NOVA INTEGRAÇÃO: Sistema de Comissões
         from limites.comissao import calcular_comissao
         
+        # Extrai a sigla da moeda do texto do menu
+        moeda_calc = moeda
+        if "BTC" in moeda.upper():
+            moeda_calc = "BTC"
+        elif "USDT" in moeda.upper():
+            moeda_calc = "USDT"
+        elif "DEPIX" in moeda.upper():
+            moeda_calc = "DEPIX"
+        
         # Calcula a comissão baseada na moeda e valor
-        resultado_comissao = calcular_comissao(valor_brl, moeda)
+        resultado_comissao = calcular_comissao(valor_brl, moeda_calc)
         
         if resultado_comissao:
             # Usa os valores calculados pelo sistema de comissões
@@ -424,7 +433,7 @@ async def resumo_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             comissao_total = valor_brl * taxa
             valor_liquido = valor_brl - comissao_total
             valor_recebido = valor_liquido / cotacao
-            percentual = 1.0
+            percentual = 1.0  # 1.0% (já em formato de exibição)
             taxa_fixa = 0.0
         
         # Formata os valores
@@ -452,7 +461,7 @@ async def resumo_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             taxa_parceiro_info = f"R$ {taxa_parceiro:.2f}"
         else:
             # Método não escolhido ainda - mostra informação transparente
-            taxa_parceiro_info = "Definida após escolha do pagamento"
+            taxa_parceiro_info = "R$ 1,00 (para PIX)"
         
         # Cria o teclado de confirmação
         teclado_confirmacao = [
