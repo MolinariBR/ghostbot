@@ -260,6 +260,112 @@ def formatar_resumo_comissao(resultado: Dict) -> str:
     """Função de conveniência para formatar resumo."""
     return ComissaoCalculator.formatar_resumo_comissao(resultado)
 
+def calcular_comissao_fallback(valor: float, moeda: str = 'BTC') -> Dict:
+    """
+    Fallback robusto para cálculo de comissão quando a API principal falha.
+    Implementa as mesmas regras de negócio do sistema principal.
+    
+    Args:
+        valor: Valor em BRL
+        moeda: Moeda (BTC, DEPIX, USDT)
+        
+    Returns:
+        Dict com informações da comissão calculada
+    """
+    try:
+        valor = float(valor)
+        moeda_upper = moeda.upper()
+        
+        logger.info(f"Fallback de comissão ativado para {moeda_upper} - R$ {valor:.2f}")
+        
+        if moeda_upper == 'BTC':
+            # Regras BTC
+            if valor >= 10 and valor <= 500:
+                # Faixa de R$ 10 a R$ 500: 10%
+                percentual = 0.10
+                fixo = 0.0
+                taxa_display = 10.0
+            elif valor > 500 and valor <= 1000:
+                # Faixa de R$ 500 a R$ 1000: 7%
+                percentual = 0.07
+                fixo = 0.0
+                taxa_display = 7.0
+            elif valor > 1000:
+                # Acima de R$ 1000: 5%
+                percentual = 0.05
+                fixo = 0.0
+                taxa_display = 5.0
+            else:
+                # Fallback para valores abaixo de R$ 10
+                percentual = 0.10
+                fixo = 0.0
+                taxa_display = 10.0
+                
+        elif moeda_upper in ['DEPIX', 'USDT']:
+            # Regras DEPIX/USDT
+            if valor >= 100:
+                # A partir de R$ 100: 1.9%
+                percentual = 0.019
+                fixo = 0.0
+                taxa_display = 1.9
+            else:
+                # Fallback para valores abaixo de R$ 100
+                percentual = 0.019
+                fixo = 0.0
+                taxa_display = 1.9
+        else:
+            # Moeda desconhecida - usa BTC como fallback
+            percentual = 0.10
+            fixo = 0.0
+            taxa_display = 10.0
+        
+        # Cálculos
+        comissao_percentual = valor * percentual
+        comissao_total = comissao_percentual + fixo
+        valor_liquido = valor - comissao_total
+        percentual_efetivo = (comissao_total / valor) * 100
+        
+        resultado = {
+            'valor_original': valor,
+            'moeda': moeda_upper,
+            'faixa': {
+                'min': 10.0 if moeda_upper == 'BTC' else 100.0,
+                'max': None  # Simplificado no fallback
+            },
+            'comissao': {
+                'percentual': taxa_display,
+                'percentual_valor': comissao_percentual,
+                'fixo': fixo,
+                'total': comissao_total
+            },
+            'valor_liquido': valor_liquido,
+            'percentual_efetivo': percentual_efetivo,
+            'fallback_used': True  # Indica que foi usado fallback
+        }
+        
+        logger.info(f"Fallback calculado: {taxa_display}% para {moeda_upper}, comissão R$ {comissao_total:.2f}")
+        return resultado
+        
+    except Exception as e:
+        logger.error(f"Erro no fallback de comissão: {e}")
+        # Fallback final ultra-simples: 10% para BTC
+        valor_safe = float(valor) if valor else 10.0
+        comissao_safe = valor_safe * 0.10
+        return {
+            'valor_original': valor_safe,
+            'moeda': moeda.upper(),
+            'faixa': {'min': 10.0, 'max': None},
+            'comissao': {
+                'percentual': 10.0,
+                'percentual_valor': comissao_safe,
+                'fixo': 0.0,
+                'total': comissao_safe
+            },
+            'valor_liquido': valor_safe - comissao_safe,
+            'percentual_efetivo': 10.0,
+            'fallback_used': True,
+            'emergency_fallback': True
+        }
 # Exemplo de uso
 if __name__ == "__main__":
     # Testes das diferentes moedas e faixas

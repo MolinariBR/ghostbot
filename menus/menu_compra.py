@@ -402,7 +402,7 @@ async def resumo_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         cotacao = await obter_cotacao(moeda)
         
         # 🚀 NOVA INTEGRAÇÃO: Sistema de Comissões
-        from limites.comissao import calcular_comissao
+        from limites.comissao import calcular_comissao, calcular_comissao_fallback
         
         # Extrai a sigla da moeda do texto do menu
         moeda_calc = moeda
@@ -416,7 +416,7 @@ async def resumo_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         # Calcula a comissão baseada na moeda e valor
         resultado_comissao = calcular_comissao(valor_brl, moeda_calc)
         
-        if resultado_comissao:
+        if resultado_comissao and resultado_comissao.get('comissao', {}).get('total') is not None:
             # Usa os valores calculados pelo sistema de comissões
             comissao_total = resultado_comissao['comissao']['total']
             valor_liquido = resultado_comissao['valor_liquido']
@@ -426,15 +426,21 @@ async def resumo_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             comissao_info = resultado_comissao['comissao']
             percentual = comissao_info['percentual']
             taxa_fixa = comissao_info['fixo']
+            
+            logger.info(f"Comissão calculada via API: {percentual}% para {moeda_calc}, valor R$ {valor_brl:.2f}")
         else:
-            # Fallback para o sistema antigo se não conseguir calcular comissão
-            logger.warning(f"Não foi possível calcular comissão para {moeda} valor R$ {valor_brl}")
-            taxa = 0.01  # 1% de taxa de exemplo
-            comissao_total = valor_brl * taxa
-            valor_liquido = valor_brl - comissao_total
+            # Fallback robusto baseado nas regras de negócio
+            logger.warning(f"Sistema de comissões falhou para {moeda} valor R$ {valor_brl}, usando fallback robusto")
+            
+            resultado_fallback = calcular_comissao_fallback(valor_brl, moeda_calc)
+            
+            comissao_total = resultado_fallback['comissao']['total']
+            valor_liquido = resultado_fallback['valor_liquido']
             valor_recebido = valor_liquido / cotacao
-            percentual = 1.0  # 1.0% (já em formato de exibição)
-            taxa_fixa = 0.0
+            percentual = resultado_fallback['comissao']['percentual']
+            taxa_fixa = resultado_fallback['comissao']['fixo']
+            
+            logger.info(f"Fallback aplicado: {percentual}% para {moeda_calc}, valor R$ {valor_brl:.2f}, comissão R$ {comissao_total:.2f}")
         
         # Formata os valores
         valor_brl_formatado = formatar_brl(valor_brl)

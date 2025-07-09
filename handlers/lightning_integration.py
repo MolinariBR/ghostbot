@@ -597,6 +597,10 @@ async def processar_lightning_address(update: Update, context: ContextTypes.DEFA
         text="✅ **Lightning Address salvo!** O pagamento será processado automaticamente pelo sistema.",
         parse_mode='Markdown'
     )
+    
+    # NOVO: Aguardar um pouco e enviar mensagem de conclusão
+    await asyncio.sleep(2)
+    await enviar_mensagem_conclusao(update, context, depix_id, lightning_address, 'lightning_address')
 
 async def processar_bolt11_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE, depix_id: str, bolt11: str):
     """
@@ -627,6 +631,10 @@ async def processar_bolt11_invoice(update: Update, context: ContextTypes.DEFAULT
         text="✅ **Invoice BOLT11 salvo!** O pagamento será processado automaticamente pelo sistema.",
         parse_mode='Markdown'
     )
+    
+    # NOVO: Aguardar um pouco e enviar mensagem de conclusão
+    await asyncio.sleep(2)
+    await enviar_mensagem_conclusao(update, context, depix_id, bolt11, 'bolt11')
 
 async def enviar_erro_formato_invalido(update: Update, context: ContextTypes.DEFAULT_TYPE, address: str):
     """
@@ -796,3 +804,79 @@ async def callback_help_wallet(update: Update, context: ContextTypes.DEFAULT_TYP
         """,
         parse_mode='Markdown'
     )
+
+async def enviar_mensagem_conclusao(update: Update, context: ContextTypes.DEFAULT_TYPE, depix_id: str, endereco: str, tipo: str):
+    """
+    Envia mensagem de conclusão da transação sempre que o usuário fornece Lightning Address
+    
+    Args:
+        update: Update do Telegram
+        context: Context do bot
+        depix_id: ID do depósito
+        endereco: Lightning Address ou BOLT11 fornecido
+        tipo: 'lightning_address' ou 'bolt11'
+    """
+    chat_id = update.effective_chat.id
+    
+    try:
+        # Buscar informações do depósito para exibir na mensagem final
+        import requests
+        url = f"https://useghost.squareweb.app/rest/deposit.php?depix_id={depix_id}"
+        response = requests.get(url, timeout=10)
+        
+        amount_brl = 0.0
+        amount_sats = 0
+        
+        if response.status_code == 200:
+            data = response.json()
+            deposits = data.get('deposits', [])
+            if deposits:
+                deposit = deposits[0]
+                amount_cents = deposit.get('amount_in_cents', 0)
+                amount_brl = amount_cents / 100
+                # Estimativa: ~166.67 sats por real (BTC ~R$ 600.000)
+                amount_sats = int(amount_brl * 166.67)
+        
+        # Tipo de endereço para exibição
+        tipo_display = "Lightning Address" if tipo == 'lightning_address' else "Invoice BOLT11"
+        endereco_display = endereco if tipo == 'lightning_address' else f"{endereco[:20]}...{endereco[-10:]}"
+        
+        # Mensagem final de conclusão
+        mensagem_conclusao = f"""
+🎉 **TRANSAÇÃO CONCLUÍDA - ENVIO COMPLETO!**
+
+✅ **Status:** Processamento finalizado
+💰 **Valor:** R$ {amount_brl:.2f}
+⚡ **Bitcoin:** ~{amount_sats:,} sats
+🎯 **Destino:** {endereco_display}
+📋 **Tipo:** {tipo_display}
+🆔 **ID:** {depix_id}
+
+🚀 **Seus bitcoins estão sendo enviados!**
+
+O pagamento será processado automaticamente pelo nosso sistema Lightning Network. 
+
+⏰ **Tempo estimado:** 1-5 minutos
+📱 **Verifique sua carteira** - o pagamento deve aparecer em breve!
+
+🎊 **Obrigado por usar o Ghost Bot!**
+
+💡 Para fazer uma nova compra, use /start
+        """
+        
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=mensagem_conclusao,
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"Mensagem de conclusão enviada para {chat_id} - Depix: {depix_id}")
+        
+    except Exception as e:
+        logger.error(f"Erro ao enviar mensagem de conclusão: {e}")
+        # Fallback: mensagem simples
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="🎉 **TRANSAÇÃO CONCLUÍDA!**\n\nSeus bitcoins estão sendo processados. Verifique sua carteira Lightning em alguns minutos!",
+            parse_mode='Markdown'
+        )

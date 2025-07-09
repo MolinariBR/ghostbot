@@ -10,8 +10,18 @@ import time
 import sys
 import os
 from datetime import datetime
+from decimal import Decimal
+
+# Adiciona o diretório do projeto ao path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Importa módulos internos do Ghost Bot
 from ghost.api.lightning_address import LightningAddressResolver
+from ghost.api.api_binance import binance_api
+from ghost.api.api_coingecko import coingecko_api
+from ghost.limites.limite_valor import LimitesValor
+from ghost.limites.comissao import ComissaoCalculator
+from ghost.handlers.lightning_handler import GhostBotLightningHandler
 
 class TesteFluxoCompleto:
     def __init__(self):
@@ -23,10 +33,18 @@ class TesteFluxoCompleto:
             self.telegram_api_url = f"https://api.telegram.org/bot{self.bot_token}"
             
             # Dados do teste
-            self.valor_compra = "5"
+            self.valor_compra = "10"  # Valor mínimo correto é R$ 10,00
             self.lightning_address = "bouncyflight79@walletofsatoshi.com"
             self.pedido_id = None
             self.teste_iniciado = datetime.now()
+            
+            # Inicializa handlers e APIs
+            self.lightning_handler = GhostBotLightningHandler(self.bot_token)
+            self.limites = LimitesValor()
+            self.comissao_calc = ComissaoCalculator()
+            
+            # Escolhe API de cotação (Binance como primária, CoinGecko como fallback)
+            self.api_cotacao = binance_api
             
         except Exception as e:
             print(f"❌ Erro na inicialização: {e}")
@@ -71,20 +89,116 @@ class TesteFluxoCompleto:
         
         return False
     
+    def calcular_comissao_fallback(self, valor_reais):
+        """Fallback para cálculo de comissão quando a API falha"""
+        try:
+            valor = float(valor_reais)
+            
+            # Estrutura de comissões do Ghost Bot
+            if valor >= 10 and valor <= 500:
+                # Faixa de R$ 10 a R$ 500: 10%
+                taxa_percentual = 10.0
+                taxa_fixa = 0.0
+                comissao_total = valor * 0.10
+                
+            elif valor > 500 and valor <= 1000:
+                # Faixa de R$ 500 a R$ 1000: 7%
+                taxa_percentual = 7.0
+                taxa_fixa = 0.0
+                comissao_total = valor * 0.07
+                
+            elif valor > 1000:
+                # Acima de R$ 1000: 5%
+                taxa_percentual = 5.0
+                taxa_fixa = 0.0
+                comissao_total = valor * 0.05
+                
+            else:
+                # Abaixo de R$ 10 (não deveria acontecer devido aos limites)
+                taxa_percentual = 10.0
+                taxa_fixa = 0.0
+                comissao_total = valor * 0.10
+            
+            print(f"📊 Comissão fallback calculada:")
+            print(f"   💰 Valor: R$ {valor:.2f}")
+            print(f"   📈 Taxa: {taxa_percentual:.1f}%")
+            print(f"   💸 Comissão: R$ {comissao_total:.2f}")
+            
+            return {
+                'valor_original': valor,
+                'percentual': taxa_percentual / 100,  # Converte para decimal
+                'fixo': taxa_fixa,
+                'comissao_total': comissao_total,
+                'taxa_percentual': taxa_percentual
+            }
+            
+        except Exception as e:
+            print(f"❌ Erro no fallback de comissão: {e}")
+            # Fallback final: 10% para valores até R$ 500
+            return {
+                'valor_original': float(valor_reais),
+                'percentual': 0.10,
+                'fixo': 0.0,
+                'comissao_total': float(valor_reais) * 0.10,
+                'taxa_percentual': 10.0
+            }
+
     def criar_pedido_backend(self):
         """Cria um pedido direto no backend para simular a compra"""
         try:
             # Usa a mesma estrutura dos outros testes
             self.depix_id = f"DEPIX_{self.chat_id}_{int(time.time())}"
+            
+            # Valida limites antes de criar pedido
+            if not self.validar_limites_valor():
+                return False
+            
+            # Calcula comissão usando nosso sistema
+            valor_decimal = Decimal(str(self.valor_compra))
+            try:
+                comissao_info = self.comissao_calc.calcular_comissao(float(valor_decimal), 'BTC')
+                
+                if comissao_info and isinstance(comissao_info, dict):
+                    # Verifica se tem todas as chaves necessárias
+                    if 'comissao_total' in comissao_info:
+                        print(f"💰 Comissão calculada: R$ {comissao_info['comissao_total']:.2f}")
+                        if 'percentual' in comissao_info and 'fixo' in comissao_info:
+                            print(f"   📊 {comissao_info['percentual']*100:.1f}% + R$ {comissao_info['fixo']:.2f}")
+                            taxa_percentual = float(comissao_info['percentual'] * 100)
+                        else:
+                            # Usa o fallback se não tem os campos necessários
+                            print("⚠️ Comissão incompleta, usando fallback inteligente")
+                            comissao_fallback = self.calcular_comissao_fallback(self.valor_compra)
+                            taxa_percentual = comissao_fallback['taxa_percentual']
+                    else:
+                        # Usa o fallback se não tem comissao_total
+                        print("⚠️ Comissão sem 'comissao_total', usando fallback inteligente")
+                        comissao_fallback = self.calcular_comissao_fallback(self.valor_compra)
+                        taxa_percentual = comissao_fallback['taxa_percentual']
+                else:
+                    # Usa o fallback se comissao_info é inválido
+                    print("⚠️ Comissão inválida, usando fallback inteligente")
+                    comissao_fallback = self.calcular_comissao_fallback(self.valor_compra)
+                    taxa_percentual = comissao_fallback['taxa_percentual']
+                    
+            except Exception as e:
+                print(f"⚠️ Erro calculando comissão: {e}")
+                print("🔄 Usando fallback inteligente de comissão")
+                comissao_fallback = self.calcular_comissao_fallback(self.valor_compra)
+                taxa_percentual = comissao_fallback['taxa_percentual']
+            
+            # Calcula valor BTC usando nossa API de cotação
+            valor_btc = self.calcular_valor_btc_real()
+            
             payload = {
                 "chatid": self.chat_id,
                 "moeda": "BTC",
                 "rede": "⚡ Lightning", 
                 "amount_in_cents": int(float(self.valor_compra) * 100),  # Converte para centavos
-                "taxa": 5.0,
+                "taxa": taxa_percentual,
                 "address": self.lightning_address,
                 "forma_pagamento": "PIX",
-                "send": 0.000014,  # Valor BTC proporcional para R$ 5
+                "send": float(valor_btc),  # Valor BTC calculado via API real
                 "user_id": int(self.chat_id),
                 "depix_id": self.depix_id,
                 "status": "pending",
@@ -106,6 +220,7 @@ class TesteFluxoCompleto:
                     print(f"   💰 Valor: R$ {self.valor_compra}")
                     print(f"   ⚡ Rede: Lightning")
                     print(f"   🆔 depix_id: {self.depix_id}")
+                    print(f"   📊 Taxa: {taxa_percentual:.1f}%")
                     return True
                 else:
                     print(f"❌ Erro criando pedido: {data}")
@@ -270,8 +385,26 @@ class TesteFluxoCompleto:
             return False
     
     def simular_envio_lightning_address(self):
-        """Simula o cliente fornecendo Lightning Address"""
-        return self.enviar_mensagem_bot(self.lightning_address, 5)
+        """Simula o cliente fornecendo Lightning Address usando o handler integrado"""
+        try:
+            # Valida o Lightning Address usando o handler
+            if not self.lightning_handler.is_lightning_address(self.lightning_address):
+                print(f"❌ Lightning Address inválido: {self.lightning_address}")
+                return False
+            
+            print(f"✅ Lightning Address validado: {self.lightning_address}")
+            
+            # Envia a mensagem
+            result = self.enviar_mensagem_bot(self.lightning_address, 5)
+            
+            if result:
+                print("📋 Lightning Address processado pelo handler interno")
+            
+            return result
+            
+        except Exception as e:
+            print(f"❌ Erro no handler Lightning: {e}")
+            return self.enviar_mensagem_bot(self.lightning_address, 5)  # Fallback
     
     def verificar_finalizacao(self):
         """Verifica se o pedido foi finalizado e BTC enviado"""
@@ -316,12 +449,87 @@ class TesteFluxoCompleto:
         
         return False
     
+    def validar_limites_valor(self):
+        """Valida se o valor está dentro dos limites permitidos"""
+        try:
+            valor = float(self.valor_compra)
+            
+            # Verifica limites mínimos e máximos
+            if valor < self.limites.PIX_COMPRA_MIN:
+                print(f"❌ Valor abaixo do mínimo: R$ {valor:.2f} < R$ {self.limites.PIX_COMPRA_MIN:.2f}")
+                return False
+            
+            if valor > self.limites.PIX_COMPRA_MAX:
+                print(f"❌ Valor acima do máximo: R$ {valor:.2f} > R$ {self.limites.PIX_COMPRA_MAX:.2f}")
+                return False
+            
+            print(f"✅ Valor dentro dos limites: R$ {self.limites.PIX_COMPRA_MIN:.2f} ≤ R$ {valor:.2f} ≤ R$ {self.limites.PIX_COMPRA_MAX:.2f}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Erro validando limites: {e}")
+            return False
+    
+    def calcular_valor_btc_real(self):
+        """Calcula o valor BTC usando nossa API de cotação real"""
+        try:
+            print("💰 Obtendo cotação real do Bitcoin...")
+            
+            # Tenta Binance primeiro
+            try:
+                price_brl = self.api_cotacao.get_btc_price_brl()
+                valor_btc = Decimal(str(self.valor_compra)) / price_brl
+                print(f"✅ Binance - BTC/BRL: R$ {price_brl:,.2f}")
+                print(f"📊 R$ {self.valor_compra} = {valor_btc:.8f} BTC")
+                return valor_btc
+                
+            except Exception as e:
+                print(f"⚠️ Erro na Binance: {e}")
+                print("🔄 Tentando CoinGecko como fallback...")
+                
+                # Fallback para CoinGecko
+                price_brl = coingecko_api.get_btc_price_brl()
+                valor_btc = Decimal(str(self.valor_compra)) / price_brl
+                print(f"✅ CoinGecko - BTC/BRL: R$ {price_brl:,.2f}")
+                print(f"📊 R$ {self.valor_compra} = {valor_btc:.8f} BTC")
+                return valor_btc
+                
+        except Exception as e:
+            print(f"❌ Erro em todas as APIs: {e}")
+            # Fallback final
+            fallback_price = Decimal('350000')  # R$ 350k estimado
+            valor_btc = Decimal(str(self.valor_compra)) / fallback_price
+            print(f"⚠️ Usando cotação estimada: R$ {fallback_price:,.2f}")
+            print(f"📊 R$ {self.valor_compra} = {valor_btc:.8f} BTC (estimado)")
+            return valor_btc
+    
+    def calcular_sats_equivalente(self, valor_reais):
+        """Calcula o valor em sats equivalente ao valor em reais usando nossa API"""
+        try:
+            print(f"🔢 Calculando {valor_reais} reais em sats...")
+            
+            # Usa o mesmo método de cotação real
+            valor_btc = self.calcular_valor_btc_real()
+            valor_sats = int(valor_btc * 100_000_000)  # 1 BTC = 100M sats
+            
+            print(f"📊 Resultado: {valor_sats:,} sats")
+            return valor_sats
+            
+        except Exception as e:
+            print(f"❌ Erro calculando sats: {e}")
+            # Fallback para valor mínimo
+            return 1000
+
     def enviar_btc_lightning_real(self):
         """Envia BTC real para o Lightning Address usando Voltz"""
         try:
             print("\n🚀 Enviando BTC real via Lightning Address (Voltz)...")
-            # 1. Resolver Lightning Address para invoice BOLT11
-            valor_sats = 3500  # Valor fixo de 3500 sats
+            
+            # 1. Calcula valor em sats baseado na cotação atual
+            valor_sats = self.calcular_sats_equivalente(self.valor_compra)
+            print(f"🔢 Valor calculado para envio: {valor_sats:,} sats")
+            
+            # 2. Resolver Lightning Address para invoice BOLT11
             resolver = LightningAddressResolver()
             result = resolver.resolve_to_bolt11(self.lightning_address, valor_sats)
             if not result['success']:
@@ -329,7 +537,8 @@ class TesteFluxoCompleto:
                 return False
             bolt11 = result['bolt11']
             print(f"✅ Invoice BOLT11 obtido: {bolt11[:60]}...")
-            # 2. Chamar backend Voltz para pagar a invoice
+            
+            # 3. Chamar backend Voltz para pagar a invoice
             payload = {
                 'action': 'pay_invoice',
                 'depix_id': self.depix_id,
@@ -359,7 +568,10 @@ class TesteFluxoCompleto:
         print(f"⚡ Rede: Lightning")
         print(f"📱 Chat ID: {self.chat_id}")
         print(f"🌐 Backend: {self.backend_url}")
-        print(f"🔢 Valor Lightning a ser enviado: 3500 sats")
+        print(f"🔢 Valor Lightning: calculado via API real (Binance/CoinGecko)")
+        print(f"🏦 APIs integradas: {self.api_cotacao.__class__.__name__}")
+        print(f"📊 Limites: R$ {self.limites.PIX_COMPRA_MIN} - R$ {self.limites.PIX_COMPRA_MAX}")
+        print(f"⚙️ Sistema de comissões: ativado")
         print("=" * 70)
         
         # PASSO 1: Iniciar conversa com bot
