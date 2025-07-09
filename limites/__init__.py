@@ -9,7 +9,11 @@ from .limite_valor import (
     validar_valor_pix_venda,
     obter_limites_pix,
     obter_mensagem_limites_pix_compra,
-    obter_mensagem_limites_pix_venda
+    obter_mensagem_limites_pix_venda,
+    validar_compra_com_limite_progressivo,
+    calcular_limite_atual,
+    obter_info_limites_usuario,
+    obter_mensagem_limite_progressivo
 )
 
 __all__ = [
@@ -18,5 +22,9 @@ __all__ = [
     'validar_valor_pix_venda',
     'obter_limites_pix',
     'obter_mensagem_limites_pix_compra',
-    'obter_mensagem_limites_pix_venda'
+    'obter_mensagem_limites_pix_venda',
+    'validar_compra_com_limite_progressivo',
+    'calcular_limite_atual',
+    'obter_info_limites_usuario',
+    'obter_mensagem_limite_progressivo'
 ]

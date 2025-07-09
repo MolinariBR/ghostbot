@@ -307,19 +307,6 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
         valor_str = update.message.text.replace('R$', '').replace(',', '.').strip()
         valor = float(re.sub(r'[^0-9.]', '', valor_str))
         
-        # 🚀 NOVA INTEGRAÇÃO: Validação de Limites PIX
-        validacao = LimitesValor.validar_pix_compra(valor)
-        if not validacao['valido']:
-            await update.message.reply_text(
-                f"❌ {validacao['mensagem']}\n\n"
-                f"💡 {validacao['dica']}\n\n"
-                "💵 *Digite o valor desejado* (ex: 150,50) ou use os valores sugeridos abaixo:",
-                parse_mode='Markdown'
-            )
-            return QUANTIDADE
-        
-        context.user_data['valor_brl'] = valor
-
         # Consulta histórico de depósitos confirmados do usuário
         url = f"https://useghost.squareweb.app/rest/deposit.php?chatid={user_id}"
         resp = requests.get(url, timeout=10)
@@ -328,21 +315,60 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
         deposits = data.get('deposits', [])
         confirmados = [d for d in deposits if d.get('status', '').lower() == 'confirmado']
         num_compras = len(confirmados)
+        
+        # Obtém CPF se já foi fornecido anteriormente
+        cpf = context.user_data.get('cpf')
+        
+        # 🚀 NOVA INTEGRAÇÃO: Validação de Limites PIX + Progressivos
+        validacao = LimitesValor.validar_compra_progressiva(valor, num_compras, cpf)
+        if not validacao['valido']:
+            if validacao['erro'] == 'LIMITE_PROGRESSIVO':
+                # Mensagem específica para limite progressivo
+                mensagem = f"❌ {validacao['mensagem']}\n\n"
+                mensagem += f"💡 {validacao['dica']}\n\n"
+                
+                # Adiciona informações sobre o limite atual
+                info_limite = LimitesValor.obter_info_limite_progressivo(num_compras, cpf)
+                mensagem += f"📊 *Seus Limites Atuais*\n"
+                mensagem += f"🔹 Limite atual: R$ {info_limite['limite_atual']:.2f}\n"
+                mensagem += f"🔹 Compras realizadas: {info_limite['num_compras']}\n"
+                
+                if info_limite['proximo_limite']:
+                    mensagem += f"🎯 Próximo limite: R$ {info_limite['proximo_limite']:.2f}\n"
+                
+                if validacao.get('cpf_necessario', False):
+                    mensagem += f"\n🔒 Para aumentar o limite, forneça seu CPF."
+                
+                await update.message.reply_text(
+                    mensagem,
+                    parse_mode='Markdown'
+                )
+            else:
+                # Mensagem para limites PIX básicos
+                await update.message.reply_text(
+                    f"❌ {validacao['mensagem']}\n\n"
+                    f"💡 {validacao['dica']}\n\n"
+                    "💵 *Digite o valor desejado* (ex: 150,50) ou use os valores sugeridos abaixo:",
+                    parse_mode='Markdown'
+                )
+            return QUANTIDADE
+        
+        context.user_data['valor_brl'] = valor
 
-        # Lógica de limites progressivos
+        # Lógica de limites progressivos legada (mantida para compatibilidade)
         if num_compras == 0:
-            limite = 500.00
+            limite_legado = 500.00
         else:
-            limite = 850.00
+            limite_legado = 850.00
 
-        if valor > limite:
+        if valor > limite_legado:
             context.user_data['solicitar_cpf'] = True
             await update.message.reply_text(
-                f"🔒 Para compras acima de R$ {limite:,.2f} é necessário informar o CPF.\n\nPor favor, digite seu CPF (apenas números):"
+                f"🔒 Para compras acima de R$ {limite_legado:,.2f} é necessário informar o CPF.\n\nPor favor, digite seu CPF (apenas números):"
             )
             return SOLICITAR_CPF
         else:
-            context.user_data['cpf'] = None
+            context.user_data['cpf'] = cpf
             return await resumo_compra(update, context)
     except ValueError:
         # Trata erro de conversão de valor
