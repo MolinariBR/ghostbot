@@ -1,0 +1,197 @@
+name: Ghost Bot Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * *'  # Executa diariamente às 02:00
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: [3.9, 3.10, 3.11]
+        test-type: [unit, integration, performance]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r tests/requirements-test.txt
+    
+    - name: Configure test environment
+      run: |
+        python tests/ci_utils.py setup
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        BACKEND_URL: ${{ secrets.BACKEND_URL }}
+        CHAT_ID_TEST: ${{ secrets.CHAT_ID_TEST }}
+        DEPIX_API_KEY: ${{ secrets.DEPIX_API_KEY }}
+        VOLTZ_API_KEY: ${{ secrets.VOLTZ_API_KEY }}
+        LIGHTNING_ADDRESS_TEST: ${{ secrets.LIGHTNING_ADDRESS_TEST }}
+    
+    - name: Run unit tests
+      if: matrix.test-type == 'unit'
+      run: |
+        pytest tests/core/ -m "not integration and not performance" --junitxml=test-results-unit.xml
+    
+    - name: Run integration tests
+      if: matrix.test-type == 'integration'
+      run: |
+        python tests/ci_utils.py test
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        BACKEND_URL: ${{ secrets.BACKEND_URL }}
+        CHAT_ID_TEST: ${{ secrets.CHAT_ID_TEST }}
+    
+    - name: Run performance tests
+      if: matrix.test-type == 'performance'
+      run: |
+        timeout 300 python tests/scenarios/test_performance.py || true
+    
+    - name: Generate reports
+      if: always()
+      run: |
+        python tests/ci_utils.py report
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.python-version }}-${{ matrix.test-type }}
+        path: |
+          test-results-*.xml
+          tests/reports/
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      if: matrix.test-type == 'unit'
+      with:
+        file: ./tests/reports/coverage/coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+    
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const path = './tests/reports/';
+          if (fs.existsSync(path)) {
+            const files = fs.readdirSync(path);
+            const reportFile = files.find(f => f.startsWith('relatorio_suite_'));
+            if (reportFile) {
+              const report = JSON.parse(fs.readFileSync(path + reportFile, 'utf8'));
+              const comment = `
+              ## 🧪 Resultados dos Testes
+              
+              **Taxa de Sucesso:** ${(report.taxa_sucesso * 100).toFixed(1)}%
+              **Testes Executados:** ${report.testes_executados}
+              **Sucessos:** ${report.sucessos}
+              **Falhas:** ${report.falhas}
+              **Duração:** ${report.duracao_total_segundos.toFixed(1)}s
+              
+              ${report.taxa_sucesso >= 0.8 ? '✅ Testes aprovados!' : '❌ Testes falharam!'}
+              `;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
+          }
+
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Run security scan
+      uses: securecodewarrior/github-action-add-sarif@v1
+      with:
+        sarif-file: 'security-scan.sarif'
+    
+    - name: Check for secrets
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+
+  deploy:
+    needs: [test, security]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Deploy to staging
+      run: |
+        echo "Deploying to staging environment..."
+        # Adicione aqui os comandos de deploy
+    
+    - name: Run smoke tests
+      run: |
+        python tests/run_all_tests.py --modo rapido
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN_STAGING }}
+        BACKEND_URL: ${{ secrets.BACKEND_URL_STAGING }}
+        CHAT_ID_TEST: ${{ secrets.CHAT_ID_TEST }}
+    
+    - name: Deploy to production
+      if: success()
+      run: |
+        echo "Deploying to production environment..."
+        # Adicione aqui os comandos de deploy para produção
+
+  notification:
+    needs: [test, security, deploy]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Notify Telegram
+      uses: appleboy/telegram-action@master
+      with:
+        to: ${{ secrets.TELEGRAM_CHAT_ID }}
+        token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        message: |
+          🚀 Ghost Bot CI/CD Pipeline
+          
+          **Branch:** ${{ github.ref }}
+          **Commit:** ${{ github.sha }}
+          **Status:** ${{ job.status }}
+          
+          **Testes:** ${{ needs.test.result }}
+          **Segurança:** ${{ needs.security.result }}
+          **Deploy:** ${{ needs.deploy.result }}
+          
+          [Ver detalhes](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})

@@ -1,0 +1,24 @@
+{
+    "test_users": [
+        {
+            "chat_id": "7910260237",
+            "lightning_address": "bouncyflight79@walletofsatoshi.com",
+            "description": "Usuário padrão de teste"
+        }
+    ],
+    "test_values": {
+        "valor_minimo": "10",
+        "valor_medio": "50",
+        "valor_maximo": "500"
+    },
+    "timeouts": {
+        "aguardar_deteccao": 15,
+        "processamento_final": 20,
+        "api_timeout": 30
+    },
+    "endpoints": {
+        "backend_url": "https://useghost.squareweb.app",
+        "webhook_depix": "/square_webhook.php",
+        "webhook_blockchain": "/depix/webhook.php"
+    }
+}
