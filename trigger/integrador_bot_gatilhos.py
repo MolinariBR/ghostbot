@@ -33,21 +33,24 @@ except ImportError:
 # Importar classes do Telegram
 try:
     from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+    print("✅ Usando python-telegram-bot")
 except ImportError:
-    try:
-        from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-    except ImportError:
-        # Mock das classes se nenhuma estiver disponível
-        class InlineKeyboardMarkup:
-            def __init__(self):
-                pass
-            def row(self, *args):
-                pass
-        
-        class InlineKeyboardButton:
-            def __init__(self, text, callback_data=None):
-                self.text = text
-                self.callback_data = callback_data
+    # Mock das classes se python-telegram-bot não estiver disponível
+    print("AVISO: python-telegram-bot não disponível, usando mocks")
+    class InlineKeyboardMarkup:
+        def __init__(self, *args, **kwargs):
+            self.keyboard = []
+        def row(self, *args):
+            self.keyboard.append(list(args))
+        def add(self, *args):
+            for button in args:
+                self.keyboard.append([button])
+    
+    class InlineKeyboardButton:
+        def __init__(self, text, callback_data=None, url=None, **kwargs):
+            self.text = text
+            self.callback_data = callback_data
+            self.url = url
 
 logger = logging.getLogger('integrador_bot')
 

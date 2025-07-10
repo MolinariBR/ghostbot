@@ -52,12 +52,6 @@ except ImportError:
     ComissaoCalculator = None
 
 try:
-    from trigger.lightning_handler import LightningHandler
-except ImportError:
-    print("⚠️ Não foi possível importar trigger.lightning_handler, usando fallback.")
-    LightningHandler = None
-
-try:
     from api.lightning_address import LightningAddressResolver
 except ImportError:
     print("⚠️ Não foi possível importar api.lightning_address, usando fallback.")
@@ -71,16 +65,28 @@ except ImportError:
     SmartPixMonitor = None
 
 try:
-    from trigger.sistema_gatilhos import trigger_system
+    from trigger.sistema_gatilhos import trigger_system, TriggerSystem as SistemaGatilhos
 except ImportError:
-    print("⚠️ Não foi possível importar trigger.sistema_gatilhos, usando fallback.")
-    trigger_system = None
+    try:
+        from trigger.simple_system import simple_trigger_system as trigger_system, SimpleTriggerSystem as SistemaGatilhos
+        print("⚠️ Sistema de gatilhos principal não encontrado, usando sistema simplificado.")
+    except ImportError:
+        print("⚠️ Não foi possível importar trigger.sistema_gatilhos, usando fallback.")
+        trigger_system = None
+        SistemaGatilhos = None
 
 try:
     from trigger.integrador_bot_gatilhos import BotTriggerIntegrator
 except ImportError:
     print("⚠️ Não foi possível importar trigger.integrador_bot_gatilhos, usando fallback.")
     BotTriggerIntegrator = None
+
+# Mover o import do LightningHandler para cá, com trigger
+try:
+    from trigger.lightning_handler import LightningHandler
+except ImportError:
+    print("⚠️ Não foi possível importar trigger.lightning_handler, usando fallback.")
+    LightningHandler = None
 
 # ==================== CREDENCIAIS VOLTZ ====================
 VOLTZ_CONFIG = {
