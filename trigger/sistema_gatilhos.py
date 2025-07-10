@@ -54,6 +54,7 @@ class EventTriggerSystem:
     
     def __init__(self):
         self.active_orders: Dict[str, Dict[str, Any]] = {}
+        self.message_sender_callback = None  # Callback para envio de mensagens
         self.event_handlers = {
             TriggerEvent.USER_CLICKED_BUY: self.handle_buy_clicked,
             TriggerEvent.CURRENCY_SELECTED: self.handle_currency_selected,
@@ -324,6 +325,24 @@ class EventTriggerSystem:
         
         return True
     
+    def set_message_sender(self, callback):
+        """Define callback para envio de mensagens"""
+        self.message_sender_callback = callback
+        logger.info("✅ Callback de envio de mensagens registrado")
+    
+    async def send_message(self, chat_id: str, text: str, parse_mode: str = 'Markdown'):
+        """Envia mensagem usando o callback registrado"""
+        if self.message_sender_callback:
+            try:
+                await self.message_sender_callback(chat_id, text, parse_mode)
+                logger.info(f"✅ Mensagem enviada para {chat_id}")
+                return True
+            except Exception as e:
+                logger.error(f"❌ Erro ao enviar mensagem via callback: {e}")
+        else:
+            logger.warning("⚠️ Callback de envio de mensagens não registrado")
+        return False
+    
     # ============================================================================
     # MÉTODOS DE INTEGRAÇÃO
     # ============================================================================
@@ -478,8 +497,66 @@ class EventTriggerSystem:
     def send_address_request(self, chat_id: str, order: Dict):
         """Solicita endereço do usuário"""
         logger.info(f"📤 Solicitando endereço para {chat_id}")
-        # Implementar envio via bot do Telegram
-        pass
+        
+        # Criar mensagem personalizada baseada no tipo de compra
+        moeda = order.get('currency', 'Lightning')
+        network = order.get('network', 'Lightning')
+        
+        # Mensagem para Lightning
+        if 'lightning' in network.lower() or 'lightning' in moeda.lower():
+            mensagem = (
+                "⚡ *PIX CONFIRMADO - LIGHTNING PAYMENT* ⚡\n\n"
+                "🎉 Seu pagamento PIX foi confirmado com sucesso!\n"
+                "⚡ Agora você receberá seus bitcoins via Lightning Network.\n\n"
+                "📮 *Forneça seu endereço Lightning:*\n"
+                "• Lightning Address: `usuario@wallet.com`\n"
+                "• BOLT11 Invoice: `lnbc1...`\n\n"
+                "💡 *Recomendações de carteiras:*\n"
+                "• Phoenix Wallet\n"
+                "• Wallet of Satoshi\n"
+                "• Muun Wallet\n"
+                "• BlueWallet\n\n"
+                "🔤 *Digite seu Lightning Address ou Invoice:*"
+            )
+        else:
+            # Mensagem para outras moedas
+            mensagem = (
+                f"✅ *PIX CONFIRMADO - {moeda.upper()}* ✅\n\n"
+                f"🎉 Seu pagamento PIX foi confirmado com sucesso!\n"
+                f"💎 Agora você receberá seus {moeda.upper()} na rede {network}.\n\n"
+                f"📮 *Forneça seu endereço {moeda.upper()}:*\n"
+                f"• Rede: {network}\n"
+                f"• Formato: Endereço válido para {network}\n\n"
+                f"⚠️ *IMPORTANTE:* Verifique se o endereço está correto.\n"
+                f"Envios para endereços incorretos não podem ser revertidos.\n\n"
+                f"🔤 *Digite seu endereço {moeda.upper()}:*"
+            )
+        
+        # Tentar usar o callback primeiro
+        import asyncio
+        try:
+            # Criar e executar task assíncrona
+            async def send_async():
+                return await self.send_message(chat_id, mensagem)
+            
+            # Executar de forma síncrona
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Se loop está rodando, criar task
+                    task = loop.create_task(send_async())
+                    logger.info(f"📨 Task de envio criada para {chat_id}")
+                else:
+                    # Se loop não está rodando, executar
+                    loop.run_until_complete(send_async())
+            except RuntimeError:
+                # Criar novo loop se necessário
+                asyncio.run(send_async())
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao enviar mensagem para {chat_id}: {e}")
+            # Fallback: log para debug
+            logger.info(f"⚠️ Fallback: Usuário {chat_id} precisa fornecer endereço manually")
     
     # ============================================================================
     # MÉTODOS DE INTEGRAÇÃO EXTERNA

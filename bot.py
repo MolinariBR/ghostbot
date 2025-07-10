@@ -76,6 +76,9 @@ from config import BotConfig, LogConfig
 from menus import setup_menus, get_compra_conversation, get_venda_conversation
 from menus.menu_compra import iniciar_compra
 
+# Variável global para a aplicação do bot
+application = None
+
 def setup_logging():
     """
     Configura o sistema de logging com handlers para console e arquivo.
@@ -175,6 +178,9 @@ def init_bot():
             .token(Config.TELEGRAM_BOT_TOKEN)
             .build()
         )
+        
+        # Tornar a aplicação globalmente acessível
+        globals()['application'] = application
         
         logger.info("Aplicação do bot inicializada com sucesso.")
         return application
@@ -493,9 +499,27 @@ def setup_handlers(application):
     # 🚀 INTEGRAÇÃO: SISTEMA DE GATILHOS PARA PRODUÇÃO 🚀
     try:
         from trigger.bot_integration import setup_trigger_integration
+        from trigger.sistema_gatilhos import trigger_system
         
         # Configura integração com sistema de gatilhos
         trigger_integration = setup_trigger_integration(application)
+        
+        # Registrar callback de envio de mensagens
+        async def send_message_callback(chat_id: str, text: str, parse_mode: str = 'Markdown'):
+            """Callback para envio de mensagens via sistema de gatilhos"""
+            try:
+                await application.bot.send_message(
+                    chat_id=int(chat_id),
+                    text=text,
+                    parse_mode=parse_mode
+                )
+                return True
+            except Exception as e:
+                logger.error(f"❌ Erro ao enviar mensagem via callback: {e}")
+                return False
+        
+        # Registrar o callback no sistema de gatilhos
+        trigger_system.set_message_sender(send_message_callback)
         
         if trigger_integration:
             logger.info("✅ Sistema de gatilhos integrado com sucesso para produção!")

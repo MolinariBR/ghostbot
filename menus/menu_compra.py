@@ -1192,6 +1192,19 @@ async def processar_pix(update: Update, context) -> int:
         # Integração direta com sistema de gatilhos
         try:
             from trigger.sistema_gatilhos import trigger_system, TriggerEvent
+            
+            # Habilitar usuário no sistema de gatilhos automaticamente para Lightning
+            chat_id = str(update.effective_user.id)
+            try:
+                from trigger.bot_integration import setup_trigger_integration
+                # Verificar se existe integração ativa
+                if hasattr(setup_trigger_integration, '_integration_instance'):
+                    integration = setup_trigger_integration._integration_instance
+                    integration.enable_for_user(chat_id)
+                    logger.info(f"✅ Usuário {chat_id} habilitado no sistema de gatilhos para Lightning")
+            except Exception as e:
+                logger.warning(f"⚠️ Não foi possível habilitar usuário no sistema de gatilhos: {e}")
+            
             trigger_system.trigger_event(
                 TriggerEvent.PIX_PAYMENT_DETECTED,
                 str(update.effective_user.id),
