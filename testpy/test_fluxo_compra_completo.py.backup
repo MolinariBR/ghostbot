@@ -16,71 +16,23 @@ from decimal import Decimal
 # Adiciona o diretório do projeto ao path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Adiciona o diretório trigger ao path para importações
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'trigger')))
-
-# Adiciona o diretório do projeto ao path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-# Importa módulos internos do Ghost Bot com fallbacks individuais
+# Importa módulos internos do Ghost Bot
 try:
-    from api.api_binance import binance_api
+    from ghost.api.lightning_address import LightningAddressResolver
+    from ghost.api.api_binance import binance_api
+    from ghost.api.api_coingecko import coingecko_api
+    from ghost.limites.limite_valor import LimitesValor
+    from ghost.limites.comissao import ComissaoCalculator
+    from ghost.handlers.lightning_handler import GhostBotLightningHandler
 except ImportError:
-    print("⚠️ api.api_binance não encontrado, usando mock.")
-    class BinanceApiMock:
-        @staticmethod
-        def get_btc_price_brl():
-            return 350000.0
-    binance_api = BinanceApiMock()
-
-try:
-    from api.api_coingecko import coingecko_api
-except ImportError:
-    print("⚠️ Não foi possível importar api.api_coingecko, usando fallback.")
-    coingecko_api = None
-
-try:
-    from limites.limite_valor import LimitesValor
-except ImportError:
-    print("⚠️ Não foi possível importar limites.limite_valor, usando fallback.")
-    LimitesValor = None
-
-try:
-    from limites.comissao import ComissaoCalculator
-except ImportError:
-    print("⚠️ Não foi possível importar limites.comissao, usando fallback.")
-    ComissaoCalculator = None
-
-try:
-    from trigger.lightning_handler import LightningHandler
-except ImportError:
-    print("⚠️ Não foi possível importar trigger.lightning_handler, usando fallback.")
-    LightningHandler = None
-
-try:
-    from api.lightning_address import LightningAddressResolver
-except ImportError:
-    print("⚠️ Não foi possível importar api.lightning_address, usando fallback.")
+    # Fallback se módulos não estão disponíveis
+    print("⚠️ Alguns módulos não disponíveis, usando fallbacks")
     LightningAddressResolver = None
-
-# Importa módulos do diretório trigger individualmente
-try:
-    from trigger.smart_pix_monitor import SmartPixMonitor
-except ImportError:
-    print("⚠️ Não foi possível importar trigger.smart_pix_monitor, usando fallback.")
-    SmartPixMonitor = None
-
-try:
-    from trigger.sistema_gatilhos import trigger_system
-except ImportError:
-    print("⚠️ Não foi possível importar trigger.sistema_gatilhos, usando fallback.")
-    trigger_system = None
-
-try:
-    from trigger.integrador_bot_gatilhos import BotTriggerIntegrator
-except ImportError:
-    print("⚠️ Não foi possível importar trigger.integrador_bot_gatilhos, usando fallback.")
-    BotTriggerIntegrator = None
+    binance_api = None
+    coingecko_api = None
+    LimitesValor = None
+    ComissaoCalculator = None
+    GhostBotLightningHandler = None
 
 # ==================== CREDENCIAIS VOLTZ ====================
 VOLTZ_CONFIG = {
@@ -108,8 +60,8 @@ class TesteFluxoCompleto:
             self.teste_iniciado = datetime.now()
             
             # Inicializa handlers e APIs com fallbacks
-            if LightningHandler:
-                self.lightning_handler = LightningHandler()
+            if GhostBotLightningHandler:
+                self.lightning_handler = GhostBotLightningHandler(self.bot_token)
             else:
                 self.lightning_handler = None
                 
@@ -242,35 +194,30 @@ class TesteFluxoCompleto:
             
             # Calcula comissão usando nosso sistema ou fallback
             valor_decimal = float(self.valor_compra)
-            if self.comissao_calc:
-                try:
+            try:
+                if self.comissao_calc:
                     comissao_info = self.comissao_calc.calcular_comissao(valor_decimal, 'BTC')
-                    
-                    if comissao_info and isinstance(comissao_info, dict):
-                        # Verifica se tem todas as chaves necessárias
-                        if 'comissao_total' in comissao_info:
-                            print(f"💰 Comissão calculada: R$ {comissao_info['comissao_total']:.2f}")
-                            if 'percentual' in comissao_info and 'fixo' in comissao_info:
-                                print(f"   📊 {comissao_info['percentual']*100:.1f}% + R$ {comissao_info['fixo']:.2f}")
-                                taxa_percentual = float(comissao_info['percentual'] * 100)
-                            else:
-                                # Usa o fallback se não tem os campos necessários
-                                print("⚠️ Comissão incompleta, usando fallback inteligente")
-                                comissao_fallback = self.calcular_comissao_fallback(self.valor_compra)
-                                taxa_percentual = comissao_fallback['taxa_percentual']
+                
+                if comissao_info and isinstance(comissao_info, dict):
+                    # Verifica se tem todas as chaves necessárias
+                    if 'comissao_total' in comissao_info:
+                        print(f"💰 Comissão calculada: R$ {comissao_info['comissao_total']:.2f}")
+                        if 'percentual' in comissao_info and 'fixo' in comissao_info:
+                            print(f"   📊 {comissao_info['percentual']*100:.1f}% + R$ {comissao_info['fixo']:.2f}")
+                            taxa_percentual = float(comissao_info['percentual'] * 100)
                         else:
-                            # Usa o fallback se não tem comissao_total
-                            print("⚠️ Comissão sem 'comissao_total', usando fallback inteligente")
+                            # Usa o fallback se não tem os campos necessários
+                            print("⚠️ Comissão incompleta, usando fallback inteligente")
                             comissao_fallback = self.calcular_comissao_fallback(self.valor_compra)
                             taxa_percentual = comissao_fallback['taxa_percentual']
                     else:
-                        # Usa o fallback se comissao_info é inválido
-                        print("⚠️ Comissão inválida, usando fallback inteligente")
+                        # Usa o fallback se não tem comissao_total
+                        print("⚠️ Comissão sem 'comissao_total', usando fallback inteligente")
                         comissao_fallback = self.calcular_comissao_fallback(self.valor_compra)
                         taxa_percentual = comissao_fallback['taxa_percentual']
-                except Exception as e:
-                    print(f"⚠️ Erro calculando comissão: {e}")
-                    print("🔄 Usando fallback inteligente de comissão")
+                else:
+                    # Usa o fallback se comissao_info é inválido
+                    print("⚠️ Comissão inválida, usando fallback inteligente")
                     comissao_fallback = self.calcular_comissao_fallback(self.valor_compra)
                     taxa_percentual = comissao_fallback['taxa_percentual']
             else:
@@ -278,6 +225,12 @@ class TesteFluxoCompleto:
                 print("⚠️ ComissaoCalculator não disponível, usando fallback")
                 comissao_fallback = self.calcular_comissao_fallback(self.valor_compra)
                 taxa_percentual = comissao_fallback['taxa_percentual']
+                    
+        except Exception as e:
+            print(f"⚠️ Erro calculando comissão: {e}")
+            print("🔄 Usando fallback inteligente de comissão")
+            comissao_fallback = self.calcular_comissao_fallback(self.valor_compra)
+            taxa_percentual = comissao_fallback['taxa_percentual']
             
             # Calcula valor BTC usando nossa API de cotação
             valor_btc = self.calcular_valor_btc_real()
@@ -318,7 +271,6 @@ class TesteFluxoCompleto:
                     print(f"❌ Erro criando pedido: {data}")
             else:
                 print(f"❌ HTTP {response.status_code}: {response.text}")
-                    
         except Exception as e:
             print(f"❌ Erro criando pedido: {e}")
         return False
@@ -432,7 +384,7 @@ class TesteFluxoCompleto:
                         
                         # Verifica se parece ser um log válido
                         if any(keyword in content.lower() for keyword in 
-                            ['lightning', 'bot', 'telegram', 'error', 'info', 'debug']):
+                               ['lightning', 'bot', 'telegram', 'error', 'info', 'debug']):
                             print(f"✅ Log encontrado em: {endpoint}")
                             
                             # Mostra as últimas linhas relevantes
@@ -442,7 +394,7 @@ class TesteFluxoCompleto:
                             print(f"📄 Últimas entradas relevantes:")
                             for line in recent_lines:
                                 if any(keyword in line.lower() for keyword in 
-                                    ['lightning', 'pendente', 'endereço', 'invoice', 'erro', 'address']):
+                                       ['lightning', 'pendente', 'endereço', 'invoice', 'erro', 'address']):
                                     print(f"   🔍 {line.strip()}")
                             
                             logs_encontrados = True
@@ -633,90 +585,6 @@ class TesteFluxoCompleto:
             # Lista de endpoints possíveis para verificar saldo
             endpoints_saldo = [
                 f"{VOLTZ_CONFIG['node_url']}/api/v1/wallet",
-                f"{VOLTZ_CONFIG['node_url']}/api/v1/wallet/balance"
-            ]
-            
-            for endpoint in endpoints_saldo:
-                try:
-                    print(f"[DEBUG] Tentando endpoint: {endpoint}")
-                    response = requests.get(endpoint, headers=headers, timeout=15)
-                    
-                    print(f"[DEBUG] Resposta Voltz: HTTP {response.status_code}")
-                    
-                    if response.status_code == 200:
-                        try:
-                            data = response.json()
-                            
-                            # Diferentes formatos de resposta possíveis
-                            balance_msat = None
-                            if 'balance' in data:
-                                balance_msat = data['balance']
-                            elif 'balance_msat' in data:
-                                balance_msat = data['balance_msat']
-                            elif 'wallet' in data and 'balance' in data['wallet']:
-                                balance_msat = data['wallet']['balance']
-                            
-                            if balance_msat is not None:
-                                balance_sats = int(balance_msat / 1000) if balance_msat else 0
-                                
-                                print(f"✅ Saldo da carteira Voltz:")
-                                print(f"   🔢 Valor bruto da API: {balance_msat:,} msat")
-                                print(f"   📊 Convertido para sats: {balance_sats:,} sats")
-                                print(f"   💰 Equivalente em BTC: {balance_sats/100_000_000:.8f} BTC")
-                                
-                                return {
-                                    'success': True,
-                                    'balance_sats': balance_sats,
-                                    'balance_msat': balance_msat,
-                                    'balance_btc': balance_sats/100_000_000,
-                                    'raw_response': data
-                                }
-                            else:
-                                print(f"⚠️ Resposta válida mas sem campo 'balance': {data}")
-                                continue
-                                
-                        except json.JSONDecodeError:
-                            print(f"❌ Resposta inválida do servidor: {response.text}")
-                            continue
-                    
-                    elif response.status_code == 401:
-                        print(f"❌ Não autorizado - verificando credenciais...")
-                        continue
-                    elif response.status_code == 404:
-                        print(f"⚠️ Endpoint não encontrado, tentando próximo...")
-                        continue
-                    else:
-                        print(f"❌ HTTP {response.status_code}: {response.text}")
-                        continue
-                        
-                except requests.exceptions.Timeout:
-                    print(f"⏱️ Timeout no endpoint {endpoint}")
-                    continue
-                except requests.exceptions.ConnectionError:
-                    print(f"🔌 Erro de conexão no endpoint {endpoint}")
-                    continue
-                except Exception as e:
-                    print(f"❌ Erro no endpoint {endpoint}: {e}")
-                    continue
-            
-            # Se chegou aqui, nenhum endpoint funcionou
-            print("❌ Nenhum endpoint de saldo funcionou!")
-            return {'success': False, 'error': 'Nenhum endpoint de saldo disponível'}
-                
-        except Exception as e:
-            print(f"❌ Erro verificando saldo: {e}")
-            return {'success': False, 'error': str(e)}
-            print("\n💰 Verificando saldo da carteira Voltz...")
-            
-            # Usa as credenciais diretas do Voltz - tenta diferentes endpoints
-            headers = {
-                'X-Api-Key': VOLTZ_CONFIG['admin_key'],
-                'Content-Type': 'application/json'
-            }
-            
-            # Lista de endpoints possíveis para verificar saldo
-            endpoints_saldo = [
-                f"{VOLTZ_CONFIG['node_url']}/api/v1/wallet",
                 f"{VOLTZ_CONFIG['node_url']}/api/v1/wallet/balance", 
                 f"{VOLTZ_CONFIG['node_url']}/api/v1/balance",
                 f"{VOLTZ_CONFIG['node_url']}/api/v1/wallets/{VOLTZ_CONFIG['wallet_id']}/balance",
@@ -841,61 +709,6 @@ class TesteFluxoCompleto:
             else:
                 print(f"✅ Saldo suficiente para o envio!")
             
-            # Para teste, vamos simular o sucesso sem fazer envio real
-            print("⚠️ MODO TESTE: Simulando envio Lightning sem transação real")
-            print("🎉 PAGAMENTO LIGHTNING SIMULADO COM SUCESSO!")
-            print("   🔑 Payment Hash: TESTE_HASH_123")
-            print("   🔐 Preimage: TESTE_PREIMAGE_456")
-            print("   💸 Taxa simulada: 3 sats")
-            print("   📊 Status: Simulado com sucesso")
-            
-            return True
-                
-        except Exception as e:
-            print(f"❌ ERRO CRÍTICO: Exceção durante envio Lightning")
-            print(f"🔍 Detalhes: {str(e)}")
-            return False
-            print("\n🚀 Enviando BTC real via Lightning Address (Voltz)...")
-            
-            # 1. Calcula valor em sats baseado na cotação atual
-            valor_sats = self.calcular_sats_equivalente(self.valor_compra)
-            print(f"🔢 Valor calculado para envio: {valor_sats:,} sats")
-            
-            # 2. Verificar saldo da carteira Voltz ANTES do envio
-            print("\n💰 VERIFICAÇÃO DE SALDO PRÉ-ENVIO:")
-            saldo_info = self.verificar_saldo_voltz()
-            if not saldo_info['success']:
-                print(f"❌ FALHA: Não foi possível verificar saldo da Voltz")
-                print(f"🔍 Erro: {saldo_info['error']}")
-                return False
-            
-            saldo_disponivel = saldo_info['balance_sats']
-            
-            # Taxa Lightning realista: 0.1% a 0.5% com mínimo de 1-10 sats
-            taxa_percentual = 0.002  # 0.2% (mais realista para Lightning)
-            taxa_minima = 3  # 3 sats mínimo (muito baixo, ~R$ 0.01)
-            taxa_maxima = 100  # 100 sats máximo para valores pequenos
-            
-            taxa_calculada = max(taxa_minima, min(valor_sats * taxa_percentual, taxa_maxima))
-            taxa_estimada = int(taxa_calculada)
-            
-            valor_total_necessario = valor_sats + taxa_estimada
-            
-            print(f"📊 Análise de saldo:")
-            print(f"   💰 Saldo disponível: {saldo_disponivel:,} sats")
-            print(f"   📤 Valor a enviar: {valor_sats:,} sats")
-            print(f"   💸 Taxa estimada: {taxa_estimada:,} sats ({taxa_percentual*100:.1f}% ou mín. {taxa_minima} sats)")
-            print(f"   🔢 Total necessário: {valor_total_necessario:,} sats")
-            print(f"   💡 Taxa em R$: ~R$ {(taxa_estimada/100_000_000) * 615000:.4f}")
-            
-            if saldo_disponivel < valor_total_necessario:
-                print(f"❌ SALDO INSUFICIENTE!")
-                print(f"🚫 Faltam: {valor_total_necessario - saldo_disponivel:,} sats")
-                print(f"💡 Necessário adicionar pelo menos {(valor_total_necessario - saldo_disponivel)/100_000_000:.8f} BTC à carteira")
-                return False
-            else:
-                print(f"✅ Saldo suficiente para o envio!")
-            
             # 3. Resolver Lightning Address para invoice BOLT11
             print("\n⚡ Resolvendo Lightning Address para invoice BOLT11...")
             resolver = LightningAddressResolver()
@@ -939,9 +752,6 @@ class TesteFluxoCompleto:
                     if success:
                         break
                     try:
-                        pass
-                    except Exception as e:
-                        pass
                         print(f"[DEBUG] Tentando endpoint: {endpoint}")
                         print(f"[DEBUG] Payload: {payload}")
                         
@@ -960,6 +770,7 @@ class TesteFluxoCompleto:
                                 if (data.get('payment_hash') or data.get('hash') or 
                                     data.get('status') == 'success' or 
                                     data.get('checking_id')):
+                                    
                                     payment_hash = data.get('payment_hash', data.get('hash', data.get('checking_id', 'N/A')))
                                     preimage = data.get('preimage', 'N/A')
                                     fee_msat = data.get('fee', 0) or 0
@@ -1263,15 +1074,9 @@ class TesteFluxoCompleto:
         self.log_passo(12, "PREPARAR ENVIO - Validando dados e preparando transação")
         
         # Validar Lightning Address
-        if self.lightning_handler and hasattr(self.lightning_handler, 'is_lightning_address'):
-            if not self.lightning_handler.is_lightning_address(self.lightning_address):
-                print(f"❌ FALHA: Lightning Address inválido: {self.lightning_address}")
-                return False
-        else:
-            # Validação básica se handler não disponível
-            if '@' not in self.lightning_address or '.' not in self.lightning_address:
-                print(f"❌ FALHA: Lightning Address inválido: {self.lightning_address}")
-                return False
+        if not self.lightning_handler.is_lightning_address(self.lightning_address):
+            print(f"❌ FALHA: Lightning Address inválido: {self.lightning_address}")
+            return False
         
         print(f"✅ Lightning Address validado: {self.lightning_address}")
         
@@ -1484,22 +1289,17 @@ class TesteFluxoCompleto:
     def _verificar_smart_pix_monitor(self):
         """Verifica se Smart PIX Monitor está funcionando"""
         try:
-            if SmartPixMonitor is None:
-                return False
-            # Usa a classe já importada no topo do arquivo
-            monitor_instance = SmartPixMonitor()
-            return hasattr(monitor_instance, 'is_running')
+            from smart_pix_monitor import smart_monitor, get_monitor_stats
+            stats = get_monitor_stats()
+            return stats.get('is_running', False)
         except:
             return False
     
     def _verificar_sistema_gatilhos(self):
         """Verifica se sistema de gatilhos está disponível"""
         try:
-            if SistemaGatilhos is None:
-                return False
-            # Usa a classe já importada no topo do arquivo
-            sistema_instance = SistemaGatilhos()
-            return hasattr(sistema_instance, 'trigger_event')
+            from sistema_gatilhos import trigger_system, TriggerEvent
+            return hasattr(trigger_system, 'trigger_event')
         except:
             return False
     
@@ -1536,11 +1336,9 @@ class TesteFluxoCompleto:
     def _verificar_handlers_bot(self):
         """Verifica se handlers do bot estão carregados"""
         try:
-            if BotTriggerIntegrator is None:
-                return False
-            # Usa a classe já importada no topo do arquivo
-            return hasattr(BotTriggerIntegrator, '__init__')
-        except Exception:
+            from integrador_bot_gatilhos import BotTriggerIntegrator
+            return True
+        except:
             return False
 
 if __name__ == "__main__":
