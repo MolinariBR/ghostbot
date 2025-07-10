@@ -60,7 +60,6 @@ except ImportError:
     ConversationHandler = None
     filters = None
 
-from telegram.constants import ParseMode
 from telegram.error import (
     NetworkError, 
     TelegramError, 
@@ -68,8 +67,6 @@ from telegram.error import (
     TimedOut, 
     ChatMigrated, 
     Conflict,
-    BadRequest,
-    Forbidden,
     BadRequest
 )
 

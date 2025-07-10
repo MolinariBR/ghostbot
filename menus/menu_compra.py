@@ -1,3 +1,6 @@
+# ATENÇÃO: Execute sempre o projeto via 'python -m ghost.bot' na raiz do projeto para que imports funcionem corretamente.
+# Não execute diretamente este arquivo.
+
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import MessageHandler, ConversationHandler, CommandHandler, filters
 from telegram.ext import ContextTypes
@@ -8,11 +11,14 @@ import logging
 from typing import Dict, Any, Optional
 import os
 import re
+import traceback
+import aiohttp
 
+# Imports do sistema Ghost
 from api.voltz import VoltzAPI
 
 # 🚀 NOVA INTEGRAÇÃO: Smart PIX Monitor (substitui cron externo)
-from smart_pix_monitor import register_pix_payment
+from trigger.smart_pix_monitor import register_pix_payment
 
 # 🚀 NOVA INTEGRAÇÃO: Sistema de Limites de Valor
 from limites.limite_valor import LimitesValor
@@ -127,7 +133,7 @@ def menu_redes(moeda: str):
         ]
     return teclado
 
-async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def iniciar_compra(update: Update, context) -> int:
     """Inicia o fluxo de compra mostrando as moedas disponíveis."""
     try:
         # Envia dados do usuário para o backend PHP
@@ -171,7 +177,7 @@ async def iniciar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             logger.error(f"Falha ao enviar mensagem de erro: {str(e2)}")
     return ESCOLHER_MOEDA
 
-async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def escolher_moeda(update: Update, context) -> int:
     """Processa a escolha da moeda e pede para selecionar a rede."""
     if update.message.text == "🔙 Voltar":
         try:
@@ -235,7 +241,7 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     return ESCOLHER_REDE
 
-async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def escolher_rede(update: Update, context) -> int:
     """Processa a escolha da rede e pede o valor em BRL."""
     if update.message.text == "🔙 Voltar":
         return await iniciar_compra(update, context)
@@ -301,7 +307,7 @@ async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     
     return QUANTIDADE
 
-async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def processar_quantidade(update: Update, context) -> int:
     """Processa a quantidade informada, aplica limites progressivos e solicita CPF se necessário."""
     try:
         user = update.effective_user
@@ -382,7 +388,7 @@ async def processar_quantidade(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return QUANTIDADE
 
-async def solicitar_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def solicitar_cpf(update: Update, context) -> int:
     """Recebe o CPF do usuário, valida e segue para o resumo da compra."""
     cpf = re.sub(r'[^0-9]', '', update.message.text)
     if len(cpf) != 11:
@@ -391,7 +397,7 @@ async def solicitar_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     context.user_data['cpf'] = cpf
     return await resumo_compra(update, context)
 
-async def resumo_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def resumo_compra(update: Update, context) -> int:
     """Mostra o resumo da compra antes da confirmação."""
     try:
         moeda = context.user_data.get('moeda', 'a moeda selecionada')
@@ -525,7 +531,7 @@ async def resumo_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         return ESCOLHER_REDE
     return RESUMO_COMPRA
 
-async def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def confirmar_compra(update: Update, context) -> int:
     """Confirma os dados e verifica se precisa solicitar endereço ou vai direto para pagamento."""
     
     if update.message.text == "🔙 Mudar Moeda":
@@ -588,7 +594,7 @@ async def confirmar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     # Se chegou aqui, volta para quantidade
     return await processar_quantidade(update, context)
 
-async def solicitar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def solicitar_endereco(update: Update, context) -> int:
     """Solicita o endereço de recebimento para redes que não são Lightning."""
     try:
         moeda = context.user_data.get('moeda', '')
@@ -645,7 +651,7 @@ Por favor, informe o endereço onde deseja receber suas criptomoedas:
     
     return SOLICITAR_ENDERECO
 
-async def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def processar_endereco(update: Update, context) -> int:
     """Processa o endereço informado e vai para escolha de pagamento."""
     if update.message.text == "🔙 Voltar":
         return await confirmar_compra(update, context)
@@ -674,7 +680,7 @@ async def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     return await mostrar_metodos_pagamento(update, context)
 
-async def mostrar_metodos_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def mostrar_metodos_pagamento(update: Update, context) -> int:
     """Mostra as opções de métodos de pagamento."""
     try:
         opcoes_pagamento = menu_metodos_pagamento()
@@ -705,7 +711,7 @@ def menu_metodos_pagamento():
         ["🔙 Voltar"]
     ]
     
-async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def processar_metodo_pagamento(update: Update, context) -> int:
     """Processa o método de pagamento escolhido."""
     if update.message.text == "🔙 Voltar":
         # Se é Lightning, volta para confirmação; senão volta para endereço
@@ -739,7 +745,7 @@ async def processar_metodo_pagamento(update: Update, context: ContextTypes.DEFAU
     )
     return ESCOLHER_PAGAMENTO
 
-async def registrar_pedido_backend(context: ContextTypes.DEFAULT_TYPE, status: str = "pending"):
+async def registrar_pedido_backend(context, status: str = "pending"):
     """
     Registra o pedido no backend (tabela deposit) para TED e Boleto.
     Salva o id do depósito criado em context.user_data['deposit_id'].
@@ -782,7 +788,7 @@ async def registrar_pedido_backend(context: ContextTypes.DEFAULT_TYPE, status: s
         logger.error(f"Falha ao registrar pedido no backend: {e}")
 
 # FUNÇÃO COMENTADA - Substituída por redirecionamento para @GhosttP2P
-# async def processar_ted(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+# async def processar_ted(update: Update, context) -> int:
 #     await registrar_pedido_backend(context, status="pending")
 #     """Processa pagamento via TED."""
 #     try:
@@ -834,7 +840,7 @@ async def registrar_pedido_backend(context: ContextTypes.DEFAULT_TYPE, status: s
 #         return ESCOLHER_PAGAMENTO
 
 # FUNÇÃO COMENTADA - Substituída por redirecionamento para @GhosttP2P
-# async def processar_comprovante_ted(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+# async def processar_comprovante_ted(update: Update, context) -> int:
 #     """Processa o comprovante de TED enviado."""
 #     if update.message.text == "🔙 Voltar":
 #         return await mostrar_metodos_pagamento(update, context)
@@ -926,7 +932,7 @@ async def registrar_pedido_backend(context: ContextTypes.DEFAULT_TYPE, status: s
 #         return AGUARDAR_TED_COMPROVANTE
 
 # FUNÇÃO COMENTADA - Substituída por redirecionamento para @GhosttP2P
-# async def processar_boleto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+# async def processar_boleto(update: Update, context) -> int:
 #     await registrar_pedido_backend(context, status="pending")
 #     """Processa pagamento via Boleto - direciona para admin."""
 #     try:
@@ -968,7 +974,7 @@ async def registrar_pedido_backend(context: ContextTypes.DEFAULT_TYPE, status: s
 #         )
 #         return ESCOLHER_PAGAMENTO
 
-async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def processar_pix(update: Update, context) -> int:
     """Processa pagamento via PIX."""
     # Dados da compra
     moeda = context.user_data.get('moeda', 'a moeda selecionada')
@@ -1197,7 +1203,7 @@ async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     
     return ConversationHandler.END
 
-async def cancelar_compra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def cancelar_compra(update: Update, context) -> int:
     """
     Cancela a compra e volta ao menu principal.
     
@@ -1288,7 +1294,7 @@ def validar_cpf(cpf: str) -> bool:
             return False
     return True
 
-async def solicitar_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def solicitar_cpf(update: Update, context) -> int:
     """Solicita o CPF do usuário."""
     try:
         await update.message.reply_text(
@@ -1305,7 +1311,7 @@ async def solicitar_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         )
     return SOLICITAR_CPF
 
-async def processar_cpf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def processar_cpf(update: Update, context) -> int:
     """Processa o CPF informado, valida e envia ao backend."""
     if update.message.text == "🔙 Voltar":
         return await cancelar_compra(update, context)

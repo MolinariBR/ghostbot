@@ -21,13 +21,13 @@ def menu_moedas_venda():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
 
-async def iniciar_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def iniciar_venda(update: Update, context) -> int:
     """Inicia o fluxo de venda redirecionando para @GhosttP2P."""
     # � REDIRECIONAMENTO AUTOMÁTICO: Todas as vendas vão para @GhosttP2P
     await redirecionar_para_venda(update, context)
     return ConversationHandler.END
 
-async def escolher_moeda_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def escolher_moeda_venda(update: Update, context) -> int:
     """Processa a escolha da moeda e pede a quantidade."""
     if update.message.text == "🔙 Voltar":
         return await cancelar_venda(update, context)
@@ -41,7 +41,7 @@ async def escolher_moeda_venda(update: Update, context: ContextTypes.DEFAULT_TYP
     )
     return QUANTIDADE
 
-async def processar_quantidade_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def processar_quantidade_venda(update: Update, context) -> int:
     """Processa a quantidade informada e pede o endereço de saque."""
     if update.message.text == "🔙 Voltar":
         return await iniciar_venda(update, context)
@@ -82,7 +82,7 @@ async def processar_quantidade_venda(update: Update, context: ContextTypes.DEFAU
         )
         return QUANTIDADE
 
-async def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def processar_endereco(update: Update, context) -> int:
     """Processa o endereço e mostra a confirmação."""
     if update.message.text == "🔙 Voltar":
         return await iniciar_venda(update, context)
@@ -108,7 +108,7 @@ async def processar_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
     return CONFIRMAR
 
-async def confirmar_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def confirmar_venda(update: Update, context) -> int:
     """Confirma a venda e finaliza o processo."""
     moeda = context.user_data.get('moeda_venda', 'a moeda selecionada')
     quantidade = context.user_data.get('quantidade_venda', 0)
@@ -128,7 +128,7 @@ async def confirmar_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     context.user_data.clear()
     return -1  # ConversationHandler.END
 
-async def cancelar_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def cancelar_venda(update: Update, context) -> int:
     """Cancela a venda e volta ao menu principal."""
     context.user_data.clear()
     await update.message.reply_text(

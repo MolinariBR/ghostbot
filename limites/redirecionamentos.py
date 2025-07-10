@@ -18,7 +18,7 @@ class RedirecionamentoManager:
     CONTATO_SUPORTE = "@GhosttP2P"
     
     @staticmethod
-    async def redirecionar_venda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def redirecionar_venda(update: Update, context) -> None:
         """
         Redireciona usuário para venda via @GhosttP2P.
         
@@ -52,7 +52,7 @@ class RedirecionamentoManager:
             )
     
     @staticmethod
-    async def redirecionar_ted_boleto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def redirecionar_ted_boleto(update: Update, context) -> None:
         """
         Redireciona usuário para TED/Boleto via @GhosttP2P.
         
@@ -87,7 +87,7 @@ class RedirecionamentoManager:
             )
     
     @staticmethod
-    async def redirecionar_suporte_geral(update: Update, context: ContextTypes.DEFAULT_TYPE, motivo: str = "suporte") -> None:
+    async def redirecionar_suporte_geral(update: Update, context, motivo: str = "suporte") -> None:
         """
         Redireciona usuário para suporte geral.
         
@@ -123,14 +123,14 @@ class RedirecionamentoManager:
             )
 
 # Funções de conveniência
-async def redirecionar_para_venda(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def redirecionar_para_venda(update: Update, context):
     """Função de conveniência para redirecionamento de venda."""
     await RedirecionamentoManager.redirecionar_venda(update, context)
 
-async def redirecionar_para_ted_boleto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def redirecionar_para_ted_boleto(update: Update, context):
     """Função de conveniência para redirecionamento de TED/Boleto."""
     await RedirecionamentoManager.redirecionar_ted_boleto(update, context)
 
-async def redirecionar_para_suporte(update: Update, context: ContextTypes.DEFAULT_TYPE, motivo: str = "suporte"):
+async def redirecionar_para_suporte(update: Update, context, motivo: str = "suporte"):
     """Função de conveniência para redirecionamento de suporte."""
     await RedirecionamentoManager.redirecionar_suporte_geral(update, context, motivo)
