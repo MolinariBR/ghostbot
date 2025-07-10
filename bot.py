@@ -40,16 +40,26 @@ from logging.handlers import RotatingFileHandler
 
 # Importações do Telegram
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import (
-    Application,
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    ConversationHandler,
-    filters
-)
-from telegram.request import HTTPXRequest
+try:
+    from telegram.ext import (
+        Application,
+        ApplicationBuilder,
+        CommandHandler,
+        MessageHandler,
+        ContextTypes,
+        ConversationHandler,
+        filters
+    )
+except ImportError:
+    # Fallback para versões antigas
+    Application = None
+    ApplicationBuilder = None
+    CommandHandler = None
+    MessageHandler = None
+    ContextTypes = None
+    ConversationHandler = None
+    filters = None
+
 from telegram.constants import ParseMode
 from telegram.error import (
     NetworkError, 
@@ -162,24 +172,10 @@ def init_bot():
         if not hasattr(Config, 'TELEGRAM_BOT_TOKEN') or not Config.TELEGRAM_BOT_TOKEN:
             raise ValueError("Token do bot não configurado. Verifique o arquivo de configuração.")
         
-        # Configuração do cliente HTTP personalizado com opções avançadas
-        logger.debug("Configurando cliente HTTP personalizado...")
-        request = HTTPXRequest(
-            connection_pool_size=BotConfig.POOL_SIZE,
-            read_timeout=BotConfig.READ_TIMEOUT,
-            connect_timeout=BotConfig.CONNECTION_TIMEOUT,
-            write_timeout=BotConfig.WRITE_TIMEOUT,
-            pool_timeout=BotConfig.POOL_TIMEOUT,
-            http_version='1.1'
-        )
-        
         logger.debug("Criando instância da aplicação...")
-        # Cria e configura a aplicação com a instância personalizada de request
-        # Os timeouts já foram configurados no HTTPXRequest
         application = (
             Application.builder()
             .token(Config.TELEGRAM_BOT_TOKEN)
-            .request(request)  # Usa a instância personalizada com configurações
             .build()
         )
         
@@ -205,7 +201,7 @@ setup_menus(menu_principal)
 # Utilitários para manipulação de erros
 def error_handler(handler):
     """Decorator para tratamento de erros em handlers."""
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+    async def wrapper(update, context, *args, **kwargs):
         try:
             return await handler(update, context, *args, **kwargs)
         except Exception as e:
@@ -222,7 +218,7 @@ def error_handler(handler):
 
 # Handlers de comando
 @error_handler
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def start(update, context):
     """
     Inicia a conversa e mostra o menu principal.
     
@@ -282,7 +278,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         logger.error(f"Erro crítico no handler start: {str(e)}", exc_info=True)
         return MENU
 
-async def _enviar_imagem_boas_vindas(update: Update, context: ContextTypes.DEFAULT_TYPE, imagem_path: str):
+async def _enviar_imagem_boas_vindas(update, context, imagem_path):
     """
     Função auxiliar para enviar a imagem de boas-vindas de forma assíncrona.
     
@@ -304,7 +300,7 @@ async def _enviar_imagem_boas_vindas(update: Update, context: ContextTypes.DEFAU
         logger.error(f"Erro ao enviar imagem de boas-vindas: {str(e)}", exc_info=True)
 
 @error_handler
-async def vender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def vender(update, context):
     """
     Lida com a opção de venda.
     
@@ -328,7 +324,7 @@ async def vender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         raise
 
 @error_handler
-async def servicos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def servicos(update, context):
     """
     Mostra os serviços disponíveis.
     
@@ -355,7 +351,7 @@ async def servicos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         raise
 
 @error_handler
-async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def ajuda(update, context):
     """
     Mostra a ajuda e instruções de uso.
     
@@ -412,7 +408,7 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return AJUDA
 
 @error_handler
-async def termos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def termos(update, context):
     """
     Mostra os termos de uso e política de privacidade.
     
@@ -497,20 +493,22 @@ def setup_handlers(application):
     application.add_handler(MessageHandler(filters.Regex('^📜 Termos$'), termos))
     application.add_handler(MessageHandler(filters.Regex('^🔙 Voltar$'), start))
     
-    # ⚡ NOVA INTEGRAÇÃO LIGHTNING ⚡
+    # 🚀 INTEGRAÇÃO: SISTEMA DE GATILHOS PARA PRODUÇÃO 🚀
     try:
-        from handlers.lightning_integration import setup_lightning_integration
+        from trigger.bot_integration import setup_trigger_integration
         
-        # Configura a integração Lightning
-        lightning_integration = setup_lightning_integration(application)
+        # Configura integração com sistema de gatilhos
+        trigger_integration = setup_trigger_integration(application)
         
-        if lightning_integration:
-            logger.info("✅ Integração Lightning configurada com sucesso!")
+        if trigger_integration:
+            logger.info("✅ Sistema de gatilhos integrado com sucesso para produção!")
+            logger.info("💡 Use /comprar_v2 para testar o novo sistema de gatilhos")
         else:
-            logger.warning("⚠️ Falha ao configurar integração Lightning")
+            logger.warning("⚠️ Falha ao configurar sistema de gatilhos - usando modo tradicional")
             
     except Exception as e:
-        logger.error(f"❌ Erro ao configurar integração Lightning: {e}", exc_info=True)
+        logger.error(f"❌ Erro ao configurar sistema de gatilhos: {e}", exc_info=True)
+        logger.info("🔄 Continuando com sistema tradicional de menus...")
 
 async def signal_handler(app, signum=None, frame=None):
     """
