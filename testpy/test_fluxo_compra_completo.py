@@ -534,11 +534,18 @@ class TesteFluxoCompleto:
                     data = response.json()
                     if data.get('success'):
                         balance_sats = data.get('balance', 0)
-                        print(f"✅ Saldo da carteira Voltz: {balance_sats:,} sats")
-                        print(f"📊 Equivalente a: {balance_sats/100_000_000:.8f} BTC")
+                        balance_msat = data.get('balance_msat', 0)
+                        raw_response = data.get('raw_response', {})
+                        
+                        print(f"✅ Saldo da carteira Voltz:")
+                        print(f"   🔢 Valor bruto da API: {raw_response.get('balance', 0):,} msat")
+                        print(f"   📊 Convertido para sats: {balance_sats:,} sats")
+                        print(f"   � Equivalente em BTC: {balance_sats/100_000_000:.8f} BTC")
+                        
                         return {
                             'success': True,
                             'balance_sats': balance_sats,
+                            'balance_msat': balance_msat,
                             'balance_btc': balance_sats/100_000_000
                         }
                     else:
@@ -617,12 +624,16 @@ class TesteFluxoCompleto:
                     if data.get('success'):
                         payment_hash = data.get('payment_hash', 'N/A')
                         preimage = data.get('preimage', 'N/A')
-                        fee_msat = data.get('fee_msat', 0)
+                        fee_msat = data.get('fee_msat', 0) or 0  # Garante que não seja None
                         
                         print(f"🎉 PAGAMENTO LIGHTNING ENVIADO COM SUCESSO!")
                         print(f"   🔑 Payment Hash: {payment_hash}")
                         print(f"   🔐 Preimage: {preimage}")
-                        print(f"   💸 Taxa real: {fee_msat/1000:.0f} sats ({fee_msat} msat)")
+                        
+                        if fee_msat and fee_msat > 0:
+                            print(f"   💸 Taxa real: {fee_msat/1000:.0f} sats ({fee_msat} msat)")
+                        else:
+                            print(f"   💸 Taxa: Não informada pelo servidor")
                         
                         # Verificar saldo após envio
                         print("\n💰 VERIFICAÇÃO DE SALDO PÓS-ENVIO:")
