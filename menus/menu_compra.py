@@ -1183,6 +1183,17 @@ async def processar_pix(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     if 'lightning' in rede.lower():
         logger.info(f"Lightning PIX criado - depix_id: {txid}, chat_id: {update.effective_user.id}")
         logger.info("Aguardando confirmação PIX para disparar invoice Lightning")
+        # Integração direta com sistema de gatilhos
+        try:
+            from trigger.sistema_gatilhos import trigger_system, TriggerEvent
+            trigger_system.trigger_event(
+                TriggerEvent.PIX_PAYMENT_DETECTED,
+                str(update.effective_user.id),
+                {'depix_id': txid}
+            )
+            logger.info(f"[Gatilhos] Evento PIX_PAYMENT_DETECTED disparado para chat_id {update.effective_user.id} e depix_id {txid}")
+        except Exception as e:
+            logger.error(f"Erro ao disparar evento no sistema de gatilhos: {e}")
     
     return ConversationHandler.END
 
