@@ -353,13 +353,25 @@ class TriggerBotIntegration:
             parse_mode='HTML'
         )
     
-    async def send_address_request(self, chat_id: str):
-        """Solicita endereço do usuário"""
+    async def send_address_request(self, chat_id: str, context_data: dict = None):
+        """Solicita endereço do usuário após pagamento PIX Lightning"""
+        # Mensagem padrão
         text = (
             "📮 <b>Informe seu endereço de recebimento:</b>\n\n"
             "💡 Digite o endereço da sua carteira onde deseja receber a criptomoeda:"
         )
-        
+        # Se houver dados extras, personalize a mensagem
+        if context_data:
+            depix_id = context_data.get('depix_id')
+            valor_sats = context_data.get('amount_sats')
+            if depix_id or valor_sats:
+                text = (
+                    f"🎉 <b>PIX confirmado!</b>\n\n"
+                    f"💰 Valor: {valor_sats or ''} sats\n"
+                    f"🆔 Depix ID: {depix_id or ''}\n\n"
+                    "📮 <b>Informe seu endereço Lightning (user@dominio.com) ou BOLT11:</b>\n\n"
+                    "💡 Use carteiras como Wallet of Satoshi, Phoenix ou Breez."
+                )
         await self.application.bot.send_message(
             chat_id=chat_id,
             text=text,
