@@ -1,0 +1,29 @@
+{
+  "user_id": "7910260237",
+  "username": "triacorelabs",
+  "start_time": "2025-07-11T11:03:14.814954",
+  "duration_seconds": 353.922526,
+  "current_state": "STARTED",
+  "total_steps": 2,
+  "total_errors": 0,
+  "steps": [
+    {
+      "timestamp": "2025-07-11T11:03:14.815432",
+      "step": "SESSION_STARTED",
+      "data": {
+        "username": "triacorelabs"
+      },
+      "success": true,
+      "state_before": "STARTED"
+    },
+    {
+      "timestamp": "2025-07-11T11:09:08.736278",
+      "step": "SESSION_ENDED",
+      "data": {},
+      "success": true,
+      "state_before": "STARTED"
+    }
+  ],
+  "context_data": {},
+  "errors": []
+}

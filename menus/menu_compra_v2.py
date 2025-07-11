@@ -7,6 +7,7 @@ import re
 import time
 import asyncio
 import aiohttp
+import requests
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -455,6 +456,24 @@ class MenuCompraV2:
                 raise Exception("Resposta inválida da API Depix")
             qr_code, txid, copia_e_cola = self._extrair_dados_pix(cobranca)
             if txid:
+                # ENVIO AUTOMÁTICO PARA BACKEND
+                try:
+                    valor_btc = context.user_data.get('valor_btc', 0.0) or 0.0
+                    payment_hash = cobranca.get('transaction_id') or cobranca.get('txid', '')
+                    deposito = {
+                        "depix_id": txid,
+                        "chatid": chatid,
+                        "amount_in_cents": valor_centavos,
+                        "send": valor_btc,
+                        "rede": "lightning",
+                        "status": "pending",
+                        "created_at": datetime.now().isoformat(),
+                        "blockchainTxID": payment_hash,
+                    }
+                    url_backend = "https://useghost.squareweb.app/api/deposit_receiver.php"
+                    requests.post(url_backend, json=deposito, timeout=10)
+                except Exception as e:
+                    logger.warning(f"Erro ao enviar depósito para backend: {e}")
                 try:
                     asyncio.create_task(notification_system.schedule_smart_checks(txid, chatid))
                     logger.info(f"PIX {txid} agendado para verificação inteligente")
