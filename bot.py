@@ -1,3 +1,6 @@
+# MIGRAÇÃO MENU V2 - 2025-07-10 21:39:59
+# Menu de compra migrado para versão V2 (limpa e otimizada)
+# Backup do menu antigo disponível em /home/mau/bot/ghost/backup/
 #!/usr/bin/env python3
 """
 Bot principal do Ghost Bot - Assistente de Criptomoedas
@@ -74,7 +77,7 @@ from telegram.error import (
 from tokens import Config
 from config import BotConfig, LogConfig
 from menus import setup_menus, get_compra_conversation, get_venda_conversation
-from menus.menu_compra import iniciar_compra
+from menus.menu_compra_v2 import menu_compra_v2
 
 # Variável global para a aplicação do bot
 application = None
@@ -472,7 +475,7 @@ def setup_handlers(application):
     application.handlers = {}
     
     # Importa os handlers de conversação aqui para evitar importação circular
-    from menus.menu_compra import get_compra_conversation, iniciar_compra
+    from menus.menu_compra_v2 import get_compra_conversation_v2 as get_compra_conversation, set_menu_principal_v2 as set_menu_principal
     from menus.menu_venda import get_venda_conversation
     
     # Adiciona os handlers de comando
@@ -489,12 +492,45 @@ def setup_handlers(application):
         application.add_handler(venda_conv)
     
     # Adiciona handlers para os outros menus
-    application.add_handler(MessageHandler(filters.Regex('^🛒 Comprar$'), iniciar_compra))
+    # Handler de compra agora está dentro do ConversationHandler V2
+    # application.add_handler(MessageHandler(filters.Regex('^🛒 Comprar$'), iniciar_compra))
     application.add_handler(MessageHandler(filters.Regex('^💰 Vender$'), vender))
     application.add_handler(MessageHandler(filters.Regex('^🔧 Serviços$'), servicos))
     application.add_handler(MessageHandler(filters.Regex('^❓ Ajuda$'), ajuda))
     application.add_handler(MessageHandler(filters.Regex('^📜 Termos$'), termos))
     application.add_handler(MessageHandler(filters.Regex('^🔙 Voltar$'), start))
+    
+    # ⚡ INTEGRAÇÃO: LIGHTNING ADDRESS HANDLER ⚡
+    try:
+        from lightning_address_handler import handle_lightning_input, is_lightning_input
+        
+        async def process_general_message(update: Update, context):
+            """Processa mensagens genéricas que podem ser Lightning Address/Invoice"""
+            try:
+                text = update.message.text.strip()
+                
+                # Verifica se é Lightning Address/Invoice
+                if is_lightning_input(text):
+                    await handle_lightning_input(update, context)
+                    return
+                
+                # Se não for Lightning input, ignora silenciosamente
+                # (evita spam de respostas para mensagens aleatórias)
+                
+            except Exception as e:
+                logger.error(f"Erro processando mensagem geral: {e}")
+        
+        # Adiciona handler para mensagens de texto genérico (baixa prioridade)
+        application.add_handler(MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            process_general_message
+        ))
+        
+        logger.info("✅ Lightning Address Handler integrado com sucesso!")
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao integrar Lightning Address Handler: {e}")
+        logger.info("🔄 Continuando sem handler de Lightning Address...")
     
     # 🚀 INTEGRAÇÃO: SISTEMA DE GATILHOS PARA PRODUÇÃO 🚀
     try:
@@ -530,6 +566,22 @@ def setup_handlers(application):
     except Exception as e:
         logger.error(f"❌ Erro ao configurar sistema de gatilhos: {e}", exc_info=True)
         logger.info("🔄 Continuando com sistema tradicional de menus...")
+    
+    # 🎯 INTEGRAÇÃO: SISTEMA DE CAPTURA DE EVENTOS 🎯
+    try:
+        from captura import initialize_capture_system
+        
+        capture_success = initialize_capture_system(application)
+        
+        if capture_success:
+            logger.info("✅ Sistema de captura de eventos ativado!")
+            logger.info("📊 Logs detalhados em: /home/mau/bot/ghost/captura/")
+        else:
+            logger.warning("⚠️ Sistema de captura não foi inicializado - continuando sem monitoramento detalhado")
+            
+    except Exception as e:
+        logger.error(f"❌ Erro ao configurar sistema de captura: {e}", exc_info=True)
+        logger.info("🔄 Continuando sem sistema de captura...")
 
 async def signal_handler(app, signum=None, frame=None):
     """
