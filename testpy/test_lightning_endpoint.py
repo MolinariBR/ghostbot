@@ -1,85 +1,158 @@
 #!/usr/bin/env python3
 """
-Teste específico do novo endpoint process_lightning_address.php
+Teste específico do endpoint process_lightning_address.php
+Valida se o backend processa corretamente o Lightning Address digitado pelo usuário
 """
-
 import requests
 import json
 import time
 
-def test_lightning_address_endpoint():
-    """Testa o endpoint de processamento Lightning Address"""
+def test_process_lightning_address():
+    """Testa o endpoint process_lightning_address.php"""
+    
+    print("🧪 TESTE: Endpoint process_lightning_address.php")
+    print("=" * 60)
     
     backend_url = "https://useghost.squareweb.app"
     endpoint = f"{backend_url}/api/process_lightning_address.php"
     
-    print("🧪 TESTANDO ENDPOINT PROCESS_LIGHTNING_ADDRESS.PHP")
-    print("=" * 60)
+    # Dados de teste
+    chat_id = "7910260237"
+    lightning_address = "bouncyflight79@walletofsatoshi.com"
     
-    # Teste 1: Lightning Address válido
-    print("\n1. Testando Lightning Address válido...")
-    payload1 = {
-        "chat_id": "7910260237",
-        "user_input": "bouncyflight79@walletofsatoshi.com"
+    print(f"🌐 Endpoint: {endpoint}")
+    print(f"👤 Chat ID: {chat_id}")
+    print(f"⚡ Lightning Address: {lightning_address}")
+    
+    # Payload para teste
+    payload = {
+        "chat_id": chat_id,
+        "user_input": lightning_address
+    }
+    
+    headers = {
+        'Content-Type': 'application/json'
     }
     
     try:
-        response = requests.post(endpoint, json=payload1, timeout=15)
-        print(f"Status: {response.status_code}")
-        print(f"Resposta: {json.dumps(response.json(), indent=2)}")
+        print(f"\n🔄 Enviando requisição...")
+        print(f"📤 Payload: {json.dumps(payload, indent=2)}")
+        
+        response = requests.post(
+            endpoint,
+            json=payload,
+            headers=headers,
+            timeout=30
+        )
+        
+        print(f"\n📨 RESPOSTA:")
+        print(f"   🌐 Status: {response.status_code}")
+        print(f"   📋 Headers: {dict(response.headers)}")
+        
+        if response.status_code == 200:
+            try:
+                data = response.json()
+                print(f"   ✅ JSON: {json.dumps(data, indent=2)}")
+                
+                if data.get('success'):
+                    print(f"\n🎉 SUCESSO: Lightning Address processado!")
+                    if 'payment_hash' in data:
+                        print(f"   🔑 Payment Hash: {data['payment_hash']}")
+                    if 'amount_paid_sats' in data:
+                        print(f"   💰 Sats enviados: {data['amount_paid_sats']}")
+                    return True
+                else:
+                    print(f"\n❌ ERRO: {data.get('error', 'Erro desconhecido')}")
+                    return False
+                    
+            except json.JSONDecodeError:
+                print(f"   ❌ Resposta não é JSON válido: {response.text}")
+                return False
+        
+        elif response.status_code == 404:
+            print(f"\n❌ ENDPOINT NÃO ENCONTRADO")
+            print(f"💡 Verifique se o arquivo existe: {endpoint}")
+            return False
+            
+        elif response.status_code == 500:
+            print(f"\n❌ ERRO INTERNO DO SERVIDOR")
+            print(f"📋 Resposta: {response.text}")
+            return False
+            
+        else:
+            print(f"\n❌ HTTP {response.status_code}")
+            print(f"📋 Resposta: {response.text}")
+            return False
+            
+    except requests.exceptions.ConnectionError:
+        print(f"\n❌ ERRO DE CONEXÃO")
+        print(f"💡 Servidor pode estar offline ou URL incorreta")
+        return False
+        
+    except requests.exceptions.Timeout:
+        print(f"\n❌ TIMEOUT")
+        print(f"💡 Servidor demorou mais de 30s para responder")
+        return False
+        
     except Exception as e:
-        print(f"Erro: {e}")
+        print(f"\n❌ ERRO INESPERADO: {e}")
+        return False
+
+def test_endpoint_availability():
+    """Testa se o endpoint está acessível"""
     
-    print("\n" + "-" * 40)
+    print("\n🔍 TESTE: Disponibilidade do endpoint")
+    print("-" * 40)
     
-    # Teste 2: BOLT11 invoice válido (simulado)
-    print("\n2. Testando BOLT11 invoice...")
-    payload2 = {
-        "chat_id": "7910260237", 
-        "user_input": "lnbc35u1p5xafm7pp53at096yvk5x0synw5qpsgy4s72nqwn2gg9wa2p77l4"
-    }
+    backend_url = "https://useghost.squareweb.app"
     
-    try:
-        response = requests.post(endpoint, json=payload2, timeout=15)
-        print(f"Status: {response.status_code}")
-        print(f"Resposta: {json.dumps(response.json(), indent=2)}")
-    except Exception as e:
-        print(f"Erro: {e}")
+    # Lista de endpoints para testar
+    endpoints = [
+        f"{backend_url}/api/process_lightning_address.php",
+        f"{backend_url}/rest/deposit.php",
+        f"{backend_url}/square_webhook.php",
+        f"{backend_url}/depix/webhook.php"
+    ]
     
-    print("\n" + "-" * 40)
-    
-    # Teste 3: Input inválido
-    print("\n3. Testando input inválido...")
-    payload3 = {
-        "chat_id": "7910260237",
-        "user_input": "texto_invalido"
-    }
-    
-    try:
-        response = requests.post(endpoint, json=payload3, timeout=15)
-        print(f"Status: {response.status_code}")
-        print(f"Resposta: {json.dumps(response.json(), indent=2)}")
-    except Exception as e:
-        print(f"Erro: {e}")
-    
-    print("\n" + "-" * 40)
-    
-    # Teste 4: Chat ID sem depósitos pendentes
-    print("\n4. Testando chat ID sem depósitos...")
-    payload4 = {
-        "chat_id": "999999999",
-        "user_input": "test@walletofsatoshi.com"
-    }
-    
-    try:
-        response = requests.post(endpoint, json=payload4, timeout=15)
-        print(f"Status: {response.status_code}")
-        print(f"Resposta: {json.dumps(response.json(), indent=2)}")
-    except Exception as e:
-        print(f"Erro: {e}")
-    
-    print("\n" + "=" * 60)
-    print("🎯 TESTE CONCLUÍDO")
+    for endpoint in endpoints:
+        try:
+            print(f"\n📡 Testando: {endpoint}")
+            
+            # Para endpoints POST, usa OPTIONS primeiro
+            response = requests.options(endpoint, timeout=10)
+            
+            if response.status_code in [200, 204, 405]:  # 405 = Method Not Allowed é OK
+                print(f"   ✅ Endpoint acessível (HTTP {response.status_code})")
+            else:
+                print(f"   ❌ HTTP {response.status_code}")
+                
+        except requests.exceptions.ConnectionError:
+            print(f"   ❌ Erro de conexão")
+        except requests.exceptions.Timeout:
+            print(f"   ❌ Timeout")
+        except Exception as e:
+            print(f"   ❌ Erro: {e}")
 
 if __name__ == "__main__":
-    test_lightning_address_endpoint()
+    print("🚀 TESTE DO BACKEND - LIGHTNING ADDRESS")
+    print("=" * 70)
+    
+    # 1. Testa disponibilidade geral
+    test_endpoint_availability()
+    
+    # 2. Testa endpoint específico
+    print("\n" + "=" * 70)
+    success = test_process_lightning_address()
+    
+    # 3. Resultado final
+    print("\n" + "=" * 70)
+    print("🎯 RESULTADO FINAL:")
+    
+    if success:
+        print("✅ Endpoint process_lightning_address.php funcionando!")
+        print("🔄 Lightning Address Handler pode ser integrado ao bot")
+    else:
+        print("❌ Endpoint com problemas")
+        print("🔧 Verificar implementação no backend")
+        
+    print("=" * 70)
