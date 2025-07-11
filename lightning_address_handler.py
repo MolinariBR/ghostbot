@@ -7,6 +7,7 @@ import logging
 import re
 import requests
 import json
+import asyncio
 from typing import Dict, Any, Optional
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -71,6 +72,9 @@ class LightningAddressHandler:
                     "📊 Acompanhe o status do seu pagamento nos logs.",
                     parse_mode='Markdown'
                 )
+                
+                # Redirecionar para o menu principal após sucesso
+                await self._redirect_to_main_menu(update, context)
             else:
                 await update.message.reply_text(
                     "❌ *Erro ao processar Lightning Address/Invoice*\n\n"
@@ -149,6 +153,51 @@ class LightningAddressHandler:
         except Exception as e:
             logger.error(f"Erro geral na chamada backend: {e}")
             return False
+        
+    async def _redirect_to_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Redireciona o usuário para o menu principal após processamento bem-sucedido"""
+        try:
+            # Aguardar um pouco antes de mostrar o menu
+            await asyncio.sleep(2)
+            
+            # Mostrar menu principal com comando /start
+            await update.message.reply_text(
+                "🏠 *Retornando ao menu principal...*\n\n"
+                "Use os botões abaixo para navegar:",
+                parse_mode='Markdown',
+                reply_markup=self._get_main_menu_keyboard()
+            )
+            
+        except Exception as e:
+            logger.error(f"Erro ao redirecionar para menu principal: {e}")
+            
+            # Fallback: mostrar mensagem simples
+            await update.message.reply_text(
+                "🏠 *Retornando ao menu principal...*\n\n"
+                "Digite /start para ver as opções disponíveis.",
+                parse_mode='Markdown'
+            )
+    
+    def _get_main_menu_keyboard(self):
+        """Retorna o teclado do menu principal"""
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("💰 Comprar", callback_data="menu_compra"),
+                InlineKeyboardButton("💸 Vender", callback_data="menu_venda")
+            ],
+            [
+                InlineKeyboardButton("📊 Carteira", callback_data="menu_carteira"),
+                InlineKeyboardButton("📞 Suporte", url="https://t.me/useghost")
+            ],
+            [
+                InlineKeyboardButton("❓ Ajuda", callback_data="menu_ajuda"),
+                InlineKeyboardButton("⚙️ Config", callback_data="menu_config")
+            ]
+        ]
+        
+        return InlineKeyboardMarkup(keyboard)
 
 # Instância global
 lightning_address_handler = LightningAddressHandler()
