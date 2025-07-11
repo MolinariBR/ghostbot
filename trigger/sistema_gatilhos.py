@@ -11,6 +11,10 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 import requests
 from enum import Enum
+try:
+    from captura.capture_system import capture_system
+except ImportError:
+    from captura.capture_system import capture_system
 
 # Configuração de logging
 logging.basicConfig(
@@ -266,63 +270,61 @@ class EventTriggerSystem:
         """Gatilho: Pagamento PIX foi detectado"""
         depix_id = data.get('depix_id')
         blockchain_txid = data.get('blockchain_txid')
-        
+        timestamp = data.get('timestamp')
         logger.info(f"💰 Pagamento PIX detectado: {depix_id} (chat_id: {chat_id})")
-        
+        # Captura evento de pagamento PIX
+        capture_system.capture_pix_payment(chat_id, depix_id, blockchain_txid)
+        capture_system.capture_trigger_event(chat_id, 'PIX_PAYMENT_DETECTED', {'depix_id': depix_id, 'blockchain_txid': blockchain_txid, 'timestamp': timestamp})
         order = self.get_or_create_order(chat_id)
         order['blockchain_txid'] = blockchain_txid
         order['events'].append({
             'event': TriggerEvent.PIX_PAYMENT_DETECTED.value,
             'depix_id': depix_id,
             'blockchain_txid': blockchain_txid,
-            'timestamp': data['timestamp']
+            'timestamp': timestamp
         })
-        
         self.update_order_status(chat_id, OrderStatus.PIX_PAID, {'blockchain_txid': blockchain_txid})
-        
         # IMPORTANTE: Solicitar endereço do usuário
-        self.trigger_event(TriggerEvent.ADDRESS_REQUESTED, chat_id, {'depix_id': depix_id})
-        
+        self.trigger_event(TriggerEvent.ADDRESS_REQUESTED, chat_id, {'depix_id': depix_id, 'timestamp': timestamp})
         return True
     
     def handle_address_requested(self, chat_id: str, data: Dict[str, Any]) -> bool:
         """Gatilho: Solicitar endereço do usuário"""
         depix_id = data.get('depix_id')
-        
+        timestamp = data.get('timestamp')
         logger.info(f"📮 Solicitando endereço para chat_id {chat_id} (depix: {depix_id})")
-        
+        # Captura solicitação de endereço
+        capture_system.capture_step(chat_id, 'ADDRESS_REQUESTED', {'depix_id': depix_id, 'timestamp': timestamp})
+        capture_system.capture_trigger_event(chat_id, 'ADDRESS_REQUESTED', {'depix_id': depix_id, 'timestamp': timestamp})
         order = self.get_or_create_order(chat_id)
         order['events'].append({
             'event': TriggerEvent.ADDRESS_REQUESTED.value,
             'depix_id': depix_id,
-            'timestamp': data['timestamp']
+            'timestamp': timestamp
         })
-        
         # Enviar solicitação de endereço
         self.send_address_request(chat_id, order)
-        
         self.update_order_status(chat_id, OrderStatus.ADDRESS_REQUESTED)
         return True
     
     def handle_address_provided(self, chat_id: str, data: Dict[str, Any]) -> bool:
         """Gatilho: Usuário forneceu endereço"""
         user_address = data.get('address')
-        
+        timestamp = data.get('timestamp')
         logger.info(f"📮 Usuário {chat_id} forneceu endereço: {user_address}")
-        
+        # Captura entrada de endereço
+        capture_system.capture_address_input(chat_id, user_address)
+        capture_system.capture_trigger_event(chat_id, 'ADDRESS_PROVIDED', {'address': user_address, 'timestamp': timestamp})
         order = self.get_or_create_order(chat_id)
         order['user_address'] = user_address
         order['events'].append({
             'event': TriggerEvent.ADDRESS_PROVIDED.value,
             'address': user_address,
-            'timestamp': data['timestamp']
+            'timestamp': timestamp
         })
-        
         self.update_order_status(chat_id, OrderStatus.ADDRESS_PROVIDED, {'user_address': user_address})
-        
         # IMPORTANTE: Enviar cripto via Voltz
         self.send_crypto_via_voltz(chat_id, order)
-        
         return True
     
     def set_message_sender(self, callback):
@@ -330,18 +332,103 @@ class EventTriggerSystem:
         self.message_sender_callback = callback
         logger.info("✅ Callback de envio de mensagens registrado")
     
-    async def send_message(self, chat_id: str, text: str, parse_mode: str = 'Markdown'):
-        """Envia mensagem usando o callback registrado"""
-        if self.message_sender_callback:
+    def start_payment_monitoring(self, chat_id: str, depix_id: str):
+        """Inicia monitoramento do pagamento PIX"""
+        logger.info(f"👁️  Iniciando monitoramento de pagamento: {depix_id}")
+        
+        # Em vez de cron, usar polling inteligente em background
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(self.monitor_pix_payment(chat_id, depix_id))
+            else:
+                loop.run_until_complete(self.monitor_pix_payment(chat_id, depix_id))
+        except RuntimeError:
+            # Se não há loop, criar um novo
+            asyncio.run(self.monitor_pix_payment(chat_id, depix_id))
+    
+    async def monitor_pix_payment(self, chat_id: str, depix_id: str):
+        """Monitora pagamento PIX em background (substitui cron)"""
+        max_attempts = 120  # 2 horas (60s * 120)
+        attempt = 0
+        
+        while attempt < max_attempts:
             try:
-                await self.message_sender_callback(chat_id, text, parse_mode)
-                logger.info(f"✅ Mensagem enviada para {chat_id}")
-                return True
+                # Consultar Eulen Depix
+                payment_status = await self.check_eulen_depix_status(depix_id)
+                
+                if payment_status and payment_status.get('blockchain_txid'):
+                    logger.info(f"✅ Pagamento confirmado: {depix_id}")
+                    
+                    # Disparar evento de pagamento detectado
+                    self.trigger_event(TriggerEvent.PIX_PAYMENT_DETECTED, chat_id, {
+                        'depix_id': depix_id,
+                        'blockchain_txid': payment_status['blockchain_txid']
+                    })
+                    return
+                
+                # Aguardar 60 segundos antes da próxima verificação
+                await asyncio.sleep(60)
+                attempt += 1
+                
             except Exception as e:
-                logger.error(f"❌ Erro ao enviar mensagem via callback: {e}")
-        else:
-            logger.warning("⚠️ Callback de envio de mensagens não registrado")
-        return False
+                logger.error(f"❌ Erro no monitoramento: {e}")
+                await asyncio.sleep(60)
+                attempt += 1
+        
+        logger.warning(f"⏰ Timeout no monitoramento de pagamento: {depix_id}")
+    
+    async def check_eulen_depix_status(self, depix_id: str) -> Optional[Dict]:
+        """Consulta status no Eulen Depix"""
+        try:
+            # Implementar consulta real à API do Eulen Depix
+            # Por enquanto, usar a API atual
+            url = f"https://useghost.squareweb.app/rest/deposit.php?depix_id={depix_id}"
+            response = requests.get(url, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('deposits'):
+                    deposit = data['deposits'][0]
+                    if deposit.get('blockchainTxID'):
+                        return {
+                            'blockchain_txid': deposit['blockchainTxID'],
+                            'status': deposit.get('status')
+                        }
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao consultar Eulen Depix: {e}")
+            return None
+    
+    def send_crypto_via_voltz(self, chat_id: str, order: Dict[str, Any]):
+        """Envia criptomoeda via Voltz"""
+        logger.info(f"🚀 Enviando {order['currency']} via {order['network']} para {order['user_address']}")
+        try:
+            voltz_result = self.call_voltz_api(order)
+            if voltz_result and voltz_result.get('success'):
+                order['voltz_txid'] = voltz_result.get('txid')
+                # Captura envio de cripto
+                capture_system.capture_crypto_send(chat_id, voltz_result.get('txid'), success=True)
+                capture_system.capture_trigger_event(chat_id, 'CRYPTO_SENT', {'txid': voltz_result.get('txid'), 'success': True})
+                self.send_transaction_completed_message(chat_id, voltz_result)
+                self.update_order_status(chat_id, OrderStatus.COMPLETED, {
+                    'voltz_txid': voltz_result.get('txid'),
+                    'completed_at': datetime.now().isoformat()
+                })
+                if chat_id in self.active_orders:
+                    del self.active_orders[chat_id]
+            else:
+                logger.error(f"❌ Erro no envio via Voltz: {voltz_result}")
+                capture_system.capture_crypto_send(chat_id, None, success=False, error=str(voltz_result))
+                capture_system.capture_trigger_event(chat_id, 'CRYPTO_SENT', {'txid': None, 'success': False, 'error': str(voltz_result)})
+                self.update_order_status(chat_id, OrderStatus.ERROR)
+        except Exception as e:
+            logger.error(f"❌ Erro ao enviar via Voltz: {e}")
+            capture_system.capture_crypto_send(chat_id, None, success=False, error=str(e))
+            capture_system.capture_trigger_event(chat_id, 'CRYPTO_SENT', {'txid': None, 'success': False, 'error': str(e)})
+            self.update_order_status(chat_id, OrderStatus.ERROR)
     
     # ============================================================================
     # MÉTODOS DE INTEGRAÇÃO
@@ -420,32 +507,131 @@ class EventTriggerSystem:
     def send_crypto_via_voltz(self, chat_id: str, order: Dict[str, Any]):
         """Envia criptomoeda via Voltz"""
         logger.info(f"🚀 Enviando {order['currency']} via {order['network']} para {order['user_address']}")
-        
         try:
-            # Implementar envio via Voltz
             voltz_result = self.call_voltz_api(order)
-            
             if voltz_result and voltz_result.get('success'):
                 order['voltz_txid'] = voltz_result.get('txid')
-                
-                # Enviar mensagem de sucesso
+                # Captura envio de cripto
+                capture_system.capture_crypto_send(chat_id, voltz_result.get('txid'), success=True)
+                capture_system.capture_trigger_event(chat_id, 'CRYPTO_SENT', {'txid': voltz_result.get('txid'), 'success': True})
                 self.send_transaction_completed_message(chat_id, voltz_result)
-                
                 self.update_order_status(chat_id, OrderStatus.COMPLETED, {
                     'voltz_txid': voltz_result.get('txid'),
                     'completed_at': datetime.now().isoformat()
                 })
-                
-                # Limpar pedido da memória
                 if chat_id in self.active_orders:
                     del self.active_orders[chat_id]
-                
             else:
                 logger.error(f"❌ Erro no envio via Voltz: {voltz_result}")
+                capture_system.capture_crypto_send(chat_id, None, success=False, error=str(voltz_result))
+                capture_system.capture_trigger_event(chat_id, 'CRYPTO_SENT', {'txid': None, 'success': False, 'error': str(voltz_result)})
                 self.update_order_status(chat_id, OrderStatus.ERROR)
-                
         except Exception as e:
             logger.error(f"❌ Erro ao enviar via Voltz: {e}")
+            capture_system.capture_crypto_send(chat_id, None, success=False, error=str(e))
+            capture_system.capture_trigger_event(chat_id, 'CRYPTO_SENT', {'txid': None, 'success': False, 'error': str(e)})
+            self.update_order_status(chat_id, OrderStatus.ERROR)
+    
+    # ============================================================================
+    # MÉTODOS DE INTEGRAÇÃO
+    # ============================================================================
+    
+    def start_payment_monitoring(self, chat_id: str, depix_id: str):
+        """Inicia monitoramento do pagamento PIX"""
+        logger.info(f"👁️  Iniciando monitoramento de pagamento: {depix_id}")
+        
+        # Em vez de cron, usar polling inteligente em background
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(self.monitor_pix_payment(chat_id, depix_id))
+            else:
+                loop.run_until_complete(self.monitor_pix_payment(chat_id, depix_id))
+        except RuntimeError:
+            # Se não há loop, criar um novo
+            asyncio.run(self.monitor_pix_payment(chat_id, depix_id))
+    
+    async def monitor_pix_payment(self, chat_id: str, depix_id: str):
+        """Monitora pagamento PIX em background (substitui cron)"""
+        max_attempts = 120  # 2 horas (60s * 120)
+        attempt = 0
+        
+        while attempt < max_attempts:
+            try:
+                # Consultar Eulen Depix
+                payment_status = await self.check_eulen_depix_status(depix_id)
+                
+                if payment_status and payment_status.get('blockchain_txid'):
+                    logger.info(f"✅ Pagamento confirmado: {depix_id}")
+                    
+                    # Disparar evento de pagamento detectado
+                    self.trigger_event(TriggerEvent.PIX_PAYMENT_DETECTED, chat_id, {
+                        'depix_id': depix_id,
+                        'blockchain_txid': payment_status['blockchain_txid']
+                    })
+                    return
+                
+                # Aguardar 60 segundos antes da próxima verificação
+                await asyncio.sleep(60)
+                attempt += 1
+                
+            except Exception as e:
+                logger.error(f"❌ Erro no monitoramento: {e}")
+                await asyncio.sleep(60)
+                attempt += 1
+        
+        logger.warning(f"⏰ Timeout no monitoramento de pagamento: {depix_id}")
+    
+    async def check_eulen_depix_status(self, depix_id: str) -> Optional[Dict]:
+        """Consulta status no Eulen Depix"""
+        try:
+            # Implementar consulta real à API do Eulen Depix
+            # Por enquanto, usar a API atual
+            url = f"https://useghost.squareweb.app/rest/deposit.php?depix_id={depix_id}"
+            response = requests.get(url, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('deposits'):
+                    deposit = data['deposits'][0]
+                    if deposit.get('blockchainTxID'):
+                        return {
+                            'blockchain_txid': deposit['blockchainTxID'],
+                            'status': deposit.get('status')
+                        }
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao consultar Eulen Depix: {e}")
+            return None
+    
+    def send_crypto_via_voltz(self, chat_id: str, order: Dict[str, Any]):
+        """Envia criptomoeda via Voltz"""
+        logger.info(f"🚀 Enviando {order['currency']} via {order['network']} para {order['user_address']}")
+        try:
+            voltz_result = self.call_voltz_api(order)
+            if voltz_result and voltz_result.get('success'):
+                order['voltz_txid'] = voltz_result.get('txid')
+                # Captura envio de cripto
+                capture_system.capture_crypto_send(chat_id, voltz_result.get('txid'), success=True)
+                capture_system.capture_trigger_event(chat_id, 'CRYPTO_SENT', {'txid': voltz_result.get('txid'), 'success': True})
+                self.send_transaction_completed_message(chat_id, voltz_result)
+                self.update_order_status(chat_id, OrderStatus.COMPLETED, {
+                    'voltz_txid': voltz_result.get('txid'),
+                    'completed_at': datetime.now().isoformat()
+                })
+                if chat_id in self.active_orders:
+                    del self.active_orders[chat_id]
+            else:
+                logger.error(f"❌ Erro no envio via Voltz: {voltz_result}")
+                capture_system.capture_crypto_send(chat_id, None, success=False, error=str(voltz_result))
+                capture_system.capture_trigger_event(chat_id, 'CRYPTO_SENT', {'txid': None, 'success': False, 'error': str(voltz_result)})
+                self.update_order_status(chat_id, OrderStatus.ERROR)
+        except Exception as e:
+            logger.error(f"❌ Erro ao enviar via Voltz: {e}")
+            capture_system.capture_crypto_send(chat_id, None, success=False, error=str(e))
+            capture_system.capture_trigger_event(chat_id, 'CRYPTO_SENT', {'txid': None, 'success': False, 'error': str(e)})
             self.update_order_status(chat_id, OrderStatus.ERROR)
     
     # ============================================================================
@@ -499,11 +685,11 @@ class EventTriggerSystem:
         logger.info(f"📤 Solicitando endereço para {chat_id}")
         
         # Criar mensagem personalizada baseada no tipo de compra
-        moeda = order.get('currency', 'Lightning')
-        network = order.get('network', 'Lightning')
+        moeda = order.get('currency', 'Lightning') or 'Lightning'
+        network = order.get('network', 'Lightning') or 'Lightning'
         
         # Mensagem para Lightning
-        if 'lightning' in network.lower() or 'lightning' in moeda.lower():
+        if 'lightning' in str(network).lower() or 'lightning' in str(moeda).lower():
             mensagem = (
                 "⚡ *PIX CONFIRMADO - LIGHTNING PAYMENT* ⚡\n\n"
                 "🎉 Seu pagamento PIX foi confirmado com sucesso!\n"
@@ -520,38 +706,43 @@ class EventTriggerSystem:
             )
         else:
             # Mensagem para outras moedas
+            moeda_str = str(moeda).upper()
+            network_str = str(network)
             mensagem = (
-                f"✅ *PIX CONFIRMADO - {moeda.upper()}* ✅\n\n"
+                f"✅ *PIX CONFIRMADO - {moeda_str}* ✅\n\n"
                 f"🎉 Seu pagamento PIX foi confirmado com sucesso!\n"
-                f"💎 Agora você receberá seus {moeda.upper()} na rede {network}.\n\n"
-                f"📮 *Forneça seu endereço {moeda.upper()}:*\n"
-                f"• Rede: {network}\n"
-                f"• Formato: Endereço válido para {network}\n\n"
+                f"💎 Agora você receberá seus {moeda_str} na rede {network_str}.\n\n"
+                f"📮 *Forneça seu endereço {moeda_str}:*\n"
+                f"• Rede: {network_str}\n"
+                f"• Formato: Endereço válido para {network_str}\n\n"
                 f"⚠️ *IMPORTANTE:* Verifique se o endereço está correto.\n"
                 f"Envios para endereços incorretos não podem ser revertidos.\n\n"
-                f"🔤 *Digite seu endereço {moeda.upper()}:*"
+                f"🔤 *Digite seu endereço {moeda_str}:*"
             )
         
         # Tentar usar o callback primeiro
         import asyncio
         try:
-            # Criar e executar task assíncrona
-            async def send_async():
-                return await self.send_message(chat_id, mensagem)
-            
-            # Executar de forma síncrona
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # Se loop está rodando, criar task
-                    task = loop.create_task(send_async())
-                    logger.info(f"📨 Task de envio criada para {chat_id}")
-                else:
-                    # Se loop não está rodando, executar
-                    loop.run_until_complete(send_async())
-            except RuntimeError:
-                # Criar novo loop se necessário
-                asyncio.run(send_async())
+            if self.message_sender_callback:
+                # Criar e executar task assíncrona
+                async def send_async():
+                    return await self.message_sender_callback(chat_id, mensagem)
+                
+                # Executar de forma síncrona
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Se loop está rodando, criar task
+                        task = loop.create_task(send_async())
+                        logger.info(f"📨 Task de envio criada para {chat_id}")
+                    else:
+                        # Se loop não está rodando, executar
+                        loop.run_until_complete(send_async())
+                except RuntimeError:
+                    # Criar novo loop se necessário
+                    asyncio.run(send_async())
+            else:
+                logger.warning(f"⚠️ Callback de envio não configurado. Mensagem para {chat_id}: {mensagem[:50]}...")
                 
         except Exception as e:
             logger.error(f"❌ Erro ao enviar mensagem para {chat_id}: {e}")

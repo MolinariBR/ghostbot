@@ -20,6 +20,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger('smart_monitor')
 
+try:
+    from captura.capture_system import capture_system
+except ImportError:
+    from captura.capture_system import capture_system
+
 class SmartPixMonitor:
     """Monitor inteligente de pagamentos PIX - substitui cron externo"""
     
@@ -61,6 +66,93 @@ class SmartPixMonitor:
         self.is_running = False
         logger.info("🛑 Smart PIX Monitor parado")
         
+    async def smart_check_payment(self, depix_id: str, chat_id: str):
+        """Verificação inteligente com retry em momentos estratégicos - substitui polling contínuo"""
+        import uuid
+        
+        capture_system.capture_step(chat_id, "START_SMART_CHECK_PAYMENT", {"depix_id": depix_id})
+        logger.info(f"🧠 Iniciando verificação inteligente para {depix_id}")
+        
+        # Intervalos estratégicos: 30s, 2min, 5min, 10min, 20min
+        intervals = [30, 120, 300, 600, 1200]
+        
+        api_key = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJhbGciOiJSUzI1NiIsImVudiI6InByb2QiLCJleHAiOjE3ODI3NjUzNzcsImlhdCI6MTc1MTY2MTM3NywianRpIjoiNTY4OTlhZTdjMGJlIiwic2NvcGUiOlsiZGVwb3NpdCIsIndpdGhkcmF3Il0sInN1YiI6Imdob3N0IiwidHlwIjoiSldUIn0.fcobx8C6rPyYAYKo1WBhwyvErWHlX_ZOaZM3QvrOtBS5EGip8ofxX2h7lnJjZozNvu_6qI7SK3EsS8sPGYAkBWHvON3huWzXN--NkZV9HK4G5VMIYESdDqTvS7xnBcEJFlKjpq6wbN1siYu8Zp6b7RTfeRBlG4lNYiFVe3DWBJW2lcfTAOhMnpFQ4DPClxek-htU-pDtZcBwwgMfpBVGBIeiGVRV4YAvKFUeKItNijbBIwZtP3qsxslR-W8aaJUQ35OkPkBfrrw6OKz94Ng4xVs9uOZJ64ZBwVNzjKX_r6OIXtjVRbaErU-R4scdMlKYz-yj7bu0NhtmJTccruYyN5ITWtcTwxL9avhEp_ej8Ve3rWaf3ezsKejEol2iVakrHU9JDgLzmWxo7PXxTeipw5GlkXXo5IgtxxI-ViIHzPO3L816ZxdGhMlLS6fHEcZC1slWALUQgFxrS2VOLAfV105K63g4_X7_JKbEH0w7tOpaqd0Fl3VvodtKzH33JPNSfj9AD7hhJwhX6tDQvOtSpoRu10uRwPcVv_wfuqsgyaT6kfBJ5WKUdpyWFvSWWKjI5S907cjj8uXbazycBMQtZaL_aIRuqCEY3x_d8J_UlfS-vPwjC99RsXxMztXIzyQNdper7wIhVA604JiP5kvGN3ipzwIGNYT3jakbDviYNE0"
+        headers = {
+            "api_key": api_key,
+            "Authorization": f"Bearer {api_key}",
+            "X-Nonce": str(uuid.uuid4())
+        }
+        
+        for i, delay in enumerate(intervals):
+            try:
+                logger.info(f"⏱️ Aguardando {delay}s antes da verificação {i+1}/5 para {depix_id}")
+                await asyncio.sleep(delay)
+                
+                # Verificar se o pagamento ainda está ativo
+                if depix_id not in self.active_payments:
+                    logger.info(f"⚠️ Pagamento {depix_id} foi removido, parando verificação")
+                    return None
+                
+                url = f"https://depix.eulen.app/api/deposit-status?id={depix_id}"
+                response = requests.get(url, headers=headers, timeout=10)
+                
+                capture_system.capture_step(chat_id, "SMART_CHECK_ATTEMPT", {
+                    "depix_id": depix_id, 
+                    "attempt": i+1,
+                    "status_code": response.status_code
+                })
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    response_data = data.get('response', data)
+                    status = response_data.get('status')
+                    blockchain_txid = response_data.get('blockchainTxID')
+                    
+                    logger.info(f"🔍 Verificação {i+1}/5: status={status}, txid={blockchain_txid is not None}")
+                    
+                    if status == 'depix_sent' and blockchain_txid:
+                        capture_system.capture_step(chat_id, "BLOCKCHAIN_TXID_OBTAINED_SMART", {
+                            "depix_id": depix_id, 
+                            "blockchain_txid": blockchain_txid,
+                            "attempt": i+1
+                        })
+                        
+                        logger.info(f"✅ BlockchainTxID encontrado na tentativa {i+1}: {blockchain_txid}")
+                        
+                        # Verificar se pagamento ainda existe e processar
+                        if depix_id in self.active_payments:
+                            self.active_payments[depix_id]['blockchain_txid'] = blockchain_txid
+                            self.active_payments[depix_id]['confirmed_at'] = datetime.now()
+                            await self._process_confirmed_payment(depix_id, self.active_payments[depix_id])
+                        else:
+                            # Recriar dados do pagamento
+                            payment_data = {
+                                'chat_id': chat_id,
+                                'depix_id': depix_id,
+                                'blockchain_txid': blockchain_txid,
+                                'registered_at': datetime.now(),
+                                'confirmed_at': datetime.now(),
+                                'amount': 10.0
+                            }
+                            self.active_payments[depix_id] = payment_data
+                            await self._process_confirmed_payment(depix_id, payment_data)
+                        
+                        return blockchain_txid
+                    
+            except Exception as e:
+                logger.error(f"❌ Erro na verificação {i+1} para {depix_id}: {e}")
+                capture_system.capture_error(chat_id, "SMART_CHECK_ERROR", str(e), e)
+        
+        # Se chegou aqui, timeout após todas as tentativas
+        logger.warning(f"⏰ Timeout após 5 tentativas para {depix_id}")
+        capture_system.capture_step(chat_id, "SMART_CHECK_TIMEOUT", {"depix_id": depix_id})
+        
+        # Remove do monitoramento ativo
+        if depix_id in self.active_payments:
+            del self.active_payments[depix_id]
+        
+        return None
+
     def register_pix_payment(self, depix_id: str, chat_id: str, amount_brl: float):
         """
         Registra um novo pagamento PIX para monitoramento
@@ -80,12 +172,15 @@ class SmartPixMonitor:
         
         self.active_payments[depix_id] = payment_data
         self.stats['payments_monitored'] += 1
-        
         logger.info(f"📝 PIX registrado para monitoramento: {depix_id} (chat: {chat_id}, valor: R$ {amount_brl:.2f})")
+        capture_system.capture_step(chat_id, "PIX_REGISTERED", {"depix_id": depix_id, "amount_brl": amount_brl})
         
-        # Se o monitor não estiver rodando, iniciar automaticamente
-        if not self.is_running:
-            self.start_monitoring()
+        # Iniciar verificação inteligente (substitui polling contínuo)
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(self.smart_check_payment(depix_id, chat_id))
+        else:
+            loop.run_until_complete(self.smart_check_payment(depix_id, chat_id))
     
     async def _monitor_loop(self):
         """Loop principal de monitoramento"""
@@ -157,6 +252,14 @@ class SmartPixMonitor:
                         payment_data['confirmed_at'] = datetime.now()
                         return True
             
+            # MOCK: Se depix_id começar com 'test_', simula pagamento confirmado
+            if str(depix_id).startswith('test_'):
+                logger.info(f"[MOCK] Pagamento de teste detectado para depix_id: {depix_id}")
+                payment_data['blockchain_txid'] = f"MOCK_TXID_{depix_id}"
+                payment_data['confirmed_at'] = datetime.now()
+                await self._process_confirmed_payment(depix_id, payment_data)
+                return f"MOCK_TXID_{depix_id}"
+            
             return False
             
         except Exception as e:
@@ -185,10 +288,17 @@ class SmartPixMonitor:
                 self.stats['average_confirmation_time'] = (current_avg * (count - 1) + confirmation_time) / count
             
             logger.info(f"💰 Pagamento {depix_id} confirmado em {confirmation_time:.1f}s (chat: {chat_id})")
-            
-            # AQUI É ONDE CHAMAMOS O SISTEMA ATUAL
+
             # Dispara o processamento Lightning (substitui o cron)
             await self._trigger_lightning_processing(chat_id)
+
+            # NOVO: Solicita endereço cripto após confirmação do pagamento
+            try:
+                from trigger.sistema_gatilhos import trigger_system, TriggerEvent
+                trigger_system.trigger_event(TriggerEvent.ADDRESS_REQUESTED, chat_id, {'depix_id': depix_id})
+                logger.info(f"📮 Gatilho ADDRESS_REQUESTED disparado para chat_id {chat_id} após confirmação do pagamento.")
+            except Exception as e:
+                logger.error(f"Erro ao disparar gatilho ADDRESS_REQUESTED após pagamento confirmado: {e}")
             
         except Exception as e:
             logger.error(f"Erro ao processar pagamento confirmado {depix_id}: {e}")
@@ -210,6 +320,7 @@ class SmartPixMonitor:
                 'depix_id': payment_data.get('depix_id'),
                 'amount': payment_data.get('amount'),
                 'chat_id': chat_id,
+                'blockchain_txid': payment_data.get('blockchain_txid'),  # Adicionado!
                 'timestamp': datetime.now().isoformat()
             }
             

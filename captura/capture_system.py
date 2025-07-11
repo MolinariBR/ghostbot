@@ -241,6 +241,10 @@ class CaptureSystem:
     def capture_pix_generation(self, user_id: str, depix_id: str, qr_code_url: str = None, success: bool = True):
         """Captura geração de PIX"""
         session = self.get_session(user_id)
+        if not session:
+            # Fallback: cria sessão mínima se não existir
+            session = self.start_session(user_id)
+            capture_logger.info(f"⚡ Sessão criada automaticamente para {user_id} pelo backend (PIX generation)")
         if session:
             session.add_step("PIX_GENERATED", {
                 "depix_id": depix_id,
@@ -301,12 +305,14 @@ class CaptureSystem:
     def capture_trigger_event(self, user_id: str, event_name: str, event_data: Dict = None, success: bool = True):
         """Captura evento do sistema de gatilhos"""
         session = self.get_session(user_id)
+        if not session:
+            # Fallback: cria sessão mínima se não existir
+            session = self.start_session(user_id)
+            capture_logger.info(f"⚡ Sessão criada automaticamente para {user_id} pelo backend (trigger event: {event_name})")
         if session:
-            session.add_step("TRIGGER_EVENT", {
-                "event_name": event_name,
-                "event_data": event_data,
-                "success": success
-            }, success)
+            session.add_step(f"TRIGGER_EVENT_{event_name}", event_data or {}, success)
+            if not success:
+                session.add_error(f"Trigger event falhou: {event_name}")
         else:
             capture_logger.warning(f"⚠️ Sessão não encontrada para {user_id} no evento {event_name}")
             
@@ -322,6 +328,14 @@ class CaptureSystem:
             }, success=False)
         else:
             capture_logger.error(f"❌ Erro para usuário sem sessão {user_id}: {error_type} - {error_message}")
+    
+    def capture_step(self, user_id: str, step_name: str, data: Dict = None, success: bool = True):
+        """Captura um passo genérico do usuário"""
+        session = self.get_session(user_id)
+        if session:
+            session.add_step(step_name, data, success)
+        else:
+            capture_logger.warning(f"⚠️ Sessão não encontrada para {user_id} ao capturar passo {step_name}")
     
     # ============================================================================
     # MÉTODOS DE ANÁLISE
