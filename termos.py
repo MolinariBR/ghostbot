@@ -15,41 +15,27 @@ def obter_termos() -> str:
 Ao usar este bot, você concorda com os termos abaixo:
 
 *1. Objetivo*
-O bot facilita a compra de criptomoedas, direcionando usuários a atendentes após confirmação do pagamento.
+O bot facilita a compra de criptomoedas, com controle de comissão, limites diários por usuário e direcionamento ao atendimento quando necessário.
 
-*2. Regras de Pagamento*
-Chave PIX: Copie todo o texto da chave PIX e pague na área "PIX Copia e Cola" do seu banco.
+*2. Comissão e Limites*
+Todas as compras possuem comissão variável conforme moeda e valor. Os limites diários são escalonados por usuário, iniciando em R$500,00 e podendo chegar até R$4.999,99. Compras acima do limite exigem CPF e/ou contato com o atendente.
 
-Proibição de terceiros: Use apenas sua conta bancária. Pagamentos de terceiros são permitidos só para cadastrados no bot. Inconsistências podem levar à retenção do valor e processo de KYC para estorno.
+*3. Métodos de Pagamento*
+O método principal é o PIX. Para TED ou boleto, ou para redes específicas (Liquid, Polygon, Onchain), o usuário deve falar com o atendente @GhosttP2P. Pagamentos de terceiros só são permitidos para usuários cadastrados.
 
-Comprovante: Clique em PAGO, envie o comprovante e aguarde o atendente.
+*4. Regras de Pagamento*
+Chave PIX: Copie todo o texto da chave PIX e pague na área "PIX Copia e Cola" do seu banco. Envie o comprovante após o pagamento.
 
-*3. Contestações Indevidas*
-Tentativas de chargeback, MED ou contestações indevidas são proibidas.
-
-Medidas legais serão tomadas, e custos bancários serão repassados ao usuário.
-
-A entrega das criptomoedas será suspensa até a resolução da disputa.
-
-*4. Responsabilidades do Usuário*
-Forneça dados corretos e siga as instruções.
-
-Fraudes ou uso indevido resultam em bloqueio e retenção de valores.
-
-O usuário assume os riscos da compra de criptomoedas.
-
-*5. Retenção e Estorno*
-Pagamentos retidos por inconsistências ou contestações exigem KYC para estorno, feito apenas à conta de origem.
-
-Não nos responsabilizamos por atrasos causados por dados incorretos.
+*5. Contestações e Retenção*
+Tentativas de chargeback, MED ou contestações indevidas são proibidas. Pagamentos retidos exigem KYC para estorno, feito apenas à conta de origem. Não nos responsabilizamos por atrasos causados por dados incorretos.
 
 *6. Privacidade*
-Dados são tratados com confidencialidade, e usados apenas para averiguação.
+Dados são tratados com confidencialidade, usados apenas para averiguação e controle de limites.
 
 *7. Aceitação*
-Usar o bot implica concordância com estes termos.
+Usar o bot implica concordância com estes termos, incluindo regras de comissão, limites e métodos de pagamento.
 
-Dúvidas? Fale com o suporte: @GhosttP2P
+Dúvidas ou compras especiais? Fale com o suporte: @GhosttP2P
 """
     return termos.strip()
 
@@ -60,7 +46,7 @@ def obter_termos_resumido() -> str:
     Returns:
         str: Texto resumido dos termos.
     """
-    return "📜 Termos de Uso para Compra de Criptomoedas"
+    return "📜 Termos de Uso: Comissão, Limites, Pagamentos e Atendimento via @GhosttP2P"
 
 # Exemplo de uso:
 if __name__ == "__main__":
