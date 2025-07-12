@@ -610,6 +610,7 @@ class MenuCompraV2:
             logger.info(f"Valor em sats calculado: {valor_sats}")
             if valor_sats == 0:
                 logger.error(f"Valor em sats é zero para depósito PIX! chatid={chatid}, valor_brl={valor_brl}")
+            valor_btc = valor_sats  # Correção: garante que valor_btc está definido
             cobranca = pix_api.criar_pagamento(
                 valor_centavos=valor_centavos,
                 endereco=endereco_temp,
