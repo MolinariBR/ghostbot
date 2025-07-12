@@ -1,4 +1,4 @@
-# Dependências para desenvolvimento e testes
+requirements-dev.txt# Dependências para desenvolvimento e testes
 pytest>=7.0.0
 pytest-cov>=3.0.0
 pytest-mock>=3.10.0
