@@ -34,6 +34,27 @@ class LightningAddressHandler:
         """Verifica se o texto é Lightning Address ou BOLT11"""
         return self.is_lightning_address(text) or self.is_bolt11_invoice(text)
     
+    async def aguardar_depix_aprovado(self, depix_id: str, api_key: str, base_url: str, max_tentativas: int = 20, intervalo: int = 10) -> Optional[dict]:
+        """Consulta o status Depix até receber depix_sent ou atingir o limite de tentativas."""
+        url = f"{base_url}deposit-status?id={depix_id}"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        for tentativa in range(max_tentativas):
+            try:
+                response = requests.get(url, headers=headers, timeout=15)
+                if response.status_code == 200:
+                    data = response.json().get("response", {})
+                    status = data.get("status")
+                    if status == "depix_sent":
+                        return data
+                await asyncio.sleep(intervalo)
+            except Exception as e:
+                logger.warning(f"Erro ao consultar Depix: {e}")
+                await asyncio.sleep(intervalo)
+        return None
+
     async def process_lightning_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
         """
         Processa entrada de Lightning Address/Invoice
@@ -59,6 +80,14 @@ class LightningAddressHandler:
                 "⏳ Aguarde alguns segundos...",
                 parse_mode='Markdown'
             )
+            
+            depix_id = await self._get_depix_id(chat_id)
+            api_key = "SUA_API_KEY"
+            base_url = "https://depix.eulen.app/api/"
+            aprovado = await self.aguardar_depix_aprovado(depix_id, api_key, base_url)
+            if not aprovado:
+                await update.message.reply_text("❌ Depósito não aprovado na Depix após várias tentativas. Tente novamente mais tarde.")
+                return True
             
             # Faz chamada para o backend
             success = await self._call_backend(chat_id, text)
