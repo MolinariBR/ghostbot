@@ -75,6 +75,21 @@ def gerar_resumo_compra(chatid, moeda, rede, valor, pix=False, registrar=False):
         resumo += f"\n{MENSAGEM_CPF}"
     return resumo
 
+def calcular_sats_recebidos(chatid, moeda, rede, valor, pix=False):
+    cotacao = get_cotacao(moeda)
+    taxa_parceiro = 1.0 if pix or (str(moeda).upper() in ["BITCOIN", "BTC"] and str(rede).upper() in ["LIGHTNING", "LNT"]) else 0.0
+    percentual, comissao, _ = calcular_comissao(valor, moeda, pix=pix)
+    parceiro = taxa_parceiro if taxa_parceiro else 0.0
+    valor_liquido = valor - comissao - parceiro
+    moeda_upper = str(moeda).upper()
+    if "BITCOIN" in moeda_upper or "BTC" in moeda_upper:
+        valor_btc = valor_liquido / cotacao if cotacao > 0 else 0
+        valor_sats = int(valor_btc * 100_000_000)
+        if valor_sats < 1:
+            valor_sats = 1
+        return valor_sats
+    return 0
+
 # Exemplo de uso
 if __name__ == "__main__":
     chatid = "123456"

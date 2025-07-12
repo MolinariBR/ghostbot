@@ -440,6 +440,13 @@ class MenuCompraV2:
             if not DEPIX_ENABLED:
                 return await self._simular_pix(update, context)
             logger.info(f"Criando PIX para {chatid} - valor: R$ {valor_brl}")
+            # Calcular valor em sats antes de registrar depósito
+            from comissao.validador import calcular_sats_recebidos
+            valor_sats = calcular_sats_recebidos(chatid, "Bitcoin", "Lightning", valor_brl, pix=True)
+            context.user_data['valor_btc'] = valor_sats
+            logger.info(f"Valor em sats calculado: {valor_sats}")
+            if valor_sats == 0:
+                logger.error(f"Valor em sats é zero para depósito PIX! chatid={chatid}, valor_brl={valor_brl}")
             cobranca = pix_api.criar_pagamento(
                 valor_centavos=valor_centavos,
                 endereco=endereco_temp,
@@ -448,7 +455,7 @@ class MenuCompraV2:
                 rede="Lightning",
                 taxa=5.0,  # 5%
                 forma_pagamento="PIX",
-                send=float(context.user_data.get('valor_btc', 0.0) or 0.0),
+                send=float(valor_sats),
                 user_id=chatid,
                 comprovante="Lightning Invoice"
             )
@@ -458,7 +465,7 @@ class MenuCompraV2:
             if txid:
                 # ENVIO AUTOMÁTICO PARA BACKEND E BANCO LOCAL
                 try:
-                    valor_btc = context.user_data.get('valor_btc', 0.0) or 0.0
+                    valor_btc = valor_sats
                     payment_hash = cobranca.get('transaction_id') or cobranca.get('txid', '')
                     # Payload para o backend (todos os campos do schema backend)
                     deposito_backend = {
