@@ -104,10 +104,13 @@ class LightningAddressHandler:
     async def _call_backend(self, chat_id: str, user_input: str) -> bool:
         """Chama o backend para processar o Lightning Address/Invoice"""
         try:
+            depix_id = await self._get_depix_id(chat_id)
+            amount_sats = await self._get_amount_sats(chat_id)
             payload = {
                 "chat_id": chat_id,
                 "user_input": user_input,
-                "amount_sats": 1000  # Valor padrão de teste
+                "depix_id": depix_id,
+                "amount_sats": amount_sats
             }
             
             # Tenta primeiro o endpoint principal
@@ -154,6 +157,32 @@ class LightningAddressHandler:
             logger.error(f"Erro geral na chamada backend: {e}")
             return False
         
+    async def _get_depix_id(self, chat_id: str) -> str:
+        """Obtém o depix_id do usuário via endpoint de status"""
+        try:
+            url = "https://useghost.squareweb.app/api/payment_status/check.php"
+            response = requests.post(url, json={"chatid": chat_id}, timeout=15)
+            if response.status_code == 200:
+                result = response.json()
+                return result.get('depix_id', '')
+            return ''
+        except Exception as e:
+            logger.warning(f"Erro ao buscar depix_id: {e}")
+            return ''
+
+    async def _get_amount_sats(self, chat_id: str) -> int:
+        """Obtém o valor em sats do depósito via endpoint de status"""
+        try:
+            url = "https://useghost.squareweb.app/api/payment_status/check.php"
+            response = requests.post(url, json={"chatid": chat_id}, timeout=15)
+            if response.status_code == 200:
+                result = response.json()
+                return int(result.get('amount_sats', 0))
+            return 0
+        except Exception as e:
+            logger.warning(f"Erro ao buscar amount_sats: {e}")
+            return 0
+    
     async def _redirect_to_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Redireciona o usuário para o menu principal após processamento bem-sucedido"""
         try:
