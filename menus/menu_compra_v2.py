@@ -79,7 +79,12 @@ PIX = "💠 PIX"
 MIN_VALOR = 10.0
 MAX_VALOR = 5000.0
 
-LOG_PATH = "/home/mau/bot/ghost/log_final/bot.log"
+# Caminho relativo para o diretório de logs
+LOG_DIR = os.path.join(os.path.dirname(__file__), '../log_final')
+LOG_PATH = os.path.join(LOG_DIR, 'bot.log')
+
+# Garante que o diretório de logs existe
+os.makedirs(LOG_DIR, exist_ok=True)
 
 def log_event(event_type, chatid=None, data=None):
     """Registra evento no log principal do bot"""
