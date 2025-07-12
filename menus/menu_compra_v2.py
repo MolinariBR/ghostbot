@@ -8,6 +8,8 @@ import time
 import asyncio
 import aiohttp
 import requests
+import json
+import os
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -77,8 +79,37 @@ PIX = "💠 PIX"
 MIN_VALOR = 10.0
 MAX_VALOR = 5000.0
 
+LOG_PATH = "/home/mau/bot/ghost/log_final/bot.log"
+
+def log_event(event_type, chatid=None, data=None):
+    """Registra evento no log principal do bot"""
+    try:
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "event": event_type,
+            "chatid": chatid,
+            "data": data or {}
+        }
+        with open(LOG_PATH, "a") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"Erro ao registrar log: {e}")
+
+# ==========================================
+# FUNÇÕES DE LOG E CAPTURA
+# ==========================================
+# log_event: registra eventos críticos no arquivo de log principal
+# capture_step/capture_error/capture_user_session: sistema de captura para rastreabilidade
+
+# ==========================================
+# CLASSE PRINCIPAL DO MENU DE COMPRA
+# ==========================================
 class MenuCompraV2:
-    """Menu de compra V2 - Versão limpa e otimizada"""
+    """
+    Menu de compra V2 - Versão limpa e otimizada
+    Gerencia todo o fluxo de compra do bot Ghost, incluindo seleção de moeda, rede,
+    valor, confirmação, pagamento e integração com backend/stateless.
+    """
     
     def __init__(self):
         self.menu_principal_func = None
@@ -90,7 +121,66 @@ class MenuCompraV2:
     # ==========================================
     # HELPERS E VALIDAÇÕES
     # ==========================================
-    
+    # formatar_brl: formata valores em reais
+    # validar_valor: valida e converte valores informados pelo usuário
+    # validar_limites_valor: verifica limites permitidos
+    # get_chatid: obtém o chatid do usuário
+
+    # ==========================================
+    # MENUS E KEYBOARDS
+    # ==========================================
+    # menu_moedas/menu_redes/menu_valores_sugeridos/menu_confirmacao/menu_pagamento:
+    # geram os teclados de opções para cada etapa do fluxo
+
+    # ==========================================
+    # HANDLERS DA CONVERSA
+    # ==========================================
+    # iniciar_compra: inicia o fluxo de compra
+    # escolher_moeda: processa escolha da moeda
+    # escolher_rede: processa escolha da rede
+    # informar_valor: processa valor informado
+    # confirmar_dados: processa confirmação dos dados
+    # escolher_pagamento: processa escolha da forma de pagamento
+
+    # ==========================================
+    # PROCESSAMENTO PIX
+    # ==========================================
+    # atualizar_status_deposito_backend: atualiza status do depósito no backend
+    # validar_pagamento_confirmado_backend: valida pagamento via backend REST
+    # _processar_pix: processa pagamento PIX, integra com Depix, backend e libera envio dos sats
+    # _simular_pix: simula pagamento PIX para testes
+    # _fallback_check: verificação de fallback caso o sistema principal falhe
+    # _validar_resposta_depix: valida resposta da API Depix
+    # _extrair_dados_pix: extrai dados do PIX da resposta da API
+
+    # ==========================================
+    # HELPERS
+    # ==========================================
+    # _cancelar_compra: cancela a compra e retorna ao menu principal
+    # _get_main_menu: retorna o teclado do menu principal
+
+    # ==========================================
+    # CONVERSATION HANDLER
+    # ==========================================
+    # get_conversation_handler: retorna o ConversationHandler configurado para o fluxo
+
+    # ==========================================
+    # CÁLCULO DE COMISSÃO E CONVERSÃO
+    # ==========================================
+    # calcular_comissao_fallback: calcula comissão padrão
+    # calcular_sats_equivalente: converte BRL para sats usando cotação online ou fallback
+
+    # ==========================================
+    # INSTÂNCIA GLOBAL E FUNÇÕES DE COMPATIBILIDADE
+    # ==========================================
+    # menu_compra_v2: instância global do menu
+    # get_compra_conversation_v2/set_menu_principal_v2: funções de compatibilidade
+
+    # ==========================================
+    # LOGS DE INICIALIZAÇÃO
+    # ==========================================
+    # Prints informativos sobre funcionalidades carregadas
+
     def formatar_brl(self, valor: float) -> str:
         """Formata valor em BRL"""
         return f"R$ {valor:,.2f}".replace(".", "v").replace(",", ".").replace("v", ",")
@@ -196,6 +286,7 @@ class MenuCompraV2:
             "username": username,
             "user_id": user.id
         })
+        log_event("COMPRA_INICIADA", chatid, {"username": username})
         
         try:
             # Limpa dados anteriores
@@ -216,6 +307,7 @@ class MenuCompraV2:
         except Exception as e:
             capture_error(chatid, str(e), "iniciar_compra")
             logger.error(f"Erro iniciando compra: {e}")
+            log_event("ERRO", chatid, {"erro": str(e), "contexto": "iniciar_compra"})
             
             await update.message.reply_text(
                 "❌ Erro ao iniciar compra. Tente novamente.",
@@ -229,6 +321,7 @@ class MenuCompraV2:
         escolha = update.message.text
 
         capture_step(chatid, "MOEDA_ESCOLHIDA", {"moeda": escolha})
+        log_event("MOEDA_ESCOLHIDA", chatid, {"moeda": escolha})
 
         if escolha == "🔙 Voltar":
             return await self._cancelar_compra(update, context)
@@ -278,6 +371,7 @@ class MenuCompraV2:
         chatid = self.get_chatid(update)
         escolha = update.message.text
         capture_step(chatid, "REDE_ESCOLHIDA", {"rede": escolha})
+        log_event("REDE_ESCOLHIDA", chatid, {"rede": escolha})
         moeda = context.user_data.get('moeda', '')
         # Regras de atendimento
         if (moeda in ["Bitcoin (BTC)", "Bitcoin"] and escolha in ["💧 Liquid", "🔗 Onchain"]) or \
@@ -325,6 +419,7 @@ class MenuCompraV2:
         chatid = self.get_chatid(update)
         valor_str = update.message.text
         capture_step(chatid, "VALOR_INFORMADO", {"valor_str": valor_str})
+        log_event("VALOR_INFORMADO", chatid, {"valor_str": valor_str})
         if valor_str == "🔙 Voltar":
             reply_markup = ReplyKeyboardMarkup(self.menu_redes(), resize_keyboard=True)
             await update.message.reply_text(
@@ -380,6 +475,7 @@ class MenuCompraV2:
         chatid = self.get_chatid(update)
         escolha = update.message.text
         capture_step(chatid, "CONFIRMACAO_PROCESSADA", {"escolha": escolha})
+        log_event("CONFIRMACAO_PROCESSADA", chatid, {"escolha": escolha})
         if escolha == "🔙 Voltar":
             reply_markup = ReplyKeyboardMarkup(self.menu_valores_sugeridos(), resize_keyboard=True)
             await update.message.reply_text(
@@ -415,6 +511,7 @@ class MenuCompraV2:
         escolha = update.message.text
         
         capture_step(chatid, "PAGAMENTO_ESCOLHIDO", {"forma": escolha})
+        log_event("PAGAMENTO_ESCOLHIDO", chatid, {"forma": escolha})
         
         if escolha == "🔙 Voltar":
             reply_markup = ReplyKeyboardMarkup(self.menu_confirmacao(), resize_keyboard=True)
@@ -446,6 +543,7 @@ class MenuCompraV2:
     
     async def atualizar_status_deposito_backend(self, depix_id: str, chatid: str, blockchainTxID: str, novo_status: str = "pagamento_confirmado"):
         """Atualiza o status do depósito no backend após confirmação do pagamento"""
+        log_event("ATUALIZAR_STATUS_DEPOSITO", chatid, {"depix_id": depix_id, "blockchainTxID": blockchainTxID, "novo_status": novo_status})
         try:
             url_backend = "https://useghost.squareweb.app/api/deposit_receiver.php"
             payload = {
@@ -468,6 +566,7 @@ class MenuCompraV2:
 
     async def validar_pagamento_confirmado_backend(self, depix_id: str) -> bool:
         """Valida se o pagamento foi confirmado via backend REST."""
+        log_event("VALIDAR_PAGAMENTO_BACKEND", None, {"depix_id": depix_id})
         try:
             url = f"https://useghost.squareweb.app/payment_status/check.php?depix_id={depix_id}"
             import aiohttp
@@ -486,7 +585,7 @@ class MenuCompraV2:
     async def _processar_pix(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Processa pagamento PIX de forma limpa"""
         chatid = self.get_chatid(update)
-        capture_step(chatid, "PIX_PROCESSAMENTO_INICIADO")
+        log_event("PROCESSAR_PIX_INICIADO", chatid)
         try:
             valor_brl = context.user_data['valor_brl']
             valor_centavos = int(valor_brl * 100)
@@ -522,6 +621,7 @@ class MenuCompraV2:
                 raise Exception("Resposta inválida da API Depix")
             qr_code, txid, copia_e_cola = self._extrair_dados_pix(cobranca)
             if txid:
+                log_event("PIX_TXID_RECEBIDO", chatid, {"txid": txid, "valor_btc": valor_btc})
                 # ENVIO AUTOMÁTICO PARA BACKEND (sem banco local)
                 try:
                     valor_btc = valor_sats
@@ -559,6 +659,7 @@ class MenuCompraV2:
                             f"✅ Pagamento confirmado! Seus sats serão enviados em instantes.",
                             parse_mode='Markdown'
                         )
+                        log_event("PAGAMENTO_CONFIRMADO", chatid, {"depix_id": txid})
                     else:
                         logger.info(f"Pagamento ainda não confirmado para depix_id={txid}, aguardando confirmação.")
                 except Exception as e:
@@ -574,6 +675,7 @@ class MenuCompraV2:
                 caption="📱 *Escaneie o QR Code para pagar*",
                 parse_mode='Markdown'
             )
+            log_event("PIX_QRCODE_ENVIADO", chatid, {"txid": txid, "qr_code": qr_code})
             # Usa o resumo do validador para garantir consistência
             mensagem = (
                 f"⚡ *PAGAMENTO PIX → LIGHTNING* ⚡\n"
@@ -598,11 +700,14 @@ class MenuCompraV2:
                 "txid": txid,
                 "valor": valor_brl
             })
+            log_event("PIX_CRIADO_SUCESSO", chatid, {"txid": txid, "valor": valor_brl})
             context.user_data.clear()
             return ConversationHandler.END
         except Exception as e:
+            log_event("ERRO_PROCESSAR_PIX", chatid, {"erro": str(e)})
             capture_error(chatid, str(e), "processar_pix")
             logger.error(f"Erro processando PIX: {e}")
+            log_event("ERRO", chatid, {"erro": str(e), "contexto": "processar_pix"})
             await update.message.reply_text(
                 f"❌ *Erro ao processar PIX*\n\n"
                 f"Tente novamente ou contate o suporte.\n"
@@ -616,30 +721,46 @@ class MenuCompraV2:
     async def _simular_pix(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Simula PIX quando API não está disponível"""
         chatid = self.get_chatid(update)
-        valor_brl = context.user_data['valor_brl']
-        moeda = context.user_data.get('moeda', '')
-        rede = context.user_data.get('rede', '')
-        from comissao.validador import gerar_resumo_compra
-        resumo = gerar_resumo_compra(chatid, moeda, rede, valor_brl, pix=True)
-        txid = f"test_{chatid}_{int(time.time())}"
-        qr_code_url = "https://via.placeholder.com/200x200/0066ff/ffffff?text=QR+PIX"
-        copia_e_cola = f"00020126360014BR.GOV.BCB.PIX0114+5511999999999520400005303986540{valor_brl:.2f}5802BR5925GHOST BOT6009SAO PAULO62070503***6304"
-        await update.message.reply_text(
-            f"🧪 *MODO SIMULAÇÃO - PIX*\n\n"
-            f"{resumo}\n"
-            f"🆔 ID: `{txid}`\n\n"
-            f"📱 Código simulado:\n"
-            f"`{copia_e_cola[:50]}...`\n\n"
-            f"⚠️ *Este é um PIX simulado para testes*",
-            parse_mode='Markdown',
-            reply_markup=self._get_main_menu()
-        )
-        capture_step(chatid, "PIX_SIMULADO", {"txid": txid, "valor": valor_brl})
-        context.user_data.clear()
-        return ConversationHandler.END
+        log_event("SIMULAR_PIX_INICIADO", chatid)
+        try:
+            valor_brl = context.user_data['valor_brl']
+            moeda = context.user_data.get('moeda', '')
+            rede = context.user_data.get('rede', '')
+            from comissao.validador import gerar_resumo_compra
+            resumo = gerar_resumo_compra(chatid, moeda, rede, valor_brl, pix=True)
+            txid = f"test_{chatid}_{int(time.time())}"
+            qr_code_url = "https://via.placeholder.com/200x200/0066ff/ffffff?text=QR+PIX"
+            copia_e_cola = f"00020126360014BR.GOV.BCB.PIX0114+5511999999999520400005303986540{valor_brl:.2f}5802BR5925GHOST BOT6009SAO PAULO62070503***6304"
+            await update.message.reply_text(
+                f"🧪 *MODO SIMULAÇÃO - PIX*\n\n"
+                f"{resumo}\n"
+                f"🆔 ID: `{txid}`\n\n"
+                f"📱 Código simulado:\n"
+                f"`{copia_e_cola[:50]}...`\n\n"
+                f"⚠️ *Este é um PIX simulado para testes*",
+                parse_mode='Markdown',
+                reply_markup=self._get_main_menu()
+            )
+            capture_step(chatid, "PIX_SIMULADO", {"txid": txid, "valor": valor_brl})
+            log_event("PIX_SIMULADO", chatid, {"txid": txid, "valor": valor_brl})
+            context.user_data.clear()
+            return ConversationHandler.END
+        except Exception as e:
+            log_event("ERRO_SIMULAR_PIX", chatid, {"erro": str(e)})
+            logger.error(f"Erro na simulação do PIX: {e}")
+            await update.message.reply_text(
+                f"❌ *Erro na simulação do PIX*\n\n"
+                f"Tente novamente ou contate o suporte.\n"
+                f"Erro: {str(e)[:50]}...",
+                parse_mode='Markdown',
+                reply_markup=self._get_main_menu()
+            )
+            context.user_data.clear()
+            return ConversationHandler.END
     
     async def _fallback_check(self, txid: str, chatid: str):
         """Verificação de fallback caso o sistema principal falhe"""
+        log_event("FALLBACK_CHECK_INICIADO", chatid, {"txid": txid})
         try:
             await asyncio.sleep(30)  # Aguarda 30s
             from direct_notification import notification_system
@@ -648,6 +769,7 @@ class MenuCompraV2:
             logger.error(f"Erro na verificação de fallback: {e}")
     
     def _validar_resposta_depix(self, cobranca: Dict) -> bool:
+        log_event("VALIDAR_RESPOSTA_DEPIX", None, {"cobranca": cobranca})
         """Valida resposta da API Depix"""
         if not cobranca:
             return False
@@ -661,6 +783,7 @@ class MenuCompraV2:
         return bool(cobranca.get('qr_image_url') and (cobranca.get('qr_code_text') or cobranca.get('copia_e_cola')))
     
     def _extrair_dados_pix(self, cobranca: Dict) -> tuple[str, str, str]:
+        log_event("EXTRAIR_DADOS_PIX", None, {"cobranca": cobranca})
         """Extrai dados do PIX da resposta da API"""
         if cobranca.get('success') and 'data' in cobranca:
             data = cobranca['data']
@@ -683,7 +806,9 @@ class MenuCompraV2:
     async def _cancelar_compra(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Cancela a compra e volta ao menu principal"""
         chatid = self.get_chatid(update)
+        log_event("CANCELAR_COMPRA", chatid)
         capture_step(chatid, "COMPRA_CANCELADA")
+        log_event("COMPRA_CANCELADA", chatid)
         
         context.user_data.clear()
         
