@@ -456,11 +456,34 @@ class MenuCompraV2:
                 raise Exception("Resposta inválida da API Depix")
             qr_code, txid, copia_e_cola = self._extrair_dados_pix(cobranca)
             if txid:
-                # ENVIO AUTOMÁTICO PARA BACKEND
+                # ENVIO AUTOMÁTICO PARA BACKEND E BANCO LOCAL
                 try:
                     valor_btc = context.user_data.get('valor_btc', 0.0) or 0.0
                     payment_hash = cobranca.get('transaction_id') or cobranca.get('txid', '')
-                    deposito = {
+                    # Payload para o backend (todos os campos do schema backend)
+                    deposito_backend = {
+                        "blockchainTxID": payment_hash,
+                        "chatid": chatid,
+                        "amount_in_cents": valor_centavos,
+                        "taxa": 5.0,
+                        "moeda": "BTC",
+                        "rede": "Lightning",
+                        "address": "LIGHTNING_PENDING",
+                        "forma_pagamento": "PIX",
+                        "send": valor_btc,
+                        "status": "pending",
+                        "created_at": datetime.now().isoformat(),
+                        "depix_id": txid,
+                        "notified": 0,
+                        "metodo_pagamento": "PIX",
+                        "comprovante": "Lightning Invoice",
+                        "user_id": chatid,
+                        "cpf": None
+                    }
+                    url_backend = "https://useghost.squareweb.app/api/deposit_receiver.php"
+                    requests.post(url_backend, json=deposito_backend, timeout=10)
+                    # Payload para o banco local (apenas campos do schema local)
+                    deposito_local = {
                         "depix_id": txid,
                         "chatid": chatid,
                         "amount_in_cents": valor_centavos,
@@ -470,10 +493,29 @@ class MenuCompraV2:
                         "created_at": datetime.now().isoformat(),
                         "blockchainTxID": payment_hash,
                     }
-                    url_backend = "https://useghost.squareweb.app/api/deposit_receiver.php"
-                    requests.post(url_backend, json=deposito, timeout=10)
+                    import os
+                    import sqlite3
+                    db_path = os.path.join(os.path.dirname(__file__), '../data/deposit.db')
+                    conn = sqlite3.connect(db_path)
+                    cur = conn.cursor()
+                    cur.execute("""
+                        INSERT OR REPLACE INTO deposit (
+                            depix_id, chatid, amount_in_cents, send, rede, status, created_at, blockchainTxID
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        deposito_local["depix_id"],
+                        deposito_local["chatid"],
+                        deposito_local["amount_in_cents"],
+                        deposito_local["send"],
+                        deposito_local["rede"],
+                        deposito_local["status"],
+                        deposito_local["created_at"],
+                        deposito_local["blockchainTxID"]
+                    ))
+                    conn.commit()
+                    conn.close()
                 except Exception as e:
-                    logger.warning(f"Erro ao enviar depósito para backend: {e}")
+                    logger.warning(f"Erro ao enviar depósito para backend ou banco local: {e}")
                 try:
                     asyncio.create_task(notification_system.schedule_smart_checks(txid, chatid))
                     logger.info(f"PIX {txid} agendado para verificação inteligente")
