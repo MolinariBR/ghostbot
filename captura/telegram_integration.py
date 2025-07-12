@@ -257,6 +257,26 @@ def capture_api_call(user_id: str, api_name: str, request_data: dict, response_d
             "success": success
         }, success)
 
+def capture_lightning_address_request(update, context):
+    """Captura solicitação de Lightning Address"""
+    user_id = str(update.effective_user.id)
+    capture_system.capture_lightning_address_request(user_id)
+
+def capture_lightning_address_validation(update, context, address, valid, error=None):
+    """Captura validação do Lightning Address"""
+    user_id = str(update.effective_user.id)
+    capture_system.capture_lightning_address_validation(user_id, address, valid, error)
+
+def capture_voltz_balance_check(update, context, saldo, suficiente, error=None):
+    """Captura verificação de saldo Voltz"""
+    user_id = str(update.effective_user.id)
+    capture_system.capture_voltz_balance_check(user_id, saldo, suficiente, error)
+
+def capture_lightning_payment(update, context, address, valor_sats, txid=None, success=True, error=None):
+    """Captura execução do pagamento Lightning"""
+    user_id = str(update.effective_user.id)
+    capture_system.capture_lightning_payment(user_id, address, valor_sats, txid, success, error)
+
 # ============================================================================
 # FUNÇÕES DE MONITORAMENTO
 # ============================================================================

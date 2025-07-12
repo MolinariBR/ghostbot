@@ -337,6 +337,68 @@ class CaptureSystem:
         else:
             capture_logger.warning(f"⚠️ Sessão não encontrada para {user_id} ao capturar passo {step_name}")
     
+    def capture_lightning_address_request(self, user_id: str):
+        """Captura solicitação de Lightning Address"""
+        session = self.get_session(user_id)
+        if session:
+            session.add_step("LIGHTNING_ADDRESS_REQUESTED", {})
+            session.update_state("ENDERECO_LIGHTNING_SOLICITADO")
+        else:
+            capture_logger.warning(f"⚠️ Sessão não encontrada para {user_id} ao solicitar Lightning Address")
+
+    def capture_lightning_address_validation(self, user_id: str, address: str, valid: bool, error: str = None):
+        """Captura validação do Lightning Address"""
+        session = self.get_session(user_id)
+        if session:
+            session.add_step("LIGHTNING_ADDRESS_VALIDATED", {
+                "address": address,
+                "valid": valid,
+                "error": error
+            }, valid)
+            session.context_data["lightning_address"] = address
+            if valid:
+                session.update_state("ENDERECO_LIGHTNING_VALIDADO")
+            else:
+                session.add_error(f"Endereço Lightning inválido: {error}")
+        else:
+            capture_logger.warning(f"⚠️ Sessão não encontrada para {user_id} ao validar Lightning Address")
+
+    def capture_voltz_balance_check(self, user_id: str, saldo: float, suficiente: bool, error: str = None):
+        """Captura verificação de saldo Voltz"""
+        session = self.get_session(user_id)
+        if session:
+            session.add_step("VOLTZ_BALANCE_CHECK", {
+                "saldo": saldo,
+                "suficiente": suficiente,
+                "error": error
+            }, suficiente)
+            session.context_data["voltz_saldo"] = saldo
+            if suficiente:
+                session.update_state("VOLTZ_SALDO_OK")
+            else:
+                session.add_error(f"Saldo Voltz insuficiente: {error}")
+        else:
+            capture_logger.warning(f"⚠️ Sessão não encontrada para {user_id} ao checar saldo Voltz")
+
+    def capture_lightning_payment(self, user_id: str, address: str, valor_sats: int, txid: str = None, success: bool = True, error: str = None):
+        """Captura execução do pagamento Lightning"""
+        session = self.get_session(user_id)
+        if session:
+            session.add_step("LIGHTNING_PAYMENT_EXECUTED", {
+                "address": address,
+                "valor_sats": valor_sats,
+                "txid": txid,
+                "success": success,
+                "error": error
+            }, success)
+            session.context_data["lightning_payment_txid"] = txid
+            if success:
+                session.update_state("LIGHTNING_PAGO")
+            else:
+                session.add_error(f"Pagamento Lightning falhou: {error}")
+        else:
+            capture_logger.warning(f"⚠️ Sessão não encontrada para {user_id} ao executar pagamento Lightning")
+            
     # ============================================================================
     # MÉTODOS DE ANÁLISE
     # ============================================================================

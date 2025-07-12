@@ -807,11 +807,9 @@ class TesteFluxoCompleto:
         """Envia BTC real para o Lightning Address usando Voltz com verificação de saldo"""
         try:
             print("\n🚀 Enviando BTC real via Lightning Address (Voltz)...")
-            
             # 1. Calcula valor em sats baseado na cotação atual
             valor_sats = self.calcular_sats_equivalente(self.valor_compra)
             print(f"🔢 Valor calculado para envio: {valor_sats:,} sats")
-            
             # 2. Verificar saldo da carteira Voltz ANTES do envio
             print("\n💰 VERIFICAÇÃO DE SALDO PRÉ-ENVIO:")
             saldo_info = self.verificar_saldo_voltz()
@@ -819,26 +817,19 @@ class TesteFluxoCompleto:
                 print(f"❌ FALHA: Não foi possível verificar saldo da Voltz")
                 print(f"🔍 Erro: {saldo_info['error']}")
                 return False
-            
             saldo_disponivel = saldo_info['balance_sats']
-            
-            # Taxa Lightning realista: 0.1% a 0.5% com mínimo de 1-10 sats
             taxa_percentual = 0.002  # 0.2% (mais realista para Lightning)
-            taxa_minima = 3  # 3 sats mínimo (muito baixo, ~R$ 0.01)
+            taxa_minima = 3  # 3 sats mínimo
             taxa_maxima = 100  # 100 sats máximo para valores pequenos
-            
             taxa_calculada = max(taxa_minima, min(valor_sats * taxa_percentual, taxa_maxima))
             taxa_estimada = int(taxa_calculada)
-            
             valor_total_necessario = valor_sats + taxa_estimada
-            
             print(f"📊 Análise de saldo:")
             print(f"   💰 Saldo disponível: {saldo_disponivel:,} sats")
             print(f"   📤 Valor a enviar: {valor_sats:,} sats")
             print(f"   💸 Taxa estimada: {taxa_estimada:,} sats ({taxa_percentual*100:.1f}% ou mín. {taxa_minima} sats)")
             print(f"   🔢 Total necessário: {valor_total_necessario:,} sats")
             print(f"   💡 Taxa em R$: ~R$ {(taxa_estimada/100_000_000) * 615000:.4f}")
-            
             if saldo_disponivel < valor_total_necessario:
                 print(f"❌ SALDO INSUFICIENTE!")
                 print(f"🚫 Faltam: {valor_total_necessario - saldo_disponivel:,} sats")
@@ -846,62 +837,6 @@ class TesteFluxoCompleto:
                 return False
             else:
                 print(f"✅ Saldo suficiente para o envio!")
-            
-            # Para teste, vamos simular o sucesso sem fazer envio real
-            print("⚠️ MODO TESTE: Simulando envio Lightning sem transação real")
-            print("🎉 PAGAMENTO LIGHTNING SIMULADO COM SUCESSO!")
-            print("   🔑 Payment Hash: TESTE_HASH_123")
-            print("   🔐 Preimage: TESTE_PREIMAGE_456")
-            print("   💸 Taxa simulada: 3 sats")
-            print("   📊 Status: Simulado com sucesso")
-            
-            return True
-                
-        except Exception as e:
-            print(f"❌ ERRO CRÍTICO: Exceção durante envio Lightning")
-            print(f"🔍 Detalhes: {str(e)}")
-            return False
-            print("\n🚀 Enviando BTC real via Lightning Address (Voltz)...")
-            
-            # 1. Calcula valor em sats baseado na cotação atual
-            valor_sats = self.calcular_sats_equivalente(self.valor_compra)
-            print(f"🔢 Valor calculado para envio: {valor_sats:,} sats")
-            
-            # 2. Verificar saldo da carteira Voltz ANTES do envio
-            print("\n💰 VERIFICAÇÃO DE SALDO PRÉ-ENVIO:")
-            saldo_info = self.verificar_saldo_voltz()
-            if not saldo_info['success']:
-                print(f"❌ FALHA: Não foi possível verificar saldo da Voltz")
-                print(f"🔍 Erro: {saldo_info['error']}")
-                return False
-            
-            saldo_disponivel = saldo_info['balance_sats']
-            
-            # Taxa Lightning realista: 0.1% a 0.5% com mínimo de 1-10 sats
-            taxa_percentual = 0.002  # 0.2% (mais realista para Lightning)
-            taxa_minima = 3  # 3 sats mínimo (muito baixo, ~R$ 0.01)
-            taxa_maxima = 100  # 100 sats máximo para valores pequenos
-            
-            taxa_calculada = max(taxa_minima, min(valor_sats * taxa_percentual, taxa_maxima))
-            taxa_estimada = int(taxa_calculada)
-            
-            valor_total_necessario = valor_sats + taxa_estimada
-            
-            print(f"📊 Análise de saldo:")
-            print(f"   💰 Saldo disponível: {saldo_disponivel:,} sats")
-            print(f"   📤 Valor a enviar: {valor_sats:,} sats")
-            print(f"   💸 Taxa estimada: {taxa_estimada:,} sats ({taxa_percentual*100:.1f}% ou mín. {taxa_minima} sats)")
-            print(f"   🔢 Total necessário: {valor_total_necessario:,} sats")
-            print(f"   💡 Taxa em R$: ~R$ {(taxa_estimada/100_000_000) * 615000:.4f}")
-            
-            if saldo_disponivel < valor_total_necessario:
-                print(f"❌ SALDO INSUFICIENTE!")
-                print(f"🚫 Faltam: {valor_total_necessario - saldo_disponivel:,} sats")
-                print(f"💡 Necessário adicionar pelo menos {(valor_total_necessario - saldo_disponivel)/100_000_000:.8f} BTC à carteira")
-                return False
-            else:
-                print(f"✅ Saldo suficiente para o envio!")
-            
             # 3. Resolver Lightning Address para invoice BOLT11
             print("\n⚡ Resolvendo Lightning Address para invoice BOLT11...")
             resolver = LightningAddressResolver()
@@ -912,31 +847,24 @@ class TesteFluxoCompleto:
                 return False
             bolt11 = result['bolt11']
             print(f"✅ Invoice BOLT11 obtido: {bolt11[:60]}...")
-            
             # 4. Chamar API Voltz diretamente para pagar a invoice
             print("\n🔄 Enviando pagamento via Voltz...")
-            
             headers = {
                 'X-Api-Key': VOLTZ_CONFIG['admin_key'],
                 'Content-Type': 'application/json'
             }
-            
-            # Tenta diferentes formatos de payload e endpoints
             endpoints_pagamento = [
                 f"{VOLTZ_CONFIG['node_url']}/api/v1/payments",
                 f"{VOLTZ_CONFIG['node_url']}/api/v1/payments/bolt11",
                 f"{VOLTZ_CONFIG['node_url']}/api/v1/invoices/pay",
                 f"{VOLTZ_CONFIG['node_url']}/api/v1/pay"
             ]
-            
             payloads = [
                 {'bolt11': bolt11},
                 {'invoice': bolt11},
                 {'payment_request': bolt11},
                 {'bolt11': bolt11, 'amount': valor_sats * 1000}
             ]
-            
-            # Primeiro tenta o endpoint mais comum com o payload mais simples
             success = False
             for endpoint in endpoints_pagamento:
                 if success:
@@ -945,12 +873,8 @@ class TesteFluxoCompleto:
                     if success:
                         break
                     try:
-                        pass
-                    except Exception as e:
-                        pass
                         print(f"[DEBUG] Tentando endpoint: {endpoint}")
                         print(f"[DEBUG] Payload: {payload}")
-                        
                         response = requests.post(
                             endpoint,
                             headers=headers,
@@ -958,22 +882,17 @@ class TesteFluxoCompleto:
                             timeout=30
                         )
                         print(f"[DEBUG] Resposta Voltz: HTTP {response.status_code} - {response.text}")
-                        
-                        if response.status_code in [200, 201]:  # 200 OK ou 201 Created
+                        if response.status_code in [200, 201]:
                             try:
                                 data = response.json()
-                                # Verifica diferentes formatos de resposta de sucesso
                                 if (data.get('payment_hash') or data.get('hash') or 
                                     data.get('status') == 'success' or 
                                     data.get('checking_id')):
                                     payment_hash = data.get('payment_hash', data.get('hash', data.get('checking_id', 'N/A')))
                                     preimage = data.get('preimage', 'N/A')
                                     fee_msat = data.get('fee', 0) or 0
-                                    
-                                    # Converte fee negativo para positivo (formato Voltz)
                                     if fee_msat < 0:
                                         fee_msat = abs(fee_msat)
-                                    
                                     print(f"🎉 PAGAMENTO LIGHTNING ENVIADO COM SUCESSO!")
                                     print(f"   🔑 Payment Hash: {payment_hash}")
                                     print(f"   🔐 Preimage: {preimage}")
@@ -1018,12 +937,11 @@ class TesteFluxoCompleto:
                         else:
                             print(f"❌ HTTP {response.status_code}: {response.text}")
                             continue
-                            
                     except requests.exceptions.Timeout:
                         print(f"⏱️ Timeout no endpoint {endpoint}")
                         continue
                     except requests.exceptions.ConnectionError:
-                        print(f"� Erro de conexão no endpoint {endpoint}")
+                        print(f"🔌 Erro de conexão no endpoint {endpoint}")
                         continue
                     except Exception as e:
                         print(f"❌ Erro no endpoint {endpoint}: {e}")

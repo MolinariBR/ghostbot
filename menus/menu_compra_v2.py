@@ -331,10 +331,10 @@ class MenuCompraV2:
             return ESCOLHER_REDE
         # Valida valor
         valido, valor, erro = self.validar_valor(valor_str)
-        if not valido:
-            capture_error(chatid, erro, "validar_valor")
+        if not valido or not self.validar_limites_valor(valor):
+            capture_error(chatid, erro or "Valor fora dos limites", "validar_valor")
             await update.message.reply_text(
-                f"❌ {erro}\n\nTente novamente:",
+                f"❌ {erro or 'Valor fora dos limites'}\n\nTente novamente:",
                 reply_markup=ReplyKeyboardMarkup(self.menu_valores_sugeridos(), resize_keyboard=True)
             )
             return INFORMAR_VALOR
@@ -342,17 +342,33 @@ class MenuCompraV2:
         context.user_data['valor_brl'] = valor
         moeda = context.user_data.get('moeda', '')
         rede = context.user_data.get('rede', '')
+        # Cálculo de comissão (com fallback)
+        try:
+            from comissao.validador import ComissaoCalculator
+            comissao_calc = ComissaoCalculator()
+            comissao_info = comissao_calc.calcular_comissao(valor, 'BTC')
+            if not comissao_info or 'comissao_total' not in comissao_info:
+                comissao_info = self.calcular_comissao_fallback(valor)
+        except Exception:
+            comissao_info = self.calcular_comissao_fallback(valor)
+        context.user_data['comissao_info'] = comissao_info
+        # Cálculo de sats com cotação real
+        valor_sats = await self.calcular_sats_equivalente(valor)
+        if valor_sats == 0:
+            valor_sats = 1000
+        context.user_data['valor_btc'] = valor_sats
         # Resumo usando validador integrado com limites
-        from comissao.validador import gerar_resumo_compra
         pix = (moeda.upper() in ["BITCOIN", "BTC"] and rede.upper() in ["LIGHTNING", "LNT"])
         resumo = gerar_resumo_compra(chatid, moeda, rede, valor, pix=pix)
+        resumo += f"\n\n💸 Comissão: R$ {comissao_info['comissao_total']:.2f} ({comissao_info['taxa_percentual']}%)"
+        resumo += f"\n🔢 Valor em sats: {valor_sats:,}"
         reply_markup = ReplyKeyboardMarkup(self.menu_confirmacao(), resize_keyboard=True)
         await update.message.reply_text(
             resumo,
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
-        capture_step(chatid, "RESUMO_EXIBIDO", {"valor": valor, "moeda": moeda, "rede": rede})
+        capture_step(chatid, "RESUMO_EXIBIDO", {"valor": valor, "moeda": moeda, "rede": rede, "sats": valor_sats})
         return CONFIRMAR_DADOS
     
     async def confirmar_dados(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -502,7 +518,12 @@ class MenuCompraV2:
                     }
                     import os
                     import sqlite3
-                    db_path = os.path.join(os.path.dirname(__file__), '../data/deposit.db')
+                    # Caminho absoluto e robusto para o banco local
+                    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+                    db_path = os.path.join(base_dir, 'data', 'deposit.db')
+                    if not os.path.exists(db_path):
+                        logger.error(f"Banco de dados local não encontrado: {db_path}")
+                        raise FileNotFoundError(f"Banco de dados local não encontrado: {db_path}")
                     conn = sqlite3.connect(db_path)
                     cur = conn.cursor()
                     cur.execute("""

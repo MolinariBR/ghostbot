@@ -19,6 +19,9 @@ except ImportError:
     CAPTURE_AVAILABLE = False
     print("⚠️ Sistema de captura não disponível - usando modo de arquivos")
 
+# Diretório de captura centralizado
+DATA_DIR = Path(__file__).parent.parent / 'data' / 'captura'
+
 def monitor_with_capture_system():
     """Monitora usando o sistema de captura diretamente"""
     print("🎯 Monitor em Tempo Real - Sistema de Captura")
@@ -74,12 +77,12 @@ def monitor_with_capture_system():
         print("\n👋 Monitor finalizado")
 
 def monitor_with_files():
-    """Monitora usando arquivos de log"""
-    print("📄 Monitor em Tempo Real - Arquivos de Log")
+    """Monitora usando arquivos de log na nova estrutura"""
+    print("📄 Monitor em Tempo Real - Arquivos de Log (Nova Estrutura)")
     print("=" * 60)
     print("Pressione Ctrl+C para sair\n")
     
-    capture_dir = Path(__file__).parent
+    capture_dir = DATA_DIR
     last_update = datetime.now()
     
     try:
@@ -150,8 +153,8 @@ def monitor_with_files():
         print("\n👋 Monitor finalizado")
 
 def show_live_stats():
-    """Mostra estatísticas em tempo real"""
-    capture_dir = Path(__file__).parent
+    """Mostra estatísticas em tempo real na nova estrutura"""
+    capture_dir = DATA_DIR
     
     while True:
         try:

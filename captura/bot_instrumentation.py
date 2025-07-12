@@ -79,7 +79,7 @@ class BotInstrumentation:
         return instrumented_handler
     
     def patch_menu_compra(self):
-        """Aplica patches específicos ao menu de compra"""
+        """Aplica patches específicos ao menu de compra, incluindo fluxo Lightning"""
         try:
             import menus.menu_compra as menu_compra
             
@@ -166,6 +166,55 @@ class BotInstrumentation:
                     # Capturar erro na geração do PIX
                     capture_system.capture_error(user_id, "PIX_PROCESSING_ERROR", str(e), e)
                     raise
+            
+            # Patch dos novos eventos do fluxo Lightning
+            original_solicitar_lightning_address = getattr(menu_compra, 'solicitar_lightning_address', None)
+            original_validar_lightning_address = getattr(menu_compra, 'validar_lightning_address', None)
+            original_verificar_voltz_saldo = getattr(menu_compra, 'verificar_voltz_saldo', None)
+            original_executar_pagamento_lightning = getattr(menu_compra, 'executar_pagamento_lightning', None)
+
+            if original_solicitar_lightning_address:
+                @capture_menu_compra_handler("solicitar_lightning_address")
+                async def patched_solicitar_lightning_address(update, context):
+                    user_id = str(update.effective_user.id)
+                    capture_system.capture_lightning_address_request(user_id)
+                    return await original_solicitar_lightning_address(update, context)
+                menu_compra.solicitar_lightning_address = patched_solicitar_lightning_address
+
+            if original_validar_lightning_address:
+                @capture_menu_compra_handler("validar_lightning_address")
+                async def patched_validar_lightning_address(update, context):
+                    user_id = str(update.effective_user.id)
+                    address = update.message.text if update.message else ""
+                    # Supondo que a função retorna (valid, error)
+                    valid, error = await original_validar_lightning_address(update, context)
+                    capture_system.capture_lightning_address_validation(user_id, address, valid, error)
+                    return valid, error
+                menu_compra.validar_lightning_address = patched_validar_lightning_address
+
+            if original_verificar_voltz_saldo:
+                @capture_menu_compra_handler("verificar_voltz_saldo")
+                async def patched_verificar_voltz_saldo(update, context):
+                    user_id = str(update.effective_user.id)
+                    saldo, suficiente, error = await original_verificar_voltz_saldo(update, context)
+                    capture_system.capture_voltz_balance_check(user_id, saldo, suficiente, error)
+                    return saldo, suficiente, error
+                menu_compra.verificar_voltz_saldo = patched_verificar_voltz_saldo
+
+            if original_executar_pagamento_lightning:
+                @capture_menu_compra_handler("executar_pagamento_lightning")
+                async def patched_executar_pagamento_lightning(update, context):
+                    user_id = str(update.effective_user.id)
+                    address = context.user_data.get('lightning_address')
+                    valor_sats = context.user_data.get('valor_btc')
+                    try:
+                        txid, success, error = await original_executar_pagamento_lightning(update, context)
+                        capture_system.capture_lightning_payment(user_id, address, valor_sats, txid, success, error)
+                        return txid, success, error
+                    except Exception as e:
+                        capture_system.capture_lightning_payment(user_id, address, valor_sats, None, False, str(e))
+                        raise
+                menu_compra.executar_pagamento_lightning = patched_executar_pagamento_lightning
             
             # Aplicar patches
             menu_compra.iniciar_compra = patched_iniciar_compra

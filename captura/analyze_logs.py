@@ -136,12 +136,46 @@ def analyze_flow_patterns(sessions: list):
     
     return flow_patterns
 
+def analyze_lightning_flow(sessions: list):
+    """Analisa o novo fluxo Lightning: etapas, sucesso, falhas e dados relevantes"""
+    lightning_steps = [
+        "LIGHTNING_ADDRESS_REQUESTED",
+        "LIGHTNING_ADDRESS_VALIDATED",
+        "VOLTZ_BALANCE_CHECK",
+        "LIGHTNING_PAYMENT_EXECUTED"
+    ]
+    stats = {step: {"count": 0, "success": 0, "fail": 0, "errors": []} for step in lightning_steps}
+    for session in sessions:
+        for step in session.get('steps', []):
+            step_name = step.get('step')
+            if step_name in lightning_steps:
+                stats[step_name]["count"] += 1
+                if step.get('success', True):
+                    stats[step_name]["success"] += 1
+                else:
+                    stats[step_name]["fail"] += 1
+                    if step.get('data', {}).get('error'):
+                        stats[step_name]["errors"].append(step['data']['error'])
+    print("\n⚡ ANÁLISE DO FLUXO LIGHTNING")
+    print("=" * 50)
+    for step, data in stats.items():
+        print(f"{step}:")
+        print(f"   Ocorrências: {data['count']}")
+        print(f"   Sucesso: {data['success']}")
+        print(f"   Falhas: {data['fail']}")
+        if data['errors']:
+            print(f"   Principais erros:")
+            for err in set(data['errors']):
+                print(f"      - {err}")
+        print()
+
 def main():
     parser = argparse.ArgumentParser(description="Analisar logs de captura do bot")
     parser.add_argument("--user", help="Analisar usuário específico")
     parser.add_argument("--summary", action="store_true", help="Mostrar resumo geral")
     parser.add_argument("--patterns", action="store_true", help="Mostrar padrões de fluxo")
     parser.add_argument("--stopping", action="store_true", help="Mostrar pontos onde usuários param")
+    parser.add_argument("--lightning", action="store_true", help="Analisar fluxo Lightning")
     
     args = parser.parse_args()
     
@@ -207,6 +241,9 @@ def main():
             print(f"   {pattern}")
             print(f"   Duração média: {data['avg_duration']:.1f}s")
             print()
+    
+    if args.lightning:
+        analyze_lightning_flow(sessions)
 
 if __name__ == "__main__":
     main()
