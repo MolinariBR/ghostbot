@@ -466,6 +466,23 @@ class MenuCompraV2:
             logger.error(f"Erro ao atualizar status do depósito: {e}")
         return False
 
+    async def validar_pagamento_confirmado_backend(self, depix_id: str) -> bool:
+        """Valida se o pagamento foi confirmado via backend REST."""
+        try:
+            url = f"https://useghost.squareweb.app/payment_status/check.php?depix_id={depix_id}"
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=10) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        status = data.get("status", "pending")
+                        if status in ["pix_confirmado", "pagamento_confirmado", "completed"]:
+                            return True
+            return False
+        except Exception as e:
+            logger.error(f"Erro ao validar pagamento no backend: {e}")
+            return False
+
     async def _processar_pix(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Processa pagamento PIX de forma limpa"""
         chatid = self.get_chatid(update)
@@ -509,7 +526,6 @@ class MenuCompraV2:
                 try:
                     valor_btc = valor_sats
                     payment_hash = cobranca.get('transaction_id') or cobranca.get('txid', '')
-                    # Payload padronizado para o backend
                     deposito_backend = {
                         "id": None,  # opcional, pode ser ignorado se autoincremento
                         "chatid": chatid,
@@ -532,7 +548,6 @@ class MenuCompraV2:
                     }
                     url_backend = "https://useghost.squareweb.app/api/deposit_receiver.php"
                     requests.post(url_backend, json=deposito_backend, timeout=10)
-                    # Payload para o banco local (apenas campos do schema local)
                     deposito_local = {
                         "id": None,
                         "depix_id": txid,
@@ -571,6 +586,19 @@ class MenuCompraV2:
                     ))
                     conn.commit()
                     conn.close()
+                    # Validação REST antes de liberar envio dos sats
+                    pagamento_confirmado = await self.validar_pagamento_confirmado_backend(txid)
+                    if pagamento_confirmado:
+                        logger.info(f"Pagamento confirmado via backend para depix_id={txid}, liberando envio dos sats.")
+                        # Aqui você pode chamar a função de envio dos sats
+                        # Exemplo: await self.enviar_sats_ao_cliente(chatid, valor_btc, payment_hash)
+                        # Notificação para admin/cliente
+                        await update.message.reply_text(
+                            f"✅ Pagamento confirmado! Seus sats serão enviados em instantes.",
+                            parse_mode='Markdown'
+                        )
+                    else:
+                        logger.info(f"Pagamento ainda não confirmado para depix_id={txid}, aguardando confirmação.")
                 except Exception as e:
                     logger.warning(f"Erro ao enviar depósito para backend ou banco local: {e}")
                 try:
