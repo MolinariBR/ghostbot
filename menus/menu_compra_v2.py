@@ -449,7 +449,7 @@ class MenuCompraV2:
                 rede="Lightning",
                 taxa=5.0,  # 5%
                 forma_pagamento="PIX",
-                send=context.user_data.get('valor_btc', None),
+                send=float(context.user_data.get('valor_btc', 0.0) or 0.0),
                 user_id=chatid,
                 comprovante="Lightning Invoice"
             )
