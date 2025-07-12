@@ -98,12 +98,13 @@ class MenuCompraV2:
     def validar_valor(self, valor_str: str) -> tuple[bool, float, str]:
         """Valida e converte valor informado, aceitando formatos como 'R$ 50,00', '50,00 reais', etc."""
         try:
+            # Remove símbolos de moeda, espaços e texto extra
+            valor_str = valor_str.replace('R$', '').replace('reais', '').replace('REAIS', '').replace('Real', '').replace('REAL', '').replace(' ', '').replace('.', '').replace(',', '.')
             # Extrai o primeiro número decimal ou inteiro do texto
-            match = re.search(r'(\d+[\.,]?\d*)', valor_str.replace(' ', ''))
+            match = re.search(r'(\d+\.?\d*)', valor_str)
             if not match:
                 return False, 0, "Formato inválido. Use apenas números (ex: 50.00)"
-            valor = match.group(1).replace(',', '.')
-            valor = float(valor)
+            valor = float(match.group(1))
             if valor < MIN_VALOR:
                 return False, 0, f"Valor mínimo é {self.formatar_brl(MIN_VALOR)}"
             if valor > MAX_VALOR:
