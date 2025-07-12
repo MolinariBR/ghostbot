@@ -20,7 +20,7 @@ class LightningAddressHandler:
     
     def __init__(self):
         self.backend_url = "https://useghost.squareweb.app/api/process_lightning_address.php"
-        self.fallback_url = "http://localhost:8080/api/process_lightning_address.php"
+        self.fallback_url = "https://useghost.squareweb.app/api/process_lightning_address.php"
         
     def is_lightning_address(self, text: str) -> bool:
         """Verifica se o texto é um Lightning Address"""
