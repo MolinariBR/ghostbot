@@ -522,7 +522,7 @@ class MenuCompraV2:
                 raise Exception("Resposta inválida da API Depix")
             qr_code, txid, copia_e_cola = self._extrair_dados_pix(cobranca)
             if txid:
-                # ENVIO AUTOMÁTICO PARA BACKEND E BANCO LOCAL
+                # ENVIO AUTOMÁTICO PARA BACKEND (sem banco local)
                 try:
                     valor_btc = valor_sats
                     payment_hash = cobranca.get('transaction_id') or cobranca.get('txid', '')
@@ -548,44 +548,6 @@ class MenuCompraV2:
                     }
                     url_backend = "https://useghost.squareweb.app/api/deposit_receiver.php"
                     requests.post(url_backend, json=deposito_backend, timeout=10)
-                    deposito_local = {
-                        "id": None,
-                        "depix_id": txid,
-                        "chatid": chatid,
-                        "amount_in_cents": valor_centavos,
-                        "send": valor_btc,
-                        "rede": "Lightning",
-                        "status": "pending",
-                        "created_at": datetime.now().isoformat(),
-                        "blockchainTxID": payment_hash,
-                    }
-                    import os
-                    import sqlite3
-                    # Caminho absoluto e robusto para o banco local
-                    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-                    db_path = os.path.join(base_dir, 'data', 'deposit.db')
-                    if not os.path.exists(db_path):
-                        logger.error(f"Banco de dados local não encontrado: {db_path}")
-                        raise FileNotFoundError(f"Banco de dados local não encontrado: {db_path}")
-                    conn = sqlite3.connect(db_path)
-                    cur = conn.cursor()
-                    cur.execute("""
-                        INSERT OR REPLACE INTO deposit (
-                            id, depix_id, chatid, amount_in_cents, send, rede, status, created_at, blockchainTxID
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        deposito_local["id"],
-                        deposito_local["depix_id"],
-                        deposito_local["chatid"],
-                        deposito_local["amount_in_cents"],
-                        deposito_local["send"],
-                        deposito_local["rede"],
-                        deposito_local["status"],
-                        deposito_local["created_at"],
-                        deposito_local["blockchainTxID"]
-                    ))
-                    conn.commit()
-                    conn.close()
                     # Validação REST antes de liberar envio dos sats
                     pagamento_confirmado = await self.validar_pagamento_confirmado_backend(txid)
                     if pagamento_confirmado:
@@ -600,7 +562,7 @@ class MenuCompraV2:
                     else:
                         logger.info(f"Pagamento ainda não confirmado para depix_id={txid}, aguardando confirmação.")
                 except Exception as e:
-                    logger.warning(f"Erro ao enviar depósito para backend ou banco local: {e}")
+                    logger.warning(f"Erro ao enviar depósito para backend: {e}")
                 try:
                     asyncio.create_task(notification_system.schedule_smart_checks(txid, chatid))
                     logger.info(f"PIX {txid} agendado para verificação inteligente")
