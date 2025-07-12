@@ -728,6 +728,15 @@ class MenuCompraV2:
             name="compra_v2_conversation"
         )
 
+    def calcular_comissao_fallback(self, valor: float) -> dict:
+        """Calcula comissão padrão de fallback (taxa fixa 5%)"""
+        taxa_percentual = 5.0
+        comissao_total = round(valor * taxa_percentual / 100, 2)
+        return {
+            "comissao_total": comissao_total,
+            "taxa_percentual": taxa_percentual
+        }
+
 # ==========================================
 # INSTÂNCIA GLOBAL
 # ==========================================
