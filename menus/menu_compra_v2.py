@@ -113,6 +113,10 @@ class MenuCompraV2:
         except (ValueError, AttributeError):
             return False, 0, "Formato inválido. Use apenas números (ex: 50.00)"
     
+    def validar_limites_valor(self, valor: float) -> bool:
+        """Valida se o valor está dentro dos limites permitidos"""
+        return MIN_VALOR <= valor <= MAX_VALOR
+    
     def get_chatid(self, update: Update) -> str:
         """Obtém chatid de forma consistente"""
         return str(update.effective_user.id)
