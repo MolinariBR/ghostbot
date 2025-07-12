@@ -444,6 +444,28 @@ class MenuCompraV2:
     # PROCESSAMENTO PIX
     # ==========================================
     
+    async def atualizar_status_deposito_backend(self, depix_id: str, chatid: str, blockchainTxID: str, novo_status: str = "pagamento_confirmado"):
+        """Atualiza o status do depósito no backend após confirmação do pagamento"""
+        try:
+            url_backend = "https://useghost.squareweb.app/api/deposit_receiver.php"
+            payload = {
+                "id": None,  # opcional, pode ser ignorado se autoincremento
+                "chatid": chatid,
+                "depix_id": depix_id,
+                "blockchainTxID": blockchainTxID,
+                "status": novo_status
+            }
+            import requests
+            resp = requests.post(url_backend, json=payload, timeout=10)
+            if resp.status_code == 200:
+                logger.info(f"Status do depósito atualizado para {novo_status} (depix_id={depix_id})")
+                return True
+            else:
+                logger.warning(f"Falha ao atualizar status do depósito: {resp.text}")
+        except Exception as e:
+            logger.error(f"Erro ao atualizar status do depósito: {e}")
+        return False
+
     async def _processar_pix(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Processa pagamento PIX de forma limpa"""
         chatid = self.get_chatid(update)
@@ -487,35 +509,37 @@ class MenuCompraV2:
                 try:
                     valor_btc = valor_sats
                     payment_hash = cobranca.get('transaction_id') or cobranca.get('txid', '')
-                    # Payload para o backend (todos os campos do schema backend)
+                    # Payload padronizado para o backend
                     deposito_backend = {
-                        "blockchainTxID": payment_hash,
+                        "id": None,  # opcional, pode ser ignorado se autoincremento
                         "chatid": chatid,
-                        "amount_in_cents": valor_centavos,
-                        "taxa": 5.0,
-                        "moeda": "BTC",
-                        "rede": "Lightning",
-                        "address": "LIGHTNING_PENDING",
-                        "forma_pagamento": "PIX",
-                        "send": valor_btc,
-                        "status": "pending",
-                        "created_at": datetime.now().isoformat(),
                         "depix_id": txid,
+                        "blockchainTxID": payment_hash,
+                        "status": "pending",
+                        "amount_in_cents": valor_centavos,
+                        "send": valor_btc,
+                        "rede": "Lightning",
+                        "moeda": "BTC",
+                        "address": "LIGHTNING_PENDING",
+                        "taxa": 5.0,
+                        "forma_pagamento": "PIX",
+                        "created_at": datetime.now().isoformat(),
+                        "user_id": chatid,
                         "notified": 0,
                         "metodo_pagamento": "PIX",
                         "comprovante": "Lightning Invoice",
-                        "user_id": chatid,
                         "cpf": None
                     }
                     url_backend = "https://useghost.squareweb.app/api/deposit_receiver.php"
                     requests.post(url_backend, json=deposito_backend, timeout=10)
                     # Payload para o banco local (apenas campos do schema local)
                     deposito_local = {
+                        "id": None,
                         "depix_id": txid,
                         "chatid": chatid,
                         "amount_in_cents": valor_centavos,
                         "send": valor_btc,
-                        "rede": "lightning",
+                        "rede": "Lightning",
                         "status": "pending",
                         "created_at": datetime.now().isoformat(),
                         "blockchainTxID": payment_hash,
@@ -532,9 +556,10 @@ class MenuCompraV2:
                     cur = conn.cursor()
                     cur.execute("""
                         INSERT OR REPLACE INTO deposit (
-                            depix_id, chatid, amount_in_cents, send, rede, status, created_at, blockchainTxID
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            id, depix_id, chatid, amount_in_cents, send, rede, status, created_at, blockchainTxID
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
+                        deposito_local["id"],
                         deposito_local["depix_id"],
                         deposito_local["chatid"],
                         deposito_local["amount_in_cents"],
@@ -738,17 +763,23 @@ class MenuCompraV2:
         }
     
     async def calcular_sats_equivalente(self, valor_brl: float) -> int:
-        """Converte BRL para sats usando cotação online ou fallback"""
+        """Converte BRL para sats usando cotação online ou fallback, com validação extra"""
         try:
             async with aiohttp.ClientSession() as session:
-                url = "https://blockchain.info/tobtc?currency=BRL&value={}".format(valor_brl)
+                url = f"https://blockchain.info/tobtc?currency=BRL&value={valor_brl:.2f}"
                 async with session.get(url, timeout=10) as resp:
                     if resp.status == 200:
-                        btc = await resp.text()
-                        sats = int(float(btc) * 1e8)
-                        return max(sats, 1)
-        except Exception:
-            pass
+                        btc_str = await resp.text()
+                        btc = float(btc_str)
+                        # Se o valor em BTC for maior que 0.01, provavelmente está errado
+                        if btc > 0.01:
+                            logger.warning(f"Cotação BTC anormal para R$ {valor_brl}: {btc_str} BTC")
+                            return 1000
+                        sats = int(round(btc * 100_000_000))
+                        if 1 <= sats <= 1_000_000:
+                            return sats
+        except Exception as e:
+            logger.warning(f"Erro ao converter BRL para sats: {e}")
         # Fallback: retorna 1000 sats se não conseguir cotação
         return 1000
 
