@@ -375,10 +375,9 @@ class MenuCompraV2:
             rede = context.user_data.get('rede', '')
             valor = context.user_data.get('valor_brl', 0)
             pix = context.user_data.get('pagamento', '') == PIX
-            from comissao.validador import gerar_resumo_compra
-            resumo = gerar_resumo_compra(chatid, moeda, rede, valor, pix=pix, registrar=True)
+            # Não exibe resumo novamente aqui
             await update.message.reply_text(
-                resumo,
+                "Selecione a forma de pagamento:",
                 parse_mode='Markdown',
                 reply_markup=ReplyKeyboardMarkup(self.menu_pagamento(), resize_keyboard=True)
             )
