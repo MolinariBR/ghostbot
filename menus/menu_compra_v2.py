@@ -736,6 +736,21 @@ class MenuCompraV2:
             "comissao_total": comissao_total,
             "taxa_percentual": taxa_percentual
         }
+    
+    async def calcular_sats_equivalente(self, valor_brl: float) -> int:
+        """Converte BRL para sats usando cotação online ou fallback"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                url = "https://blockchain.info/tobtc?currency=BRL&value={}".format(valor_brl)
+                async with session.get(url, timeout=10) as resp:
+                    if resp.status == 200:
+                        btc = await resp.text()
+                        sats = int(float(btc) * 1e8)
+                        return max(sats, 1)
+        except Exception:
+            pass
+        # Fallback: retorna 1000 sats se não conseguir cotação
+        return 1000
 
 # ==========================================
 # INSTÂNCIA GLOBAL
