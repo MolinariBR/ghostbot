@@ -91,9 +91,9 @@ except ImportError:
 # ==================== CREDENCIAIS VOLTZ ====================
 VOLTZ_CONFIG = {
     'node_url': 'https://lnvoltz.com',
-    'wallet_id': 'f3c366b7fb6f43fa9467c4dccedaf824',
-    'admin_key': '8fce34f4b0f8446a990418bd167dc644',
-    'invoice_key': 'b2f68df91c8848f6a1db26f2e403321f'
+    'wallet_id': '7ea17979a63e440a82c9d1fe70c20125',
+    'admin_key': '5661f179d22c4cf6ac6585b8ede20eea',
+    'invoice_key': 'dd329e1dfa2743a0b2eaaaf7ec0302f1'
 }
 # ============================================================
 
