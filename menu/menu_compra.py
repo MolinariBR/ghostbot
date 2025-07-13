@@ -367,30 +367,6 @@ async def tratar_opcao_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-async def consultar_status_pagamento(depix_id: str) -> Dict[str, Any]:
-    """
-    Consulta o status do pagamento PIX no backend.
-    
-    Args:
-        depix_id: ID do depósito PIX
-        
-    Returns:
-        Dicionário com o status do pagamento
-    """
-    try:
-        url = f"{BASE_URL}/payment_status/check.php"
-        params = {"depix_id": depix_id}
-        
-        timeout = aiohttp.ClientTimeout(total=30)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data
-                else:
-                    return {"success": False, "error": f"HTTP {response.status}"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
 
 async def consultar_deposito_por_depix_id(depix_id: str) -> Dict[str, Any]:
     """
@@ -403,7 +379,7 @@ async def consultar_deposito_por_depix_id(depix_id: str) -> Dict[str, Any]:
         Dicionário com os dados do depósito
     """
     try:
-        url = f"{BASE_URL}/rest/deposit.php"
+        url = f"{BASE_URL}/deposit.php"
         params = {"action": "get", "depix_id": depix_id}
         
         timeout = aiohttp.ClientTimeout(total=30)
@@ -441,37 +417,29 @@ async def verificar_pagamento_pix(update: Update, context: ContextTypes.DEFAULT_
     
     for i in range(tentativas):
         try:
-            # Consulta status do pagamento
-            status_data = await consultar_status_pagamento(depix_id)
+            # Consulta os dados do depósito diretamente
+            deposito_data = await consultar_deposito_por_depix_id(depix_id)
             
-            if status_data.get("success") and status_data.get("status") in ["pix_confirmado", "pagamento_confirmado", "completed", "depix_sent"]:
-                # PIX confirmado! Agora verifica se tem blockchainTxID
-                deposito_data = await consultar_deposito_por_depix_id(depix_id)
-                
-                if deposito_data.get("blockchainTxID"):
-                    # Sucesso! blockchainTxID encontrado
-                    await update.message.reply_text(
-                        "✅ Pagamento confirmado!\n"
-                        "🔗 Blockchain TxID encontrado.\n"
-                        "📬 Por favor, envie seu endereço Lightning (Lightning Address ou Invoice) para receber seus satoshis."
-                    )
-                    
-                    # Ativa o handler para endereços Lightning
-                    if context.user_data is not None:
-                        context.user_data["aguardando_endereco_lightning"] = True
-                        context.user_data["depix_id_confirmado"] = depix_id
-                    
-                    return True
-                else:
-                    # PIX confirmado mas ainda sem blockchainTxID
-                    await update.message.reply_text(
-                        "⏳ PIX confirmado! Aguardando processamento da transação...\n"
-                        f"Tentativa {i+1}/{tentativas}"
-                    )
-            else:
-                # PIX ainda não confirmado
+            if deposito_data.get("blockchainTxID"):
+                # Sucesso! blockchainTxID encontrado
                 await update.message.reply_text(
-                    "⏳ Aguardando confirmação do PIX...\n"
+                    "✅ Pagamento confirmado!\n"
+                    "🔗 Blockchain TxID encontrado.\n"
+                    "📬 Por favor, envie seu endereço Lightning (Lightning Address ou Invoice) para receber seus satoshis."
+                )
+                
+                # Ativa o handler para endereços Lightning
+                if context.user_data is not None:
+                    context.user_data["aguardando_endereco_lightning"] = True
+                    context.user_data["depix_id_confirmado"] = depix_id
+                
+                return True
+            else:
+                # Ainda sem blockchainTxID
+                status = deposito_data.get("status", "pending")
+                await update.message.reply_text(
+                    f"⏳ Aguardando confirmação do PIX...\n"
+                    f"Status: {status}\n"
                     f"Tentativa {i+1}/{tentativas}"
                 )
             

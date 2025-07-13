@@ -16,8 +16,8 @@ async def test_consultar_status_pagamento():
     depix_id = "test_123456"
     
     try:
-        url = f"{BASE_URL}/payment_status/check.php"
-        params = {"depix_id": depix_id}
+        url = f"{BASE_URL}/deposit.php"
+        params = {"action": "get", "depix_id": depix_id}
         
         timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -44,7 +44,7 @@ async def test_consultar_deposito():
     depix_id = "test_123456"
     
     try:
-        url = f"{BASE_URL}/rest/deposit.php"
+        url = f"{BASE_URL}/deposit.php"
         params = {"action": "get", "depix_id": depix_id}
         
         timeout = aiohttp.ClientTimeout(total=30)
