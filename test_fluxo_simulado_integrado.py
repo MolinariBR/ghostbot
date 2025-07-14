@@ -44,7 +44,7 @@ def criar_pedido_real(valor, moeda="btc", rede="lightning"):
 
 def consultar_validador(valor, moeda="btc", rede="lightning"):
     """Consulta o validador real do backend para obter cotação, comissão, limites, parceiro, etc."""
-    url = f"{BASE_URL}/cotacao/validador.php"
+    url = f"{BASE_URL}/api_cotacao.php"
     params = {
         "moeda": moeda,
         "rede": rede,
