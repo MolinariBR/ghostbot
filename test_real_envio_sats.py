@@ -268,6 +268,9 @@ class TesteRealEnvioSats:
                 return False
         else:
             await self.simular_mensagem_bot("❌ Erro ao enviar pagamento Lightning")
+            # Exibe o JSON completo da resposta de erro para debug detalhado
+            print("[DEBUG] Resposta completa do backend:")
+            print(json.dumps(resultado_envio, indent=2, ensure_ascii=False))
             await self.simular_mensagem_bot(f"🔧 Erro: {resultado_envio.get('error', 'Erro desconhecido')}")
             await self.simular_mensagem_bot("📞 Entre em contato com nosso atendente: @GhosttP2P_bot")
             return False
