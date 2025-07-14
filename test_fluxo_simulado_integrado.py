@@ -47,9 +47,11 @@ def consultar_validador(valor, moeda="btc", rede="lightning"):
     url = f"{BASE_URL}/api_cotacao.php"
     params = {
         "moeda": moeda,
-        "rede": rede,
+        "vs": "brl",
         "valor": valor,
-        "chatid": CHAT_ID
+        "chatid": CHAT_ID,
+        "compras": 1,
+        "metodo": "pix"
     }
     resp = requests.get(url, params=params)
     print(f"[DEBUG] Resposta bruta validador ({resp.status_code}): {resp.text}")
