@@ -88,36 +88,72 @@ class TesteRealEnvioSats:
             print(f"❌ Erro na consulta: {str(e)}")
             return {"success": False, "error": str(e)}
     
+    async def lightning_address_para_invoice(self, lightning_address: str, valor_sats: int) -> Optional[str]:
+        """Resolve um Lightning Address para uma invoice BOLT11 usando LNURL."""
+        try:
+            if '@' not in lightning_address:
+                raise ValueError('Endereço Lightning inválido')
+            usuario, dominio = lightning_address.split('@', 1)
+            url_lnurl = f"https://{dominio}/.well-known/lnurlp/{usuario}"
+            async with self.session.get(url_lnurl) as resp:
+                if resp.status != 200:
+                    raise Exception(f"Erro ao consultar LNURL: {resp.status}")
+                lnurl_data = await resp.json()
+                assert lnurl_data is not None
+                assert isinstance(lnurl_data, dict)
+                lnurl_data = dict(lnurl_data)  # Cast explícito para o Pyright
+                callback = lnurl_data.get('callback')
+                if not callback:
+                    raise Exception('Callback LNURL não encontrado')
+                # Valor em msats
+                amount_msat = valor_sats * 1000
+                url_invoice = f"{callback}?amount={amount_msat}"
+                async with self.session.get(url_invoice) as resp2:
+                    if resp2.status != 200:
+                        raise Exception(f"Erro ao solicitar invoice: {resp2.status}")
+                    invoice_data = await resp2.json()
+                    assert invoice_data is not None
+                    assert isinstance(invoice_data, dict)
+                    invoice_data = dict(invoice_data)  # Cast explícito para o Pyright
+                    pr = invoice_data.get('pr')
+                    if not pr:
+                        raise Exception('Invoice não encontrada na resposta LNURL')
+                    return pr
+        except Exception as e:
+            print(f"❌ Erro ao resolver Lightning Address: {str(e)}")
+            return None
+
     async def enviar_pagamento_lightning_direto(self, endereco_lightning: str, valor_sats: int) -> Dict[str, Any]:
         """Envia pagamento Lightning diretamente na API Voltz usando as credenciais."""
         try:
+            # Se não for BOLT11, resolver Lightning Address para invoice
+            if not endereco_lightning.startswith('lnbc'):
+                print(f"🔄 Resolvendo Lightning Address '{endereco_lightning}' para invoice BOLT11...")
+                invoice_bolt11 = await self.lightning_address_para_invoice(endereco_lightning, valor_sats)
+                if not invoice_bolt11:
+                    return {"success": False, "error": "Não foi possível resolver Lightning Address para invoice BOLT11"}
+                endereco_lightning = invoice_bolt11
+                print(f"✅ Invoice BOLT11 obtida: {endereco_lightning[:40]}...")
             # URL direta da API Voltz para pagamento (estrutura correta)
             url = f"{self.voltz_config['node_url']}/api/{self.voltz_config['api_version']}/payments"
-            
             headers = {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
                 'X-Api-Key': self.voltz_config['admin_key']
             }
-            
-            # Dados do pagamento (formato correto baseado no VoltzClient.php)
             data = {
                 "out": "true",
                 "bolt11": endereco_lightning,
                 "unit": "sat"
             }
-            
             if self.session is None:
                 return {"success": False, "error": "Session não inicializada"}
-            
-            print(f"💰 Enviando {valor_sats} satoshis para {endereco_lightning}...")
+            print(f"💰 Enviando {valor_sats} satoshis para {endereco_lightning[:40]}...")
             print(f"📡 URL: {url}")
             print(f"🔑 Usando admin_key: {self.voltz_config['admin_key'][:8]}...")
             print(f"📋 Dados: {json.dumps(data, indent=2)}")
-            
             async with self.session.post(url, json=data, headers=headers) as response:
                 print(f"📊 Status: {response.status}")
-                
                 if response.status == 200:
                     result = await response.json()
                     print(f"✅ Pagamento enviado com sucesso: {json.dumps(result, indent=2)}")
