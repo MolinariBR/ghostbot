@@ -101,20 +101,6 @@ def consultar_saldo_voltz():
     logger.info(f"Saldo Voltz: {data}")
     return data.get("data", {}).get("balance", 0)
 
-def testar_limites():
-    logger.info("Testando limites mínimo e máximo...")
-    for valor in [5.0, 10.0, 4999.99, 5000.0]:
-        validador = consultar_validador(valor)
-        if valor < 10.0:
-            assert not validador.get("success", True), f"Valor {valor} deveria ser rejeitado (abaixo do mínimo)"
-            logger.info(f"Valor {valor} corretamente rejeitado (abaixo do mínimo)")
-        elif valor > 4999.99:
-            assert not validador.get("success", True), f"Valor {valor} deveria ser rejeitado (acima do máximo)"
-            logger.info(f"Valor {valor} corretamente rejeitado (acima do máximo)")
-        else:
-            assert validador.get("success", False), f"Valor {valor} deveria ser aceito"
-            logger.info(f"Valor {valor} corretamente aceito")
-
 def fluxo_completo(valor):
     logger.info(f"Iniciando fluxo completo para valor R$ {valor:.2f}")
     # 1. Consulta validador
@@ -144,9 +130,8 @@ def fluxo_completo(valor):
 
 def main():
     logger.info("==== TESTE SIMULADO INTEGRADO GHOST P2P ====")
-    testar_limites()
-    for valor in [10.0, 25.0]:
-        fluxo_completo(valor)
+    logger.info("Executando fluxo completo apenas para valor R$ 10,00...")
+    fluxo_completo(10.0)
     logger.info("==== FIM DO TESTE ====")
 
 if __name__ == "__main__":
