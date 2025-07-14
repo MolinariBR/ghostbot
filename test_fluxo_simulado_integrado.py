@@ -12,7 +12,6 @@ import logging
 # Configurações
 BASE_URL = "https://useghost.squareweb.app/api"
 VOLTZ_API = "https://useghost.squareweb.app/api/api_voltz.php"
-PEDIDO_API = f"{BASE_URL}/cotacao/pedido.php"
 DEPOSIT_API = f"{BASE_URL}/deposit.php"
 DEPIX_CREATE_API = f"{BASE_URL}/depix/create_payment.php"
 
@@ -26,20 +25,23 @@ def gerar_depix_id():
     return "simu_" + ''.join(random.choices(string.ascii_lowercase + string.digits, k=24))
 
 def criar_pedido_real(valor, moeda="btc", rede="lightning"):
-    """Cria um pedido real usando o endpoint do backend"""
+    """Cria um pedido real usando o endpoint correto do backend (api_cotacao.php)"""
+    url = f"{BASE_URL}/api_cotacao.php"
     params = {
-        "chatid": CHAT_ID,
         "moeda": moeda,
         "rede": rede,
         "valor": valor,
-        "comissao": 0,
-        "parceiro": 0,
-        "cotacao": 0,
-        "recebe": 0
+        "valor_brl": valor,
+        "chatid": CHAT_ID,
+        "metodo": "pix",
+        "action": "registrar",
+        "vs": "brl",
+        "compras": "1"
     }
-    resp = requests.get(PEDIDO_API, params=params)
+    resp = requests.get(url, params=params)
+    print(f"[DEBUG] Resposta bruta registrar pedido ({resp.status_code}): {resp.text}")
     data = resp.json()
-    logger.info(f"Pedido criado: {data}")
+    logger.info(f"Pedido registrado: {data}")
     return data.get("gtxid")
 
 def consultar_validador(valor, moeda="btc", rede="lightning"):
