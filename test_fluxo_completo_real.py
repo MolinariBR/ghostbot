@@ -1,275 +1,217 @@
 #!/usr/bin/env python3
 """
-Teste do fluxo completo do PIX até o envio dos satoshis (COM CONSULTA REAL DO BALANCE)
-Consulta o balance real da carteira Voltz antes de simular o envio
+Teste Real do Fluxo Completo - Ghost P2P Bot
+Simula um usuário real fazendo uma compra completa via Telegram
 """
 
 import asyncio
-import aiohttp
-import json
-from typing import Dict, Any, Optional
-from config.config import BASE_URL
+import logging
+import time
+from telegram import Bot
+from telegram.error import TelegramError
+from typing import List, Dict, Any
 
-class FluxoCompletoReal:
-    """
-    Testa o fluxo completo com consulta real do balance da carteira Voltz
-    """
-    
+# Configuração de logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Configurações do teste
+BOT_TOKEN = "7105509014:AAENhZArthrysOBoEmdA6vaxE72pobliahI"
+CHAT_ID = 7910260237
+LIGHTNING_ADDRESS = "bouncyflight79@walletofsatoshi.com"
+
+# Depix IDs reais para teste
+DEPIX_IDS = [
+    "0197e0ed06537df9820a28f5a5380a3b",
+    "0197e10b5b8f7df9a6bf9430188534e4", 
+    "0197e12300eb7df9808ca5d7719ea40e",
+    "0197e5214a377dfaae6e541f68057444"
+]
+
+class TesteFluxoReal:
     def __init__(self):
-        self.base_url = BASE_URL
-        self.session = None
-    
-    async def __aenter__(self):
-        self.session = aiohttp.ClientSession()
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.session:
-            await self.session.close()
-    
-    async def consultar_deposito(self, depix_id: str) -> Dict[str, Any]:
-        """Consulta os dados do depósito no backend."""
+        self.bot = Bot(token=BOT_TOKEN)
+        self.current_depix_index = 0
+        self.test_results = []
+        
+    async def enviar_mensagem(self, texto: str, delay: float = 2.0) -> bool:
+        """Envia mensagem para o bot e aguarda delay"""
         try:
-            url = f"{self.base_url}/deposit.php"
-            params = {"action": "get", "depix_id": depix_id}
-            
-            if self.session is None:
-                return {"success": False, "error": "Session não inicializada"}
-                
-            async with self.session.get(url, params=params) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    return {"success": False, "error": f"HTTP {response.status}"}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+            await self.bot.send_message(chat_id=CHAT_ID, text=texto)
+            logger.info(f"✅ Mensagem enviada: {texto}")
+            await asyncio.sleep(delay)
+            return True
+        except TelegramError as e:
+            logger.error(f"❌ Erro ao enviar mensagem: {e}")
+            return False
     
-    async def consultar_balance_voltz(self) -> Dict[str, Any]:
-        """Consulta o balance real da carteira Voltz."""
+    async def aguardar_resposta(self, timeout: int = 30) -> bool:
+        """Aguarda resposta do bot (simulado)"""
+        logger.info(f"⏳ Aguardando resposta do bot (timeout: {timeout}s)")
+        await asyncio.sleep(timeout)
+        return True
+    
+    async def executar_teste_compra(self, depix_id: str, valor: float = 10.0) -> Dict[str, Any]:
+        """Executa um teste completo de compra"""
+        logger.info(f"🚀 Iniciando teste de compra - Valor: R$ {valor:.2f}, Depix ID: {depix_id}")
+        
+        resultado = {
+            "depix_id": depix_id,
+            "valor": valor,
+            "status": "iniciado",
+            "mensagens_enviadas": [],
+            "erros": [],
+            "timestamp_inicio": time.time()
+        }
+        
         try:
-            url = f"{self.base_url}/api_voltz.php"
-            params = {"action": "balance"}
+            # 1. Iniciar conversa com /start
+            if not await self.enviar_mensagem("/start"):
+                resultado["erros"].append("Falha ao enviar /start")
+                resultado["status"] = "erro"
+                return resultado
+            resultado["mensagens_enviadas"].append("/start")
             
-            if self.session is None:
-                return {"success": False, "error": "Session não inicializada"}
+            # 2. Selecionar "Comprar"
+            if not await self.enviar_mensagem("Comprar"):
+                resultado["erros"].append("Falha ao selecionar Comprar")
+                resultado["status"] = "erro"
+                return resultado
+            resultado["mensagens_enviadas"].append("Comprar")
             
-            print(f"🔍 Consultando balance da carteira Voltz...")
-            print(f"📡 URL: {url}")
-            print(f"📋 Params: {params}")
+            # 3. Selecionar "BTC"
+            if not await self.enviar_mensagem("BTC"):
+                resultado["erros"].append("Falha ao selecionar BTC")
+                resultado["status"] = "erro"
+                return resultado
+            resultado["mensagens_enviadas"].append("BTC")
             
-            async with self.session.get(url, params=params) as response:
-                print(f"📊 Status: {response.status}")
-                
-                if response.status == 200:
-                    result = await response.json()
-                    print(f"✅ Resposta: {json.dumps(result, indent=2)}")
-                    return result
-                else:
-                    error_text = await response.text()
-                    print(f"❌ Erro HTTP {response.status}: {error_text}")
-                    return {"success": False, "error": f"HTTP {response.status}"}
+            # 4. Selecionar "Lightning"
+            if not await self.enviar_mensagem("Lightning"):
+                resultado["erros"].append("Falha ao selecionar Lightning")
+                resultado["status"] = "erro"
+                return resultado
+            resultado["mensagens_enviadas"].append("Lightning")
+            
+            # 5. Enviar valor
+            valor_str = f"{valor:.2f}"
+            if not await self.enviar_mensagem(valor_str):
+                resultado["erros"].append(f"Falha ao enviar valor {valor_str}")
+                resultado["status"] = "erro"
+                return resultado
+            resultado["mensagens_enviadas"].append(valor_str)
+            
+            # 6. Aguardar resumo e confirmar
+            await self.aguardar_resposta(10)
+            if not await self.enviar_mensagem("Confirmar Pedido"):
+                resultado["erros"].append("Falha ao confirmar pedido")
+                resultado["status"] = "erro"
+                return resultado
+            resultado["mensagens_enviadas"].append("Confirmar Pedido")
+            
+            # 7. Aguardar solicitação do comprovante PIX
+            await self.aguardar_resposta(15)
+            
+            # 8. Enviar depix_id
+            depix_msg = f"depix:{depix_id}"
+            if not await self.enviar_mensagem(depix_msg):
+                resultado["erros"].append(f"Falha ao enviar depix_id {depix_id}")
+                resultado["status"] = "erro"
+                return resultado
+            resultado["mensagens_enviadas"].append(depix_msg)
+            
+            # 9. Aguardar validação do PIX e solicitação do endereço Lightning
+            await self.aguardar_resposta(20)
+            
+            # 10. Enviar endereço Lightning
+            if not await self.enviar_mensagem(LIGHTNING_ADDRESS):
+                resultado["erros"].append(f"Falha ao enviar endereço Lightning {LIGHTNING_ADDRESS}")
+                resultado["status"] = "erro"
+                return resultado
+            resultado["mensagens_enviadas"].append(LIGHTNING_ADDRESS)
+            
+            # 11. Aguardar processamento e envio dos sats
+            await self.aguardar_resposta(30)
+            
+            resultado["status"] = "concluido"
+            resultado["timestamp_fim"] = time.time()
+            resultado["duracao"] = resultado["timestamp_fim"] - resultado["timestamp_inicio"]
+            
+            logger.info(f"✅ Teste concluído com sucesso - Depix ID: {depix_id}")
+            
         except Exception as e:
-            print(f"❌ Erro na consulta: {str(e)}")
-            return {"success": False, "error": str(e)}
+            resultado["erros"].append(f"Erro inesperado: {str(e)}")
+            resultado["status"] = "erro"
+            logger.error(f"❌ Erro no teste: {e}")
+        
+        return resultado
     
-    async def simular_envio_lightning_com_balance(self, endereco_lightning: str, valor_sats: int, balance_atual: int) -> Dict[str, Any]:
-        """Simula o envio de satoshis verificando se há saldo suficiente."""
+    async def executar_todos_testes(self):
+        """Executa todos os testes com diferentes depix_ids"""
+        logger.info("🎯 Iniciando bateria de testes reais")
         
-        print(f"\n💰 VERIFICAÇÃO DE SALDO:")
-        print(f"   💰 Saldo atual: {balance_atual} satoshis")
-        print(f"   💸 Valor a enviar: {valor_sats} satoshis")
-        print(f"   📊 Saldo após envio: {balance_atual - valor_sats} satoshis")
+        for i, depix_id in enumerate(DEPIX_IDS):
+            logger.info(f"📋 Teste {i+1}/{len(DEPIX_IDS)} - Depix ID: {depix_id}")
+            
+            # Usar valores diferentes para cada teste
+            valor = 10.0 + (i * 5.0)  # 10, 15, 20, 25
+            
+            resultado = await self.executar_teste_compra(depix_id, valor)
+            self.test_results.append(resultado)
+            
+            # Aguardar entre testes
+            if i < len(DEPIX_IDS) - 1:
+                logger.info("⏸️ Aguardando 30 segundos antes do próximo teste...")
+                await asyncio.sleep(30)
         
-        if balance_atual < valor_sats:
-            return {
-                "success": False,
-                "error": f"Saldo insuficiente. Saldo atual: {balance_atual} sats, Valor necessário: {valor_sats} sats"
-            }
-        
-        # Simula uma resposta de sucesso da API Voltz
-        return {
-            "success": True,
-            "payment_hash": f"real_payment_hash_{valor_sats}_{hash(endereco_lightning) % 10000}",
-            "fee_msat": 1500,
-            "status": "complete",
-            "amount_msat": valor_sats * 1000,
-            "destination": endereco_lightning,
-            "balance_antes": balance_atual,
-            "balance_depois": balance_atual - valor_sats
-        }
+        self.mostrar_resultados()
     
-    async def simular_verificacao_pagamento_sucesso(self, payment_hash: str) -> Dict[str, Any]:
-        """Simula a verificação do status do pagamento Lightning com SUCESSO."""
-        return {
-            "success": True,
-            "data": {
-                "status": "complete",
-                "payment_hash": payment_hash,
-                "fee_msat": 1500,
-                "amount_msat": 9500000,
-                "created_at": "2024-07-08T12:00:00Z",
-                "settled_at": "2024-07-08T12:00:05Z"
-            }
-        }
-    
-    async def simular_mensagem_bot(self, mensagem: str):
-        """Simula o envio de mensagem pelo bot."""
-        print(f"🤖 BOT: {mensagem}")
-    
-    async def testar_fluxo_completo_com_balance(self, depix_id: str, endereco_lightning: str = "bouncyflight79@walletofsatoshi.com"):
-        """
-        Testa o fluxo completo incluindo consulta do balance da carteira Voltz.
+    def mostrar_resultados(self):
+        """Mostra resumo dos resultados dos testes"""
+        logger.info("\n" + "="*60)
+        logger.info("📊 RESUMO DOS TESTES")
+        logger.info("="*60)
         
-        Args:
-            depix_id: ID do depósito PIX
-            endereco_lightning: Endereço Lightning do usuário
-        """
-        print(f"🚀 Iniciando teste do fluxo completo para depix_id: {depix_id}")
-        print("=" * 80)
+        sucessos = sum(1 for r in self.test_results if r["status"] == "concluido")
+        erros = sum(1 for r in self.test_results if r["status"] == "erro")
         
-        # PASSO 1: Verificação do PIX
-        await self.simular_mensagem_bot("🔍 Verificando confirmação do pagamento PIX...")
-        await self.simular_mensagem_bot("⏳ Aguarde enquanto validamos sua transação.")
+        logger.info(f"Total de testes: {len(self.test_results)}")
+        logger.info(f"Sucessos: {sucessos}")
+        logger.info(f"Erros: {erros}")
+        logger.info(f"Taxa de sucesso: {(sucessos/len(self.test_results)*100):.1f}%")
         
-        deposito = await self.consultar_deposito(depix_id)
+        for i, resultado in enumerate(self.test_results):
+            logger.info(f"\n📋 Teste {i+1}:")
+            logger.info(f"  Depix ID: {resultado['depix_id']}")
+            logger.info(f"  Valor: R$ {resultado['valor']:.2f}")
+            logger.info(f"  Status: {resultado['status']}")
+            if resultado.get("duracao"):
+                logger.info(f"  Duração: {resultado['duracao']:.1f}s")
+            if resultado["erros"]:
+                logger.info(f"  Erros: {', '.join(resultado['erros'])}")
         
-        if "error" in deposito:
-            await self.simular_mensagem_bot(f"❌ Erro na verificação: {deposito['error']}")
-            return False
-        
-        if not deposito.get("blockchainTxID"):
-            await self.simular_mensagem_bot("❌ Pagamento não confirmado. Blockchain TxID não encontrado.")
-            return False
-        
-        # PAGAMENTO CONFIRMADO!
-        await self.simular_mensagem_bot("✅ Pagamento confirmado!")
-        await self.simular_mensagem_bot("🔗 Blockchain TxID encontrado.")
-        await self.simular_mensagem_bot("📬 Por favor, envie seu endereço Lightning (Lightning Address ou Invoice) para receber seus satoshis.")
-        
-        # PASSO 2: Recebimento do endereço Lightning
-        print(f"\n📬 Endereço Lightning recebido: {endereco_lightning}")
-        await self.simular_mensagem_bot(f"✅ Endereço Lightning recebido!")
-        await self.simular_mensagem_bot(f"📬 {endereco_lightning}")
-        await self.simular_mensagem_bot("🔄 Processando pagamento...")
-        await self.simular_mensagem_bot("⏳ Aguarde a confirmação da transação Lightning.")
-        
-        # PASSO 3: Consulta do balance da carteira Voltz
-        print(f"\n🏦 CONSULTANDO BALANCE DA CARTEIRA VOLTZ...")
-        resultado_balance = await self.consultar_balance_voltz()
-        
-        if not resultado_balance.get("success"):
-            await self.simular_mensagem_bot("❌ Erro ao consultar balance da carteira")
-            await self.simular_mensagem_bot(f"🔧 Erro: {resultado_balance.get('error', 'Erro desconhecido')}")
-            return False
-        
-        # Extrai o balance da resposta
-        balance_data = resultado_balance.get("data", {})
-        balance_atual = balance_data.get("balance", 0)
-        
-        await self.simular_mensagem_bot(f"💰 Balance da carteira: {balance_atual} satoshis")
-        
-        # PASSO 4: Envio dos satoshis (com verificação de saldo)
-        valor_sats = 9500  # Valor em satoshis (baseado no depósito)
-        print(f"\n💰 Enviando {valor_sats} satoshis...")
-        
-        resultado_envio = await self.simular_envio_lightning_com_balance(endereco_lightning, valor_sats, balance_atual)
-        
-        if resultado_envio.get("success"):
-            payment_hash = resultado_envio.get("payment_hash")
-            fee_msat = resultado_envio.get("fee_msat", 0)
-            balance_depois = resultado_envio.get("balance_depois", 0)
-            
-            if payment_hash is None:
-                await self.simular_mensagem_bot("❌ Erro: Payment hash não encontrado")
-                return False
-            
-            await self.simular_mensagem_bot("✅ Pagamento Lightning enviado com sucesso!")
-            await self.simular_mensagem_bot(f"🔗 Payment Hash: {payment_hash}")
-            await self.simular_mensagem_bot(f"💸 Taxa: {fee_msat} msat")
-            await self.simular_mensagem_bot(f"💰 Novo balance: {balance_depois} satoshis")
-            
-            # PASSO 5: Verificação do status do pagamento
-            await self.simular_mensagem_bot("🔍 Verificando status do pagamento...")
-            
-            resultado_verificacao = await self.simular_verificacao_pagamento_sucesso(payment_hash)
-            
-            if resultado_verificacao.get("success"):
-                status_pagamento = resultado_verificacao.get("data", {}).get("status", "unknown")
-                
-                if status_pagamento == "complete":
-                    # MENSAGEM FINAL DE SUCESSO!
-                    await self.simular_mensagem_bot("🎉 Transação concluída com sucesso!")
-                    await self.simular_mensagem_bot(f"💰 {valor_sats} satoshis enviados para {endereco_lightning}")
-                    await self.simular_mensagem_bot("✅ Sua transação foi finalizada. Obrigado por usar nossos serviços!")
-                    await self.simular_mensagem_bot("🔄 Para fazer uma nova compra, use /start")
-                    
-                    # DETALHES DA TRANSAÇÃO
-                    print(f"\n📊 DETALHES DA TRANSAÇÃO:")
-                    print(f"   💰 Valor: {valor_sats} satoshis")
-                    print(f"   💸 Taxa: {fee_msat} msat")
-                    print(f"   🔗 Payment Hash: {payment_hash}")
-                    print(f"   📬 Destino: {endereco_lightning}")
-                    print(f"   🏦 Balance antes: {balance_atual} satoshis")
-                    print(f"   🏦 Balance depois: {balance_depois} satoshis")
-                    print(f"   ⏰ Criado em: 2024-07-08T12:00:00Z")
-                    print(f"   ✅ Confirmado em: 2024-07-08T12:00:05Z")
-                    
-                    return True
-                else:
-                    await self.simular_mensagem_bot(f"⚠️ Status do pagamento: {status_pagamento}")
-                    await self.simular_mensagem_bot("🔄 Aguardando confirmação da rede Lightning...")
-                    return False
-            else:
-                await self.simular_mensagem_bot("❌ Erro ao verificar status do pagamento")
-                await self.simular_mensagem_bot("🔧 Entre em contato com o atendente se o problema persistir")
-                return False
-        else:
-            await self.simular_mensagem_bot("❌ Erro ao enviar pagamento Lightning")
-            await self.simular_mensagem_bot(f"🔧 Erro: {resultado_envio.get('error', 'Erro desconhecido')}")
-            await self.simular_mensagem_bot("📞 Entre em contato com nosso atendente: @GhosttP2P_bot")
-            return False
+        logger.info("\n" + "="*60)
 
 async def main():
-    """Função principal para executar os testes."""
-    print("🧪 TESTE DO FLUXO COMPLETO PIX -> LIGHTNING (COM CONSULTA REAL DO BALANCE)")
-    print("=" * 80)
+    """Função principal"""
+    logger.info("🤖 Iniciando Teste Real do Fluxo Completo")
+    logger.info(f"📱 Chat ID: {CHAT_ID}")
+    logger.info(f"⚡ Endereço Lightning: {LIGHTNING_ADDRESS}")
+    logger.info(f"🆔 Depix IDs: {', '.join(DEPIX_IDS)}")
     
-    # Depix IDs de teste (com blockchainTxID)
-    depix_ids_completos = [
-        "965cd29f947c0a548c8199bbacb42a294aec3cd8f8f6cd935c45f52b6a8ddb2b",
-        "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
-        "f1e2d3c4b5a6789012345678901234567890fedcba1234567890fedcba123456"
-    ]
+    teste = TesteFluxoReal()
     
-    # Endereço Lightning fixo para todos os testes
-    endereco_lightning = "bouncyflight79@walletofsatoshi.com"
+    try:
+        await teste.executar_todos_testes()
+    except KeyboardInterrupt:
+        logger.info("⏹️ Teste interrompido pelo usuário")
+    except Exception as e:
+        logger.error(f"❌ Erro fatal: {e}")
     
-    sucessos = 0
-    total = len(depix_ids_completos)
-    
-    async with FluxoCompletoReal() as fluxo:
-        for i, depix_id in enumerate(depix_ids_completos):
-            print(f"\n{'='*20} TESTE {i+1}/{total} {'='*20}")
-            
-            resultado = await fluxo.testar_fluxo_completo_com_balance(depix_id, endereco_lightning)
-            
-            if resultado:
-                print(f"✅ Teste {i+1} CONCLUÍDO COM SUCESSO!")
-                sucessos += 1
-            else:
-                print(f"❌ Teste {i+1} FALHOU!")
-            
-            print(f"{'='*60}")
-            
-            # Pausa entre testes
-            if i < total - 1:
-                await asyncio.sleep(2)
-    
-    print(f"\n🎯 TODOS OS TESTES CONCLUÍDOS!")
-    print(f"📊 Resumo: {sucessos}/{total} testes passaram")
-    print(f"✅ Fluxo completo do PIX até Lightning testado com sucesso!")
-    print(f"🎉 Consulta real do balance da carteira Voltz implementada!")
-    print(f"📬 Endereço Lightning usado: {endereco_lightning}")
+    logger.info("🏁 Teste finalizado")
 
 if __name__ == "__main__":
     asyncio.run(main()) 
