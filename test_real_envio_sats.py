@@ -154,7 +154,7 @@ class TesteRealEnvioSats:
             print(f"📋 Dados: {json.dumps(data, indent=2)}")
             async with self.session.post(url, json=data, headers=headers) as response:
                 print(f"📊 Status: {response.status}")
-                if response.status == 200:
+                if response.status in (200, 201):
                     result = await response.json()
                     print(f"✅ Pagamento enviado com sucesso: {json.dumps(result, indent=2)}")
                     return {"success": True, "data": result}
