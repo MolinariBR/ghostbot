@@ -127,6 +127,10 @@ async def tratar_opcao_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 compras=compras,
                 metodo=metodo
             )
+            import logging
+            logger = logging.getLogger("menu_compra_debug")
+            logger.info(f"Resposta do backend: {data}")
+            logger.info(f"context.user_data antes do resumo: {context.user_data}")
             if not data or not data.get("success"):
                 if update.message is not None:
                     await update.message.reply_text(f"Erro ao validar pedido: {data.get('error') if data else 'Erro desconhecido'}")
@@ -187,7 +191,10 @@ async def tratar_opcao_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if valor_recebe_moeda is not None:
                 resumo += f"Você Recebe: {valor_recebe_moeda:.8f} {moeda.upper()}"
             if update.message is not None:
-                await update.message.reply_text(resumo)
+                try:
+                    await update.message.reply_text(resumo)
+                except Exception as e:
+                    logger.error(f"Erro ao enviar resumo: {e}")
             # Passo 6 - Confirmar Pedido
             confirmar_markup = ReplyKeyboardMarkup([["Confirmar Pedido"], ["Voltar"]], resize_keyboard=True)
             if update.message is not None:
@@ -543,3 +550,4 @@ async def processar_endereco_lightning(update: Update, context: ContextTypes.DEF
     
     # Aqui o backend processará automaticamente via trigger_txid.php
     # O bot apenas confirma o recebimento do endereço
+    # Auteração para testes de git push
