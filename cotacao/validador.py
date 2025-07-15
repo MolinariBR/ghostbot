@@ -60,3 +60,4 @@ def validar_pedido(moeda: str, valor_brl: float, chatid: str, compras: int, meto
         'amount_in_cents': amount_in_cents,
         'send_in_cents': send_in_cents
     } 
+    #teste

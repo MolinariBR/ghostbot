@@ -32,3 +32,4 @@ def get_comissao(moeda: str, valor_brl: float) -> dict | None:
         'comissao': round(comissao, 2),
         'comissao_in_cents': comissao_in_cents
     } 
+    #teste

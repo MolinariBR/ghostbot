@@ -18,3 +18,4 @@ def get_limite_in_cents(chatid: str, compras: int) -> int:
     if compras in LIMITES_MAP:
         return LIMITES_MAP[compras]
     return LIMITE_MAXIMO 
+    #teste

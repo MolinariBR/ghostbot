@@ -110,3 +110,4 @@ def get_realtime_price(symbol: str, vs: str = 'brl') -> dict:
         'vs': vs,
         'timestamp': datetime.now().isoformat()
     } 
+    #teste
