@@ -1,3 +1,4 @@
+   # Forçar git a versionar este arquivo
 # Mapa de limites progressivos por número de compras (em centavos)
 LIMITES_MAP = {
     0: 50000,    # 500.00

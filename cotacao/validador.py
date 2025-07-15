@@ -1,5 +1,5 @@
 # Esqueleto inicial para lógica de validação de cotação e cálculo final
-
+   # Forçar git a versionar este arquivo
 from .cotacao import get_realtime_price
 from .comissao import get_comissao
 from .limites import get_limite_in_cents

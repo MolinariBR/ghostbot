@@ -1,3 +1,4 @@
+   # Forçar git a versionar este arquivo
 # Mapa de taxas de parceiro em centavos por método
 PARCEIRO_TAXA_MAP = {
     'pix': 100,     # 1 real em centavos

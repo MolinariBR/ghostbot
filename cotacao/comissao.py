@@ -1,3 +1,4 @@
+   # Forçar git a versionar este arquivo
 # Mapeamento de regras de comissão por moeda (acima de 500 reais)
 COMISSAO_MAP = {
     'btc':    {'percentual': 0.035, 'fixo_in_cents': 0},
