@@ -49,7 +49,7 @@ def get_realtime_price(symbol: str, vs: str = 'brl') -> dict:
             'symbol': 'depix',
             'vs': vs
         }
-    # 1. Binance
+    # 1. Binance (retorna em USD, converter para BRL se necessário)
     try:
         binance_symbol = symbol.upper() + 'USDT'
         url = f'https://api.binance.com/api/v3/ticker/price?symbol={binance_symbol}'
@@ -60,16 +60,29 @@ def get_realtime_price(symbol: str, vs: str = 'brl') -> dict:
         resp = requests.get(url, headers=headers, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
-            price = float(data['price'])
+            price_usd = float(data['price'])
+            # Buscar cotação USD/BRL
+            try:
+                url_brl = 'https://api.binance.com/api/v3/ticker/price?symbol=USDTBRL'
+                resp_brl = requests.get(url_brl, headers=headers, timeout=10)
+                if resp_brl.status_code == 200:
+                    data_brl = resp_brl.json()
+                    usd_brl = float(data_brl['price'])
+                else:
+                    usd_brl = 5.40  # fallback
+            except Exception:
+                usd_brl = 5.40  # fallback
+            price_brl = price_usd * usd_brl
             spread = SPREAD_MAP.get(symbol, 1.0)
-            final_price = price * (1 + spread / 100)
+            final_price = price_brl * (1 + spread / 100)
             return {
                 'price': round(final_price, 2),
                 'source': 'binance',
                 'timestamp': datetime.now().isoformat(),
                 'symbol': symbol,
-                'vs': vs,
-                'raw_price': price,
+                'vs': 'brl',
+                'raw_price_usd': price_usd,
+                'usd_brl': usd_brl,
                 'spread': spread
             }
     except Exception:
@@ -84,13 +97,27 @@ def get_realtime_price(symbol: str, vs: str = 'brl') -> dict:
             data = resp.json()
             if coin_id in data and vs_currency in data[coin_id]:
                 price = float(data[coin_id][vs_currency])
+                if vs_currency == 'usd':
+                    # Buscar cotação USD/BRL
+                    try:
+                        url_brl = 'https://api.binance.com/api/v3/ticker/price?symbol=USDTBRL'
+                        resp_brl = requests.get(url_brl, timeout=10)
+                        if resp_brl.status_code == 200:
+                            data_brl = resp_brl.json()
+                            usd_brl = float(data_brl['price'])
+                        else:
+                            usd_brl = 5.40
+                    except Exception:
+                        usd_brl = 5.40
+                    price = price * usd_brl
                 return {
                     'price': price,
                     'source': 'coingecko',
                     'timestamp': datetime.now().isoformat(),
                     'symbol': symbol,
-                    'vs': vs,
-                    'coingecko_id': coin_id
+                    'vs': 'brl',
+                    'coingecko_id': coin_id,
+                    'usd_brl': usd_brl if 'usd_brl' in locals() else None
                 }
     except Exception:
         pass
@@ -111,4 +138,3 @@ def get_realtime_price(symbol: str, vs: str = 'brl') -> dict:
         'vs': vs,
         'timestamp': datetime.now().isoformat()
     } 
-    #teste

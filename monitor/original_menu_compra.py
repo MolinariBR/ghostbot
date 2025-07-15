@@ -22,13 +22,11 @@ from datetime import datetime
 from typing import Dict, Any, Optional, Union
 import sys
 import os
-import random
-import traceback
 
 # Garante que o diretório do projeto está no PYTHONPATH
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, Bot
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     ContextTypes, 
     ConversationHandler, 
@@ -107,13 +105,6 @@ from api.pedido_manager import pedido_manager
 
 # Dicionário global para salvar o último pedido de cada usuário
 ULTIMOS_PEDIDOS = {}
-
-# Lista de depix_id de teste válidos (status depix_sent)
-DEPIX_IDS_TESTE = [
-    "0197e0ed06537df9820a28f5a5380a3b",
-    "0197e10b5b8f7df9a6bf9430188534e4",
-    "0197e12300eb7df9808ca5d7719ea40e"
-]
 
 # Função utilitária global para formatar valores monetários
 def format_brl(val):
@@ -498,12 +489,6 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                             qr_code_url = pix_data_dict.get('qr_image_url', '')
                             print(f"[DEBUG] qr_code_url: {qr_code_url}")
                             copia_cola = pix_data_dict.get('qr_copy_paste', '')
-                            # --- INÍCIO DO PATCH DE TESTE ---
-                            depix_id_teste = random.choice(DEPIX_IDS_TESTE)
-                            print(f"\033[1;35m[TESTE] Substituindo depix_id pelo real: {depix_id_teste}\033[0m")
-                            pix_data_dict['transaction_id'] = depix_id_teste
-                            print(f"\033[1;34m[DEBUG] depix_id sobrescrito para teste: {pix_data_dict['transaction_id']}\033[0m")
-                            # --- FIM DO PATCH DE TESTE ---
                             pix_valor_fmt = escape_markdown(format_brl(validador.get('valor_brl', 0)))
                             pix_valor_sats = escape_markdown(str(validador.get('valor_sats', 0)))
                             pix_pedido_id = escape_markdown(str(pedido_id))
@@ -556,26 +541,6 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                     parse_mode='Markdown'
                                 )
                             print(f"✅ [MENU] PIX criado com sucesso para pedido #{pedido_id}")
-
-                            # ================= INÍCIO DA CHAMADA DO LOOP DE VERIFICAÇÃO =================
-                            try:
-                                import asyncio
-                                depix_id = pix_data_dict.get('transaction_id', '')
-                                print(f"\033[1;33m[DEBUG] depix_id FINAL usado na verificação: {depix_id} | pedido_id: {pedido_id} | chatid: {chatid}\033[0m")
-                                if depix_id and pedido_id and chatid:
-                                    print(f"\033[1;36m[DEBUG] Chamando loop de verificação do pagamento PIX: depix_id={depix_id}, pedido_id={pedido_id}, chatid={chatid}\033[0m")
-                                    asyncio.create_task(
-                                        pedido_manager.verificar_pagamento_background(
-                                            str(depix_id),
-                                            str(pedido_id),
-                                            str(chatid)
-                                        )
-                                    )
-                                else:
-                                    print(f"\033[1;31m[ERRO] Não foi possível iniciar o loop de verificação: depix_id={depix_id}, pedido_id={pedido_id}, chatid={chatid}\033[0m")
-                            except Exception as e:
-                                print(f"\033[1;31m[ERRO] Falha ao iniciar loop de verificação do pagamento PIX: {e}\033[0m")
-                            # ================= FIM DA CHAMADA DO LOOP DE VERIFICAÇÃO =================
                         else:
                             error_msg = pix_response.get('error', 'Erro desconhecido') if pix_response and isinstance(pix_response, dict) else 'Erro desconhecido'
                             if update and update.message:
@@ -790,12 +755,6 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                             qr_code_url = pix_data_dict.get('qr_image_url', '')
                             print(f"[DEBUG] qr_code_url: {qr_code_url}")
                             copia_cola = pix_data_dict.get('qr_copy_paste', '')
-                            # --- INÍCIO DO PATCH DE TESTE ---
-                            depix_id_teste = random.choice(DEPIX_IDS_TESTE)
-                            print(f"\033[1;35m[TESTE] Substituindo depix_id pelo real: {depix_id_teste}\033[0m")
-                            pix_data_dict['transaction_id'] = depix_id_teste
-                            print(f"\033[1;34m[DEBUG] depix_id sobrescrito para teste: {pix_data_dict['transaction_id']}\033[0m")
-                            # --- FIM DO PATCH DE TESTE ---
                             pix_valor_fmt = escape_markdown(format_brl(validador.get('valor_brl', 0)))
                             pix_valor_sats = escape_markdown(str(validador.get('valor_sats', 0)))
                             pix_pedido_id = escape_markdown(str(pedido_id))
@@ -848,26 +807,6 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                     parse_mode='Markdown'
                                 )
                             print(f"✅ [MENU] PIX criado com sucesso para pedido #{pedido_id}")
-
-                            # ================= INÍCIO DA CHAMADA DO LOOP DE VERIFICAÇÃO =================
-                            try:
-                                import asyncio
-                                depix_id = pix_data_dict.get('transaction_id', '')
-                                print(f"\033[1;33m[DEBUG] depix_id FINAL usado na verificação: {depix_id} | pedido_id: {pedido_id} | chatid: {chatid}\033[0m")
-                                if depix_id and pedido_id and chatid:
-                                    print(f"\033[1;36m[DEBUG] Chamando loop de verificação do pagamento PIX: depix_id={depix_id}, pedido_id={pedido_id}, chatid={chatid}\033[0m")
-                                    asyncio.create_task(
-                                        pedido_manager.verificar_pagamento_background(
-                                            str(depix_id),
-                                            str(pedido_id),
-                                            str(chatid)
-                                        )
-                                    )
-                                else:
-                                    print(f"\033[1;31m[ERRO] Não foi possível iniciar o loop de verificação: depix_id={depix_id}, pedido_id={pedido_id}, chatid={chatid}\033[0m")
-                            except Exception as e:
-                                print(f"\033[1;31m[ERRO] Falha ao iniciar loop de verificação do pagamento PIX: {e}\033[0m")
-                            # ================= FIM DA CHAMADA DO LOOP DE VERIFICAÇÃO =================
                         else:
                             error_msg = pix_response.get('error', 'Erro desconhecido') if pix_response and isinstance(pix_response, dict) else 'Erro desconhecido'
                             if update and update.message:
@@ -951,7 +890,7 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
         print(f"🟡 [LIGHTNING] Iniciando envio de {valor_sats} sats para {endereco_lightning}")
         
         # Consultar saldo antes do envio
-        print(f"\033[1;33m[DEBUG] Consultando saldo Voltz...\033[0m")
+        print("🟡 [LIGHTNING] Consultando saldo da carteira...")
         saldo_result = await consultar_saldo()
         
         if not saldo_result or not isinstance(saldo_result, dict) or not saldo_result.get('success'):
@@ -982,7 +921,7 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
             return ConversationHandler.END
         
         # Enviar pagamento Lightning
-        print(f"\033[1;33m[DEBUG] Enviando pagamento Lightning para: {endereco_lightning}\033[0m")
+        print(f"🟡 [LIGHTNING] Enviando pagamento...")
         pagamento_result = await enviar_pagamento(endereco_lightning)
         
         if pagamento_result and isinstance(pagamento_result, dict) and pagamento_result.get('success'):
@@ -1002,7 +941,7 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
                         str(pedido_id),
                         'pagamento_enviado'
                     )
-                    print(f"\033[1;32m[DEBUG] Status do pedido atualizado para 'pagamento_enviado'\033[0m")
+                    print(f"✅ [LIGHTNING] Status do pedido #{pedido_id} atualizado")
             except Exception as e:
                 print(f"⚠️ [LIGHTNING] Erro ao atualizar status: {e}")
             
@@ -1089,7 +1028,7 @@ def get_conversation_handler():
     )
 
 # Função para ativar o estado de aguardar endereço Lightning
-async def ativar_aguardar_lightning_address(bot: Optional[Bot] = None, user_id: int = 0, pedido_id: int = 0):
+async def ativar_aguardar_lightning_address(context: ContextTypes.DEFAULT_TYPE, user_id: int, pedido_id: int):
     """
     Ativa o estado de aguardar endereço Lightning para um usuário específico.
     Esta função será chamada quando o pagamento PIX for confirmado.
@@ -1097,9 +1036,13 @@ async def ativar_aguardar_lightning_address(bot: Optional[Bot] = None, user_id: 
     try:
         print(f"🟢 [LIGHTNING] Ativando aguardar endereço para usuário {user_id}, pedido {pedido_id}")
         
+        # Definir o estado da conversa
+        if context and context.user_data:
+            context.user_data['pedido_id'] = pedido_id
+        
         # Enviar mensagem solicitando o endereço Lightning
-        if bot:
-            await bot.send_message(
+        if context and context.bot:
+            await context.bot.send_message(
                 chat_id=user_id,
                 text=escape_markdown("🎉 **Pagamento PIX Confirmado!**\n\n"
                 "✅ Seu pagamento foi recebido e confirmado!\n\n"
@@ -1111,6 +1054,7 @@ async def ativar_aguardar_lightning_address(bot: Optional[Bot] = None, user_id: 
                 "Envie seu endereço agora:"),
                 parse_mode='Markdown'
             )
+            
             print(f"✅ [LIGHTNING] Mensagem enviada para usuário {user_id}")
         
     except Exception as e:

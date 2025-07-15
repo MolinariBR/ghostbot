@@ -1,7 +1,3 @@
-"""
-Gerenciador de Pedidos - Salva pedidos no banco e ativa validação de pagamento
-"""
-
 import asyncio
 import sqlite3
 import logging
@@ -9,6 +5,7 @@ import sys
 from datetime import datetime
 from typing import Dict, Any, Optional
 from core.validador_depix import ValidadorDepix
+import traceback
 
 # Configuração de logging
 logger = logging.getLogger(__name__)
@@ -26,15 +23,18 @@ logging.basicConfig(
 class PedidoManager:
     """Gerencia pedidos e validação de pagamento PIX."""
     
-    def __init__(self, db_path: str = "data/pedidos.db"):
+    def __init__(self, db_path: str = "../data/deposit.db"):
         """
         Inicializa o gerenciador de pedidos.
         
         Args:
             db_path: Caminho para o banco de dados SQLite
         """
-        logger.debug(f"🔧 Inicializando PedidoManager com db_path: {db_path}")
-        self.db_path = db_path
+        import os
+        # Corrigir para caminho absoluto relativo ao projeto
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.db_path = os.path.join(base_dir, 'data', 'deposit.db')
+        logger.debug(f"🔧 Inicializando PedidoManager com db_path: {self.db_path}")
         
         logger.debug("🔑 Inicializando ValidadorDepix...")
         self.validador = ValidadorDepix(api_key="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJhbGciOiJSUzI1NiIsImVudiI6InByb2QiLCJleHAiOjE3ODI3NjUzNzcsImlhdCI6MTc1MTY2MTM3NywianRpIjoiNTY4OTlhZTdjMGJlIiwic2NvcGUiOlsiZGVwb3NpdCIsIndpdGhkcmF3Il0sInN1YiI6Imdob3N0IiwidHlwIjoiSldUIn0.fcobx8C6rPyYAYKo1WBhwyvErWHlX_ZOaZM3QvrOtBS5EGip8ofxX2h7lnJjZozNvu_6qI7SK3EsS8sPGYAkBWHvON3huWzXN--NkZV9HK4G5VMIYESdDqTvS7xnBcEJFlKjpq6wbN1siYu8Zp6b7RTfeRBlG4lNYiFVe3DWBJW2lcfTAOhMnpFQ4DPClxek-htU-pDtZcBwwgMfpBVGBIeiGVRV4YAvKFUeKItNijbBIwZtP3qsxslR-W8aaJUQ35OkPkBfrrw6OKz94Ng4xVs9uOZJ64ZBwVNzjKX_r6OIXtjVRbaErU-R4scdMlKYz-yj7bu0NhtmJTccruYyN5ITWtcTwxL9avhEp_ej8Ve3rWaf3ezsKejEol2iVakrHU9JDgLzmWxo7PXxTeipw5GlkXXo5IgtxxI-ViIHzPO3L816ZxdGhMlLS6fHEcZC1slWALUQgFxrS2VOLAfV105K63g4_X7_JKbEH0w7tOpaqd0Fl3VvodtKzH33JPNSfj9AD7hhJwhX6tDQvOtSpoRu10uRwPcVv_wfuqsgyaT6kfBJ5WKUdpyWFvSWWKjI5S907cjj8uXbazycBMQtZaL_aIRuqCEY3x_d8J_UlfS-vPwjC99RsXxMztXIzyQNdper7wIhVA604JiP5kvGN3ipzwIGNYT3jakbDviYNE0")
@@ -94,44 +94,56 @@ class PedidoManager:
         logger.debug(f"📊 Dados do pedido: {dados_pedido}")
         
         try:
+            # Validação defensiva dos campos obrigatórios
+            campos_obrigatorios = ['amount_in_cents', 'comissao_in_cents', 'parceiro_in_cents', 'send']
+            for campo in campos_obrigatorios:
+                if dados_pedido.get(campo) is None:
+                    logger.error(f"❌ Campo obrigatório ausente: {campo}")
+                    return False
             logger.debug(f"🔗 Conectando ao banco: {self.db_path}")
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            # Dados para inserção
-            dados_insercao = (
-                dados_pedido.get('gtxid'),
-                dados_pedido.get('chatid'),
-                dados_pedido.get('moeda', 'BTC'),
-                dados_pedido.get('rede', 'Lightning'),
-                dados_pedido.get('valor'),
-                dados_pedido.get('comissao'),
-                dados_pedido.get('parceiro'),
-                dados_pedido.get('cotacao'),
-                dados_pedido.get('recebe'),
-                dados_pedido.get('forma_pagamento', 'PIX'),
-                'novo'
-            )
-            
-            logger.debug(f"📝 Executando INSERT com dados: {dados_insercao}")
-            
-            cursor.execute("""
-                INSERT INTO pedidos_bot (
-                    gtxid, chatid, moeda, rede, valor, comissao, parceiro, 
-                    cotacao, recebe, forma_pagamento, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, dados_insercao)
-            
-            logger.debug("💾 Commitando transação...")
-            conn.commit()
-            conn.close()
-            
+            with sqlite3.connect(self.db_path, timeout=30) as conn:
+                conn.execute('PRAGMA journal_mode=WAL;')
+                cursor = conn.cursor()
+                
+                # Dados para inserção - usar as chaves corretas
+                dados_insercao = (
+                    dados_pedido.get('gtxid'),
+                    dados_pedido.get('chatid'),
+                    dados_pedido.get('moeda', 'BTC'),
+                    dados_pedido.get('rede', 'Lightning'),
+                    dados_pedido.get('amount_in_cents'),
+                    dados_pedido.get('comissao_in_cents'),
+                    dados_pedido.get('parceiro_in_cents'),
+                    dados_pedido.get('cotacao'),
+                    dados_pedido.get('send'),
+                    dados_pedido.get('forma_pagamento', 'PIX'),
+                    'novo'
+                )
+                
+                logger.debug(f"🧩 Tupla para insert: {dados_insercao}")
+                logger.debug(f"📝 Executando INSERT com dados: {dados_insercao}")
+                
+                cursor.execute("""
+                    INSERT INTO pedidos_bot (
+                        gtxid, chatid, moeda, rede, valor, comissao, parceiro, 
+                        cotacao, recebe, forma_pagamento, status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, dados_insercao)
+                
+                logger.debug("💾 Commitando transação...")
+                conn.commit()
             logger.info(f"✅ Pedido salvo com sucesso: {dados_pedido.get('gtxid')}")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Erro ao salvar pedido: {e}")
-            logger.error(f"📊 Dados que falharam: {dados_pedido}")
+            gtxid = dados_pedido.get('gtxid', 'N/A')
+            depix_id = dados_pedido.get('depix_id', 'N/A')
+            chatid = dados_pedido.get('chatid', 'N/A')
+            print(f"\033[1;31m[ERRO] PedidoManager: {e}\033[0m")
+            print(traceback.format_exc())
+            with open('logs/fluxo_erros.log', 'a') as f:
+                f.write(f"[ERRO] PedidoManager | gtxid: {gtxid} | depix_id: {depix_id} | chatid: {chatid}\n{e}\n{traceback.format_exc()}\n")
+            logger.error(f"[ERRO] PedidoManager: {e}\n{traceback.format_exc()}")
             return False
     
     async def verificar_pagamento_background(self, depix_id: str, gtxid: str, chatid: str, max_tentativas: int = 5):
@@ -149,51 +161,76 @@ class PedidoManager:
         
         for tentativa in range(1, max_tentativas + 1):
             try:
-                logger.info(f"🔄 TENTATIVA {tentativa}/{max_tentativas} - Iniciando verificação...")
+                logger.info(f"\033[1;36m🔄 TENTATIVA {tentativa}/{max_tentativas} - Iniciando verificação...\033[0m")
+                print(f"\033[1;36m🔄 [PEDIDO] Tentativa {tentativa}/{max_tentativas} - Verificando depix_id: {depix_id}\033[0m")
                 logger.debug(f"🔍 Consultando depósito: {depix_id}")
                 
                 # Consulta o status do pagamento
                 logger.debug("📡 Fazendo requisição para API Depix...")
                 resultado = await self.validador.consultar_deposito(depix_id)
                 logger.debug(f"📥 Resposta da API: {resultado}")
+                print(f"[PEDIDO] Resposta Depix: {resultado}")
                 
                 if resultado.get('success'):
-                    status = resultado.get('status', 'unknown')
-                    logger.info(f"✅ Status do pagamento: {status}")
+                    status = resultado.get('data', {}).get('status', 'unknown')
+                    logger.info(f"\033[1;32m✅ Status do pagamento: {status}\033[0m")
+                    print(f"\033[1;32m✅ [PEDIDO] Status do pagamento: {status}\033[0m")
                     logger.debug(f"📊 Dados completos da resposta: {resultado}")
                     
                     # Atualiza o banco com o status
                     logger.debug(f"💾 Atualizando status no banco: {status}")
-                    self._atualizar_status_pedido(gtxid, status, tentativa)
+                    self._atualizar_status_pedido(str(gtxid or ''), status, tentativa)
                     
                     # Se o pagamento foi confirmado, para as verificações
-                    if status in ['paid', 'completed', 'confirmed', 'depix_confirmed']:
-                        logger.info(f"🎉 PAGAMENTO CONFIRMADO! Parando verificações. Status: {status}")
+                    if status in ['paid', 'completed', 'confirmed', 'depix_confirmed', 'depix_sent']:
+                        logger.info(f"\033[1;32m🎉 PAGAMENTO CONFIRMADO! Parando verificações. Status: {status}\033[0m")
+                        print(f"\033[1;32m🎉 [PEDIDO] PAGAMENTO CONFIRMADO!\033[0m")
+                        # Chamar função para pedir endereço Lightning
+                        try:
+                            from menu.menu_compra import ativar_aguardar_lightning_address
+                            from telegram import Bot
+                            from config.config import BOT_TOKEN
+                            bot = Bot(token=BOT_TOKEN)
+                            logger.info(f"[PEDIDO] Chamando ativar_aguardar_lightning_address para chatid={chatid}, gtxid={gtxid}")
+                            print(f"[PEDIDO] Chamando ativar_aguardar_lightning_address para chatid={chatid}, gtxid={gtxid}")
+                            # Converter gtxid para int se possível
+                            try:
+                                pedido_id_int = int(gtxid)
+                            except Exception:
+                                pedido_id_int = 0
+                            # Passar o bot explicitamente
+                            asyncio.create_task(ativar_aguardar_lightning_address(bot, int(chatid), pedido_id_int))
+                        except Exception as e:
+                            logger.error(f"Erro ao ativar aguardar_lightning_address: {e}")
+                            print(f"[ERRO] Erro ao ativar aguardar_lightning_address: {e}")
                         break
                     else:
                         logger.info(f"⏳ Pagamento ainda pendente. Status: {status}")
+                        print(f"⏳ [PEDIDO] Pagamento ainda pendente. Status: {status}")
                     
                 else:
                     error_msg = resultado.get('error', 'Erro desconhecido')
                     logger.warning(f"⚠️ Erro na verificação {tentativa}: {error_msg}")
+                    print(f"⚠️ [PEDIDO] Erro na verificação {tentativa}: {error_msg}")
                     logger.debug(f"❌ Resposta de erro completa: {resultado}")
-                    self._atualizar_status_pedido(gtxid, 'erro_verificacao', tentativa)
+                    self._atualizar_status_pedido(str(gtxid or ''), 'erro_verificacao', tentativa)
                 
-                # Aguarda 30 segundos antes da próxima verificação
+                # Aguarda 3 segundos antes da próxima verificação
                 if tentativa < max_tentativas:
-                    logger.info(f"⏰ Aguardando 30 segundos antes da próxima tentativa...")
-                    await asyncio.sleep(30)
-                    
+                    logger.info(f"⏰ Aguardando 3 segundos antes da próxima tentativa...")
+                    print(f"⏰ [PEDIDO] Aguardando 3 segundos...")
+                    await asyncio.sleep(3)
             except Exception as e:
                 logger.error(f"💥 ERRO CRÍTICO na tentativa {tentativa}: {e}")
-                logger.error(f"📋 Detalhes do erro: {type(e).__name__}: {str(e)}")
-                self._atualizar_status_pedido(gtxid, 'erro_verificacao', tentativa)
-                
+                print(f"💥 [PEDIDO] ERRO CRÍTICO: {e}")
+                self._atualizar_status_pedido(str(gtxid or ''), 'erro_verificacao', tentativa)
                 if tentativa < max_tentativas:
-                    logger.info(f"⏰ Aguardando 30 segundos após erro...")
-                    await asyncio.sleep(30)
+                    logger.info(f"⏰ Aguardando 3 segundos após erro...")
+                    print(f"⏰ [PEDIDO] Aguardando 3 segundos após erro...")
+                    await asyncio.sleep(3)
         
         logger.info(f"🏁 VERIFICAÇÃO CONCLUÍDA para gtxid: {gtxid}")
+        print(f"🏁 [PEDIDO] VERIFICAÇÃO CONCLUÍDA para gtxid: {gtxid}")
         logger.info(f"📊 Total de tentativas realizadas: {max_tentativas}")
     
     def _atualizar_status_pedido(self, gtxid: str, status: str, tentativa: int):
@@ -229,8 +266,20 @@ class PedidoManager:
             logger.info(f"✅ Status atualizado para gtxid {gtxid}: {status} (tentativa {tentativa})")
             
         except Exception as e:
-            logger.error(f"❌ Erro ao atualizar status do pedido {gtxid}: {e}")
-            logger.error(f"📋 Detalhes: status={status}, tentativa={tentativa}")
+            gtxid_log = gtxid if 'gtxid' in locals() else 'N/A'
+            depix_id_log = 'N/A' # Não disponível aqui
+            chatid_log = 'N/A' # Não disponível aqui
+            print(f"\033[1;31m[ERRO] PedidoManager: {e}\033[0m")
+            print(traceback.format_exc())
+            with open('logs/fluxo_erros.log', 'a') as f:
+                f.write(f"[ERRO] PedidoManager | gtxid: {gtxid_log} | depix_id: {depix_id_log} | chatid: {chatid_log}\n{e}\n{traceback.format_exc()}\n")
+            logger.error(f"[ERRO] PedidoManager: {e}\n{traceback.format_exc()}")
+
+    def atualizar_status_pedido(self, gtxid: str, status: str, tentativa: int = 0):
+        """
+        Atualiza o status do pedido no banco de dados (interface pública).
+        """
+        self._atualizar_status_pedido(gtxid, status, tentativa)
 
 print("\033[1;34m💤 STATELESS FUNCTION AGUARDANDO EVENTO DE COMPRA...\033[0m", file=sys.stderr)
 
@@ -273,7 +322,7 @@ async def processar_pedido_completo(dados_pedido: Dict[str, Any], depix_id: str)
         # Executa a verificação em background (não bloqueia)
         logger.debug("🎯 Criando task assíncrona para verificação...")
         task = asyncio.create_task(
-            pedido_manager.verificar_pagamento_background(depix_id, gtxid, chatid)
+            pedido_manager.verificar_pagamento_background(str(depix_id or ''), str(gtxid or ''), str(chatid or ''))
         )
         logger.debug(f"✅ Task criada: {task}")
         
@@ -281,7 +330,18 @@ async def processar_pedido_completo(dados_pedido: Dict[str, Any], depix_id: str)
         logger.info(f"📊 Verificação de pagamento iniciada em background")
         
     except Exception as e:
-        logger.error(f"💥 ERRO CRÍTICO ao processar pedido completo: {e}")
+        gtxid_log = 'N/A'
+        depix_id_log = 'N/A'
+        chatid_log = 'N/A'
+        if 'dados_pedido' in locals() and isinstance(dados_pedido, dict):
+            gtxid_log = dados_pedido.get('gtxid', 'N/A')
+            depix_id_log = dados_pedido.get('depix_id', 'N/A')
+            chatid_log = dados_pedido.get('chatid', 'N/A')
+        print(f"\033[1;31m[ERRO] PedidoManager: {e}\033[0m")
+        print(traceback.format_exc())
+        with open('logs/fluxo_erros.log', 'a') as f:
+            f.write(f"[ERRO] PedidoManager | gtxid: {gtxid_log} | depix_id: {depix_id_log} | chatid: {chatid_log}\n{e}\n{traceback.format_exc()}\n")
+        logger.error(f"[ERRO] PedidoManager: {e}\n{traceback.format_exc()}")
         logger.error(f"📋 Tipo do erro: {type(e).__name__}")
         logger.error(f"📊 Dados que causaram erro: {dados_pedido}")
 
@@ -330,13 +390,20 @@ def salvar_e_verificar_pagamento(dados_pedido: Dict[str, Any], depix_id: str):
                 
                 # Executa a verificação
                 new_loop.run_until_complete(
-                    pedido_manager.verificar_pagamento_background(depix_id, gtxid, chatid)
+                    pedido_manager.verificar_pagamento_background(str(depix_id or ''), str(gtxid or ''), str(chatid or ''))
                 )
                 
                 logger.info("✅ Verificação em background concluída")
                 
             except Exception as e:
-                logger.error(f"💥 ERRO na verificação em background: {e}")
+                gtxid_log = gtxid if 'gtxid' in locals() else 'N/A'
+                depix_id_log = dados_pedido.get('depix_id', 'N/A')
+                chatid_log = dados_pedido.get('chatid', 'N/A')
+                print(f"\033[1;31m[ERRO] PedidoManager: {e}\033[0m")
+                print(traceback.format_exc())
+                with open('logs/fluxo_erros.log', 'a') as f:
+                    f.write(f"[ERRO] PedidoManager | gtxid: {gtxid_log} | depix_id: {depix_id_log} | chatid: {chatid_log}\n{e}\n{traceback.format_exc()}\n")
+                logger.error(f"[ERRO] PedidoManager: {e}\n{traceback.format_exc()}")
             finally:
                 new_loop.close()
         
@@ -349,7 +416,14 @@ def salvar_e_verificar_pagamento(dados_pedido: Dict[str, Any], depix_id: str):
         logger.info("📊 Verificação de pagamento iniciada em thread separada")
         
     except Exception as e:
-        logger.error(f"💥 ERRO na função síncrona: {e}")
+        gtxid_log = dados_pedido.get('gtxid', 'N/A')
+        depix_id_log = dados_pedido.get('depix_id', 'N/A')
+        chatid_log = dados_pedido.get('chatid', 'N/A')
+        print(f"\033[1;31m[ERRO] PedidoManager: {e}\033[0m")
+        print(traceback.format_exc())
+        with open('logs/fluxo_erros.log', 'a') as f:
+            f.write(f"[ERRO] PedidoManager | gtxid: {gtxid_log} | depix_id: {depix_id_log} | chatid: {chatid_log}\n{e}\n{traceback.format_exc()}\n")
+        logger.error(f"[ERRO] PedidoManager: {e}\n{traceback.format_exc()}")
         logger.error(f"📋 Tipo do erro: {type(e).__name__}")
     
-    logger.info("🏁 Função síncrona finalizada") 
+    logger.info("🏁 Função síncrona finalizada")

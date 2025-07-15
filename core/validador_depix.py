@@ -270,7 +270,7 @@ class ValidadorDepix:
         
         # Determina se o pagamento foi confirmado
         pagamento_confirmado = normalized_status in [
-            'paid', 'completed', 'confirmed', 'overpaid', 'depix_confirmed'
+            'paid', 'completed', 'confirmed', 'overpaid', 'depix_confirmed', 'depix_sent'
         ]
         
         # Se tiver blockchainTxID, considera como confirmado independente do status

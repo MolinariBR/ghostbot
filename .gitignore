@@ -54,3 +54,4 @@ Thumbs.db
 
 # Ignora o diretório de testes localmente
 /tests/
+# ignorar arquivos de teste

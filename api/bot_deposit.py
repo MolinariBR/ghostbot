@@ -1,6 +1,7 @@
 import requests
 import json
 from config.config import BASE_URL
+from urllib.parse import urljoin
 
 def criar_deposito_pix(gtxid: str, chatid: str, valor: float, moeda: str = "BRL") -> dict:
     """
@@ -15,8 +16,8 @@ def criar_deposito_pix(gtxid: str, chatid: str, valor: float, moeda: str = "BRL"
     Returns:
         dict: Resposta da API com os dados do PIX ou erro
     """
-    # Remove a duplicação do /api/ já que BASE_URL já inclui
-    url = f"{BASE_URL}/bot_deposit.php"
+    # Monta a URL de forma robusta, sem duplicar /api
+    url = urljoin(BASE_URL + "/", "bot_deposit.php")
     
     # Converte o valor para float e formata como string sem casas decimais
     # pois o servidor espera um valor inteiro (em centavos)

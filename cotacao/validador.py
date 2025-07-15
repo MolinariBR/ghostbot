@@ -4,11 +4,22 @@ from .cotacao import get_realtime_price
 from .comissao import get_comissao
 from .limites import get_limite_in_cents
 from .parceiro import get_parceiro_in_cents
+import uuid
 
 def validar_pedido(moeda: str, valor_brl: float, chatid: str, compras: int, metodo: str, rede: str) -> dict:
     # 1. Cotação
     cotacao_info = get_realtime_price(moeda, 'brl')
     preco_btc = cotacao_info['price'] if 'price' in cotacao_info else 0
+    fonte = cotacao_info.get('source', '')
+    vs = cotacao_info.get('vs', 'brl')
+    print(f"[VALIDADOR] preco_btc: {preco_btc} | fonte: {fonte} | vs: {vs}")
+
+    # Se a cotação veio em USD, converter para BRL
+    if vs == 'usd':
+        # TODO: Buscar cotação USD/BRL online se possível
+        usd_brl = 5.40  # Valor fixo temporário, ajuste conforme necessário
+        preco_btc = preco_btc * usd_brl
+        print(f"[VALIDADOR] preco_btc convertido para BRL: {preco_btc}")
 
     # 2. Comissão
     comissao_info = get_comissao(moeda, valor_brl)
@@ -25,12 +36,16 @@ def validar_pedido(moeda: str, valor_brl: float, chatid: str, compras: int, meto
     # 6. Valor líquido a receber (em centavos)
     send_in_cents = amount_in_cents - comissao_in_cents - parceiro_in_cents
 
+    print(f"[VALIDADOR] amount_in_cents: {amount_in_cents} | send_in_cents: {send_in_cents}")
+
     # 7. Converter para sats (se for BTC ou DEPIX)
     sats = 0
     if preco_btc > 0 and moeda.lower() in ('btc', 'bitcoin', 'depix'):
         sats = int((send_in_cents / 100) / preco_btc * 100_000_000)
+        print(f"[VALIDADOR] sats calculado: {sats}")
 
     # 8. Montar resumo
+    gtxid = str(uuid.uuid4())
     return {
         'moeda': moeda,
         'rede': rede,
@@ -58,6 +73,7 @@ def validar_pedido(moeda: str, valor_brl: float, chatid: str, compras: int, meto
             'sats': sats
         },
         'amount_in_cents': amount_in_cents,
-        'send_in_cents': send_in_cents
+        'send_in_cents': send_in_cents,
+        'gtxid': gtxid
     } 
     #teste

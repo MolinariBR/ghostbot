@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from api.depix import pix_api, PixAPIError
 from menu.menu_compra import get_conversation_handler, ativar_aguardar_lightning_address
-from pedido_manager import pedido_manager
+from api.pedido_manager import pedido_manager
 
 # Configuração básica de logging
 logging.basicConfig(level=logging.INFO)
@@ -15,24 +15,29 @@ bot_instance = None
 
 async def pix(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        if len(context.args) < 2:
-            await update.message.reply_text("Uso: /pix <valor_centavos> <endereco_PIX>")
+        if not context.args or len(context.args) < 2:
+            if update.message:
+                await update.message.reply_text("Uso: /pix <valor_centavos> <endereco_PIX>")
             return
-        valor_centavos = int(context.args[0])
-        endereco = context.args[1]
-        await update.message.reply_text("Processando pagamento PIX...")
+        valor_centavos = int(context.args[0]) if context.args else 0
+        endereco = context.args[1] if context.args else ''
+        if update.message:
+            await update.message.reply_text("Processando pagamento PIX...")
         result = pix_api.criar_pagamento(valor_centavos, endereco)
         msg = (
             f"Pagamento criado!\n"
-            f"QR Code: {result['qr_image_url']}\n"
-            f"Copia e Cola: {result['qr_code_text']}\n"
-            f"ID: {result['transaction_id']}"
+            f"QR Code: {result.get('qr_image_url', '')}\n"
+            f"Copia e Cola: {result.get('qr_code_text', '')}\n"
+            f"ID: {result.get('transaction_id', '')}"
         )
-        await update.message.reply_text(msg)
+        if update.message:
+            await update.message.reply_text(msg)
     except PixAPIError as e:
-        await update.message.reply_text(f"Erro ao criar pagamento PIX: {e}")
+        if update.message:
+            await update.message.reply_text(f"Erro ao criar pagamento PIX: {e}")
     except Exception as e:
-        await update.message.reply_text(f"Erro inesperado: {e}")
+        if update.message:
+            await update.message.reply_text(f"Erro inesperado: {e}")
 
 async def lightning_callback(user_id: int, pedido_id: int):
     """
@@ -74,53 +79,46 @@ async def ativar_lightning_address_handler(update: Update, context: ContextTypes
     """
     try:
         # Extrair dados do contexto
-        user_id = update.effective_user.id
-        pedido_id = context.user_data.get('pedido_id')
-        
+        user_id = update.effective_user.id if update.effective_user else None
+        pedido_id = context.user_data.get('pedido_id') if context.user_data else None
         if not pedido_id:
-            await update.message.reply_text(
-                "❌ **Erro:** Pedido não encontrado.\n"
-                "Por favor, inicie uma nova compra.",
-                parse_mode='Markdown'
-            )
+            if update.message:
+                await update.message.reply_text(
+                    "❌ **Erro:** Pedido não encontrado.\n"
+                    "Por favor, inicie uma nova compra.",
+                    parse_mode='Markdown'
+                )
             return
-        
-        print(f"🟢 [BOT] Ativando Lightning Address para usuário {user_id}, pedido {pedido_id}")
-        
-        # Ativar o estado de aguardar endereço Lightning
-        await ativar_aguardar_lightning_address(context, user_id, pedido_id)
-        
+        if user_id is not None:
+            print(f"🟢 [BOT] Ativando Lightning Address para usuário {user_id}, pedido {pedido_id}")
+            # Ativar o estado de aguardar endereço Lightning
+            await ativar_aguardar_lightning_address(context, user_id, pedido_id)
     except Exception as e:
         print(f"❌ [BOT] Erro ao ativar Lightning Address: {e}")
-        await update.message.reply_text(
-            f"❌ **Erro inesperado:**\n{str(e)}\n\n"
-            f"Entre em contato com o suporte.",
-            parse_mode='Markdown'
-        )
+        if update.message:
+            await update.message.reply_text(
+                f"❌ **Erro inesperado:**\n{str(e)}\n\n"
+                f"Entre em contato com o suporte.",
+                parse_mode='Markdown'
+            )
 
 if __name__ == "__main__":
     logger.info("Iniciando GhostBot...")
     app = Application.builder().token(BOT_TOKEN).build()
-    
     # Armazenar a instância do bot globalmente
     bot_instance = app.bot
-    
-    # Configurar o callback do pedido_manager
-    pedido_manager.set_lightning_callback(lightning_callback)
-    
+    # Configurar o callback do pedido_manager, se disponível
+    if hasattr(pedido_manager, 'set_lightning_callback'):
+        pedido_manager.set_lightning_callback(lightning_callback)  # type: ignore
     # Adicionar o ConversationHandler do menu de compra
     conversation_handler = get_conversation_handler()
     app.add_handler(conversation_handler)
-    
     # Adicionar handler para PIX
     app.add_handler(CommandHandler("pix", pix))
-    
     # Adicionar handler para ativar Lightning Address
     app.add_handler(CommandHandler("lightning", ativar_lightning_address_handler))
-    
     print("🟢 [BOT] GhostBot iniciado com sucesso!")
     print("🟢 [BOT] ConversationHandler configurado")
     print("🟢 [BOT] Callback de Lightning Address configurado")
     print("🟢 [BOT] Aguardando comandos...")
-    
     app.run_polling()
