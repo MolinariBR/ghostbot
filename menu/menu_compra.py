@@ -20,6 +20,11 @@ import logging
 import re
 from datetime import datetime
 from typing import Dict, Any, Optional, Union
+import sys
+import os
+
+# Garante que o diretório do projeto está no PYTHONPATH
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
@@ -32,6 +37,10 @@ from telegram.ext import (
 )
 
 from config.config import BASE_URL
+from api.pedido_manager import PedidoManager
+
+print(f"[DEBUG] __file__: {__file__}")
+print(f"[DEBUG] sys.path: {sys.path}")
 
 def escape_markdown(text: str) -> str:
     """Escapa caracteres especiais para MarkdownV2, incluindo o cifrão $"""
@@ -42,233 +51,21 @@ def escape_markdown(text: str) -> str:
 def get_user_data(context, key, default):
     return context.user_data[key] if context and hasattr(context, 'user_data') and context.user_data and key in context.user_data else default
 
-# Fallback para cotação se o módulo não existir
+# Remover completamente qualquer fallback antigo de cotação/comissão/parceiro
+# O menu só deve funcionar se o validador Python estiver disponível
+validar_pedido = None
 try:
-    from api.fallback_cotacao import get_cotacao_fallback_simples
-    
-    async def obter_cotacao_fallback():
-        """Wrapper assíncrono para a função de cotação."""
-        try:
-            cotacao = get_cotacao_fallback_simples("bitcoin", "brl")
-            return {
-                'success': True,
-                'data': {
-                    'preco_btc': cotacao.get('price', 250000),
-                    'fonte': cotacao.get('source', 'fallback')
-                }
-            }
-        except Exception as e:
-            return {
-                'success': False,
-                'error': f'Erro na cotação: {str(e)}'
-            }
-
-    async def obter_cotacao_completa(valor_brl: float, user_id: int) -> Dict[str, Any]:
-        """
-        Obtém cotação completa com comissão, parceiro e valor a receber.
-        Usa validador.php como fonte principal, fallback_cotacao.py como backup.
-        
-        Args:
-            valor_brl: Valor em reais
-            user_id: ID do usuário
-            
-        Returns:
-            Dicionário com dados completos da cotação
-        """
-        try:
-            import requests
-            
-            # Parâmetros para o validador.php
-            params = {
-                'moeda': 'bitcoin',
-                'vs': 'brl',
-                'valor': valor_brl,
-                'chatid': str(user_id),
-                'compras': 0,  # Número de compras do usuário
-                'metodo': 'pix',
-                'rede': 'lightning'
-            }
-            
-            print(f"🟡 [COTACAO] Consultando validador.php com valor: R$ {valor_brl:.2f}")
-            
-            # Tentar primeiro o validador.php
-            try:
-                response = requests.get(
-                    f"{BASE_URL}/cotacao/validador.php",
-                    params=params,
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    
-                    if data and isinstance(data, dict) and data.get('success'):
-                        validador = data.get('validador', {})
-                        if not isinstance(validador, dict):
-                            validador = {}
-                        
-                        # Extrair dados do validador
-                        cotacao_data = validador.get('cotacao', {})
-                        if not isinstance(cotacao_data, dict):
-                            cotacao_data = {}
-                        
-                        comissao_data = validador.get('comissao', {})
-                        if not isinstance(comissao_data, dict):
-                            comissao_data = {}
-                        
-                        parceiro_data = validador.get('parceiro', {})
-                        if not isinstance(parceiro_data, dict):
-                            parceiro_data = {}
-                        
-                        limite_data = validador.get('limite', {})
-                        if not isinstance(limite_data, dict):
-                            limite_data = {}
-                        
-                        # Calcular valor a receber em sats
-                        valor_recebe_brl = valor_brl
-                        comissao_valor = comissao_data.get('comissao', 0)
-                        taxa_parceiro = parceiro_data.get('taxa_parceiro', 0)
-                        
-                        if isinstance(comissao_valor, (int, float)):
-                            valor_recebe_brl -= comissao_valor
-                        if isinstance(taxa_parceiro, (int, float)):
-                            valor_recebe_brl -= taxa_parceiro
-                        
-                        # Converter para sats
-                        preco_btc = cotacao_data.get('valor', 250000)
-                        valor_recebe_sats = 0
-                        if preco_btc > 0:
-                            valor_recebe_sats = (valor_recebe_brl / preco_btc) * 100_000_000
-                        
-                        print(f"✅ [COTACAO] Dados obtidos do validador.php: {valor_recebe_sats} sats")
-                        
-                        return {
-                            'success': True,
-                            'data': {
-                                'valor_investimento': valor_brl,
-                                'cotacao': {
-                                    'preco_btc': preco_btc,
-                                    'fonte': cotacao_data.get('origem', 'validador'),
-                                    'data_atualizacao': cotacao_data.get('data_atualizacao', '')
-                                },
-                                'comissao': {
-                                    'valor': comissao_valor,
-                                    'percentual': comissao_data.get('percentual', 0)
-                                },
-                                'parceiro': {
-                                    'valor': taxa_parceiro,
-                                    'percentual': parceiro_data.get('percentual', 0)
-                                },
-                                'limite': {
-                                    'maximo': limite_data.get('limite', 0)
-                                },
-                                'valor_recebe': {
-                                    'brl': valor_recebe_brl,
-                                    'sats': int(valor_recebe_sats)
-                                },
-                                'gtxid': data.get('gtxid', '')
-                            }
-                        }
-                    else:
-                        error_msg = data.get('error', 'Erro desconhecido') if data and isinstance(data, dict) else 'Erro desconhecido'
-                        print(f"⚠️ [COTACAO] Validador.php retornou erro: {error_msg}")
-                        # Continuar para o fallback
-                else:
-                    print(f"⚠️ [COTACAO] Validador.php retornou status {response.status_code}")
-                    # Continuar para o fallback
-                    
-            except Exception as e:
-                print(f"⚠️ [COTACAO] Erro ao consultar validador.php: {e}")
-                # Continuar para o fallback
-            
-            # FALLBACK: Usar api/fallback_cotacao.py
-            print("🟡 [COTACAO] Usando fallback_cotacao.py")
-            try:
-                cotacao_fallback = get_cotacao_fallback_simples("bitcoin", "brl")
-                
-                if cotacao_fallback and isinstance(cotacao_fallback, dict):
-                    preco_btc = cotacao_fallback.get('price', 250000)
-                    valor_recebe_sats = (valor_brl / preco_btc) * 100_000_000
-                    
-                    # Valores estimados para fallback
-                    comissao_estimada = valor_brl * 0.025  # 2.5% estimado
-                    taxa_parceiro_estimada = valor_brl * 0.01  # 1% estimado
-                    valor_recebe_brl = valor_brl - comissao_estimada - taxa_parceiro_estimada
-                    
-                    return {
-                        'success': True,
-                        'data': {
-                            'valor_investimento': valor_brl,
-                            'cotacao': {
-                                'preco_btc': preco_btc,
-                                'fonte': cotacao_fallback.get('source', 'fallback'),
-                                'data_atualizacao': cotacao_fallback.get('timestamp', '')
-                            },
-                            'comissao': {
-                                'valor': comissao_estimada,
-                                'percentual': 2.5
-                            },
-                            'parceiro': {
-                                'valor': taxa_parceiro_estimada,
-                                'percentual': 1.0
-                            },
-                            'limite': {
-                                'maximo': 10000  # Limite padrão
-                            },
-                            'valor_recebe': {
-                                'brl': valor_recebe_brl,
-                                'sats': int(valor_recebe_sats)
-                            },
-                            'gtxid': 'FALLBACK_' + str(int(datetime.now().timestamp()))
-                        }
-                    }
-                else:
-                    return {
-                        'success': False,
-                        'error': 'Fallback também falhou'
-                    }
-                    
-            except Exception as e:
-                print(f"❌ [COTACAO] Erro no fallback: {e}")
-                return {
-                    'success': False,
-                    'error': f'Erro no fallback: {str(e)}'
-                }
-                
-        except Exception as e:
-            print(f"❌ [COTACAO] Erro geral: {e}")
-            return {
-                'success': False,
-                'error': f'Erro geral: {str(e)}'
-            }
-            
+    from cotacao.validador import validar_pedido
 except ImportError:
-    async def obter_cotacao_fallback():
-        return {
-            'success': False,
-            'error': 'Módulo fallback_cotacao não encontrado'
-        }
-    
-    async def obter_cotacao_completa(valor_brl: float, user_id: int) -> Dict[str, Any]:
-        """Fallback para cotação completa."""
-        return {
-            'success': False,
-            'error': 'Módulo fallback_cotacao não encontrado'
-        }
+    try:
+        from ghost.cotacao.validador import validar_pedido
+    except ImportError:
+        try:
+            from .cotacao.validador import validar_pedido
+        except ImportError:
+            validar_pedido = None
 
 # Fallback para PedidoManager se o módulo não existir
-try:
-    from pedido_manager import PedidoManager  # type: ignore
-except ImportError:
-    class PedidoManager:
-        def __init__(self):
-            pass
-        async def salvar_pedido_e_verificar(self, data):
-            return {'success': False, 'error': 'PedidoManager não disponível'}
-        async def atualizar_status_pedido(self, pedido_id, status, dados_extras=None):
-            return {'success': False, 'error': 'PedidoManager não disponível'}
-
-# Fallback para validador_voltz se o módulo não existir
 try:
     from core.validador_voltz import configurar as configurar_voltz, consultar_saldo, enviar_pagamento
 except ImportError:
@@ -506,79 +303,58 @@ async def escolher_valor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     return ESCOLHER_VALOR
 
 async def processar_valor_personalizado(update: Update, context: ContextTypes.DEFAULT_TYPE, valor_brl: float) -> int:
-    """Processa o valor escolhido (fixo ou personalizado) e mostra o resumo."""
     print(f"🟡 [MENU] Processando valor: R$ {valor_brl:.2f}")
-    
-    # Obter cotação completa
+    print(f"[DEBUG] validar_pedido: {validar_pedido}")
+    if not validar_pedido:
+        await mostrar_erro_cotacao(update, "Erro interno: validador Python não disponível. Avise o suporte.")
+        return ESCOLHER_VALOR
     try:
-        if update.effective_user:
-            user_id = update.effective_user.id
-            cotacao_completa = await obter_cotacao_completa(valor_brl, user_id)
-            
-            if cotacao_completa and isinstance(cotacao_completa, dict) and cotacao_completa.get('success'):
-                cotacao_data = cotacao_completa.get('data', {})
-                if isinstance(cotacao_data, dict):
-                    # Salvar dados completos no contexto
-                    if context and context.user_data:
-                        context.user_data['cotacao_completa'] = cotacao_data
-                        context.user_data['valor_real'] = valor_brl
-                    
-                    # Extrair dados para o resumo
-                    cotacao_info = cotacao_data.get('cotacao', {})
-                    comissao_info = cotacao_data.get('comissao', {})
-                    parceiro_info = cotacao_data.get('parceiro', {})
-                    valor_recebe_info = cotacao_data.get('valor_recebe', {})
-                    limite_info = cotacao_data.get('limite', {})
-                    
-                    if not isinstance(cotacao_info, dict):
-                        cotacao_info = {}
-                    if not isinstance(comissao_info, dict):
-                        comissao_info = {}
-                    if not isinstance(parceiro_info, dict):
-                        parceiro_info = {}
-                    if not isinstance(valor_recebe_info, dict):
-                        valor_recebe_info = {}
-                    if not isinstance(limite_info, dict):
-                        limite_info = {}
-                    
-                    # Montar resumo detalhado
-                    resumo_texto = (
-                        f"📋 *Resumo da Compra:*\n\n"
-                        f"🪙 *Moeda:* {escape_markdown(str(get_user_data(context, 'moeda', 'BTC'))) if context and context.user_data else 'BTC'}\n"
-                        f"🌐 *Rede:* {escape_markdown(str(get_user_data(context, 'rede', 'Lightning').title())) if context and context.user_data else 'Lightning'}\n\n"
-                        f"💰 *Valor do Investimento:* {escape_markdown(str(valor_brl))}\n"
-                        f"💱 *Cotação BTC:* {escape_markdown(str(cotacao_info.get('preco_btc', 250000)))}\n"
-                        f"📊 *Fonte:* {escape_markdown(str(cotacao_info.get('fonte', 'API')))}\n\n"
-                        f"💸 *Comissão:* {escape_markdown(str(comissao_info.get('valor', 0)))} {escape_markdown(str(comissao_info.get('percentual', 0)))}%\n"
-                        f"🤝 *Taxa Parceiro:* {escape_markdown(str(parceiro_info.get('valor', 0)))} {escape_markdown(str(parceiro_info.get('percentual', 0)))}%\n"
-                        f"💰 *Limite Máximo:* {escape_markdown(str(limite_info.get('maximo', 0)))}\n\n"
-                        f"⚡ *Você Recebe:* {escape_markdown(str(valor_recebe_info.get('sats', 0)))} sats\n"
-                        f"💵 *Valor Líquido:* {escape_markdown(str(valor_recebe_info.get('brl', valor_brl)))}\n\n"
-                        f"🆔 *ID Transação:* {escape_markdown(str(cotacao_data.get('gtxid', 'N/A')))}"
-                    )
-                    
-                    keyboard = [["Confirmar"], ["Voltar"]]
-                    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-                    
-                    if update and update.message:
-                        await update.message.reply_text(
-                            resumo_texto,
-                            reply_markup=reply_markup,
-                            parse_mode='MarkdownV2'
-                        )
-                    
-                    return FORMA_PAGAMENTO
-                else:
-                    await mostrar_erro_cotacao(update, "Dados de cotação inválidos")
-            else:
-                error_msg = cotacao_completa.get('error', 'Erro desconhecido') if cotacao_completa and isinstance(cotacao_completa, dict) else 'Erro desconhecido'
-                await mostrar_erro_cotacao(update, f"Erro na cotação: {error_msg}")
-        else:
-            await mostrar_erro_cotacao(update, "Usuário não encontrado")
+        user_id = str(update.effective_user.id) if update and update.effective_user else '0'
+        moeda = 'btc'
+        compras = 0
+        metodo = 'pix'
+        rede = 'lightning'
+        print(f"[DEBUG] Chamando validar_pedido com: moeda={moeda}, valor_brl={valor_brl}, user_id={user_id}, compras={compras}, metodo={metodo}, rede={rede}")
+        validador = validar_pedido(moeda, valor_brl, user_id, compras, metodo, rede)
+        print(f"[DEBUG] Resultado do validar_pedido: {validador}")
+        if not validador or not isinstance(validador, dict):
+            await mostrar_erro_cotacao(update, "Erro ao validar pedido. Avise o suporte.")
+            return ESCOLHER_VALOR
+        if context and context.user_data:
+            context.user_data['cotacao_completa'] = validador
+            context.user_data['valor_real'] = valor_brl
+            context.user_data['valor_sats'] = validador.get('valor_recebe', {}).get('sats', 0)
+        cotacao_info = validador.get('cotacao', {})
+        comissao_info = validador.get('comissao', {})
+        parceiro_info = validador.get('parceiro', {})
+        valor_recebe_info = validador.get('valor_recebe', {})
+        limite_info = validador.get('limite', {})
+        resumo_texto = (
+            f"📋 *Resumo da Compra:*\n\n"
+            f"🪙 *Moeda:* BTC\n"
+            f"🌐 *Rede:* Lightning\n\n"
+            f"💰 *Valor do Investimento:* R$ {escape_markdown(str(valor_brl))}\n"
+            f"💱 *Cotação BTC:* {escape_markdown(str(cotacao_info.get('preco_btc', 0)))}\n"
+            f"📊 *Fonte:* Python Validador\n\n"
+            f"💸 *Comissão:* R$ {escape_markdown(str(comissao_info.get('valor', 0)))} (10%)\n"
+            f"🤝 *Taxa Parceiro:* R$ {escape_markdown(str(parceiro_info.get('valor', 0)))}\n"
+            f"💰 *Limite Máximo:* R$ {escape_markdown(str(limite_info.get('maximo', 0)))}\n\n"
+            f"⚡ *Você Recebe:* {escape_markdown(str(valor_recebe_info.get('sats', 0)))} sats\n"
+            f"💵 *Valor Líquido:* R$ {escape_markdown(str(valor_recebe_info.get('brl', valor_brl)))}\n\n"
+            f"🆔 *ID Transação:* {escape_markdown(str(validador.get('gtxid', 'N/A')))}"
+        )
+        keyboard = [["Confirmar"], ["Voltar"]]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+        if update and update.message:
+            await update.message.reply_text(
+                resumo_texto,
+                reply_markup=reply_markup,
+                parse_mode='MarkdownV2'
+            )
+        return FORMA_PAGAMENTO
     except Exception as e:
         print(f"❌ [MENU] Erro ao processar valor: {e}")
         await mostrar_erro_cotacao(update, f"Erro inesperado: {str(e)}")
-    
     return ESCOLHER_VALOR
 
 async def mostrar_erro_cotacao(update: Update, mensagem: str):
@@ -601,161 +377,43 @@ async def mostrar_erro_cotacao(update: Update, mensagem: str):
     )
 
 async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handler para mostrar resumo da compra."""
     if not update or not update.message:
         return ConversationHandler.END
-    
     if update.message.text == "Voltar":
         return await escolher_valor(update, context)
-    
-    # Extrair valor escolhido
-    texto_valor = update.message.text
-    if not texto_valor or not isinstance(texto_valor, str):
-        return ConversationHandler.END
-    
-    # Mapear texto para valor em sats
-    mapeamento_valores = {
-        "1.000 sats\n~R$ 2,50": 1000,
-        "5.000 sats\n~R$ 12,50": 5000,
-        "10.000 sats\n~R$ 25,00": 10000,
-        "25.000 sats\n~R$ 62,50": 25000,
-        "50.000 sats\n~R$ 125,00": 50000,
-        "100.000 sats\n~R$ 250,00": 100000
-    }
-    
-    valor_sats = mapeamento_valores.get(texto_valor, 0)
-    if valor_sats == 0:
-        return ConversationHandler.END
-    
-    if context and context.user_data:
-        context.user_data['valor_sats'] = valor_sats
-    
-    print(f"🟢 [MENU] Usuário escolheu valor: {valor_sats} sats")
-    
-    # Calcular valores básicos
-    cotacao = {}
-    if context and context.user_data:
-        cotacao = get_user_data(context, 'cotacao', {})
-    
-    if not isinstance(cotacao, dict):
-        cotacao = {}
-    
-    preco_btc = cotacao.get('preco_btc', 250000)  # Fallback se não tiver cotação
-    
-    valor_btc = valor_sats / 100_000_000
-    valor_real = valor_btc * preco_btc
-    
-    # Salvar valores calculados
-    if context and context.user_data:
-        context.user_data['valor_btc'] = valor_btc
-        context.user_data['valor_real'] = valor_real
-    
-    # Obter cotação completa com comissão e parceiro
-    try:
-        if update.effective_user:
-            user_id = update.effective_user.id
-            cotacao_completa = await obter_cotacao_completa(valor_real, user_id)
-            
-            if cotacao_completa and isinstance(cotacao_completa, dict) and cotacao_completa.get('success'):
-                cotacao_data = cotacao_completa.get('data', {})
-                if isinstance(cotacao_data, dict):
-                    # Salvar dados completos no contexto
-                    if context and context.user_data:
-                        context.user_data['cotacao_completa'] = cotacao_data
-                    
-                    # Extrair dados para o resumo
-                    valor_investimento = cotacao_data.get('valor_investimento', valor_real)
-                    cotacao_info = cotacao_data.get('cotacao', {})
-                    comissao_info = cotacao_data.get('comissao', {})
-                    parceiro_info = cotacao_data.get('parceiro', {})
-                    valor_recebe_info = cotacao_data.get('valor_recebe', {})
-                    limite_info = cotacao_data.get('limite', {})
-                    
-                    if not isinstance(cotacao_info, dict):
-                        cotacao_info = {}
-                    if not isinstance(comissao_info, dict):
-                        comissao_info = {}
-                    if not isinstance(parceiro_info, dict):
-                        parceiro_info = {}
-                    if not isinstance(valor_recebe_info, dict):
-                        valor_recebe_info = {}
-                    if not isinstance(limite_info, dict):
-                        limite_info = {}
-                    
-                    # Montar resumo detalhado
-                    resumo_texto = (
-                        f"📋 **Resumo da Compra:**\n\n"
-                        f"🪙 **Moeda:** {escape_markdown(str(get_user_data(context, 'moeda', 'BTC'))) if context and context.user_data else 'BTC'}\n"
-                        f"🌐 **Rede:** {escape_markdown(str(get_user_data(context, 'rede', 'Lightning').title())) if context and context.user_data else 'Lightning'}\n"
-                        f"💰 **Valor do Investimento:** R$ {escape_markdown(str(valor_investimento))}\n"
-                        f"💱 **Cotação BTC:** R$ {escape_markdown(str(cotacao_info.get('preco_btc', preco_btc)))}\n"
-                        f"📊 **Fonte:** {escape_markdown(str(cotacao_info.get('fonte', 'API')))}\n\n"
-                        f"💸 **Comissão:** R$ {escape_markdown(str(comissao_info.get('valor', 0)))}\n"
-                        f"🤝 **Taxa Parceiro:** R$ {escape_markdown(str(parceiro_info.get('valor', 0)))}\n"
-                        f"💰 **Limite Máximo:** R$ {escape_markdown(str(limite_info.get('maximo', 0)))}\n\n"
-                        f"⚡ **Você Recebe:** {escape_markdown(str(valor_recebe_info.get('sats', valor_sats)))}\n"
-                        f"💵 **Valor Líquido:** R$ {escape_markdown(str(valor_recebe_info.get('brl', valor_real)))}\n\n"
-                        f"🆔 **ID Transação:** {escape_markdown(str(cotacao_data.get('gtxid', 'N/A')))}"
-                    )
-                else:
-                    # Fallback para resumo básico
-                    resumo_texto = (
-                        f"📋 **Resumo da Compra:**\n\n"
-                        f"🪙 **Moeda:** {escape_markdown(str(get_user_data(context, 'moeda', 'BTC'))) if context and context.user_data else 'BTC'}\n"
-                        f"🌐 **Rede:** {escape_markdown(str(get_user_data(context, 'rede', 'Lightning').title())) if context and context.user_data else 'Lightning'}\n"
-                        f"💰 **Valor:** {escape_markdown(str(valor_sats))}\n"
-                        f"💱 **Valor BTC:** {escape_markdown(str(valor_btc))}\n"
-                        f"💵 **Valor R$:** R$ {escape_markdown(str(valor_real))}\n\n"
-                        f"💱 **Cotação:** R$ {escape_markdown(str(preco_btc))}\n\n"
-                        f"⚠️ **Cotação completa indisponível**"
-                    )
-            else:
-                # Fallback para resumo básico
-                resumo_texto = (
-                    f"📋 **Resumo da Compra:**\n\n"
-                    f"🪙 **Moeda:** {escape_markdown(str(get_user_data(context, 'moeda', 'BTC'))) if context and context.user_data else 'BTC'}\n"
-                    f"🌐 **Rede:** {escape_markdown(str(get_user_data(context, 'rede', 'Lightning').title())) if context and context.user_data else 'Lightning'}\n"
-                    f"💰 **Valor:** {escape_markdown(str(valor_sats))}\n"
-                    f"💱 **Valor BTC:** {escape_markdown(str(valor_btc))}\n"
-                    f"💵 **Valor R$:** R$ {escape_markdown(str(valor_real))}\n\n"
-                    f"💱 **Cotação:** R$ {escape_markdown(str(preco_btc))}\n\n"
-                    f"⚠️ **Cotação completa indisponível**"
-                )
-        else:
-            # Fallback para resumo básico
-            resumo_texto = (
-                f"📋 **Resumo da Compra:**\n\n"
-                f"🪙 **Moeda:** {escape_markdown(str(get_user_data(context, 'moeda', 'BTC'))) if context and context.user_data else 'BTC'}\n"
-                f"🌐 **Rede:** {escape_markdown(str(get_user_data(context, 'rede', 'Lightning').title())) if context and context.user_data else 'Lightning'}\n"
-                f"💰 **Valor:** {escape_markdown(str(valor_sats))}\n"
-                f"💱 **Valor BTC:** {escape_markdown(str(valor_btc))}\n"
-                f"💵 **Valor R$:** R$ {escape_markdown(str(valor_real))}\n\n"
-                f"💱 **Cotação:** R$ {escape_markdown(str(preco_btc))}\n\n"
-                f"⚠️ **Cotação completa indisponível**"
-            )
-    except Exception as e:
-        print(f"❌ [MENU] Erro ao obter cotação completa: {e}")
-        # Fallback para resumo básico
-        resumo_texto = (
-            f"📋 **Resumo da Compra:**\n\n"
-            f"🪙 **Moeda:** {escape_markdown(str(get_user_data(context, 'moeda', 'BTC'))) if context and context.user_data else 'BTC'}\n"
-            f"🌐 **Rede:** {escape_markdown(str(get_user_data(context, 'rede', 'Lightning').title())) if context and context.user_data else 'Lightning'}\n"
-            f"💰 **Valor:** {escape_markdown(str(valor_sats))}\n"
-            f"💱 **Valor BTC:** {escape_markdown(str(valor_btc))}\n"
-            f"💵 **Valor R$:** R$ {escape_markdown(str(valor_real))}\n\n"
-            f"💱 **Cotação:** R$ {escape_markdown(str(preco_btc))}\n\n"
-            f"⚠️ **Erro na cotação completa**"
-        )
-    
+    # Usar sempre o contexto salvo pelo validador
+    validador = get_user_data(context, 'cotacao_completa', {})
+    if not validador:
+        await mostrar_erro_cotacao(update, "Dados do pedido não encontrados")
+        return ESCOLHER_VALOR
+    cotacao_info = validador.get('cotacao', {})
+    comissao_info = validador.get('comissao', {})
+    parceiro_info = validador.get('parceiro', {})
+    valor_recebe_info = validador.get('valor_recebe', {})
+    limite_info = validador.get('limite', {})
+    valor_brl = validador.get('valor_brl', 0)
+    valor_sats = valor_recebe_info.get('sats', 0)
+    resumo_texto = (
+        f"📋 *Resumo da Compra:*\n\n"
+        f"🪙 *Moeda:* {escape_markdown(str(get_user_data(context, 'moeda', 'BTC')))}\n"
+        f"🌐 *Rede:* {escape_markdown(str(get_user_data(context, 'rede', 'Lightning').title()))}\n"
+        f"💰 *Valor do Investimento:* R$ {escape_markdown(str(valor_brl))}\n"
+        f"💱 *Cotação BTC:* {escape_markdown(str(cotacao_info.get('preco_btc', 0)))}\n"
+        f"📊 *Fonte:* {escape_markdown(str(cotacao_info.get('fonte', 'API')))}\n\n"
+        f"💸 *Comissão:* R$ {escape_markdown(str(comissao_info.get('valor', 0)))} ({escape_markdown(str(comissao_info.get('percentual', 0)))}%)\n"
+        f"🤝 *Taxa Parceiro:* R$ {escape_markdown(str(parceiro_info.get('valor', 0)))}\n"
+        f"💰 *Limite Máximo:* R$ {escape_markdown(str(limite_info.get('maximo', 0)))}\n\n"
+        f"⚡ *Você Recebe:* {escape_markdown(str(valor_recebe_info.get('sats', 0)))} sats\n"
+        f"💵 *Valor Líquido:* R$ {escape_markdown(str(valor_recebe_info.get('brl', valor_brl)))}\n\n"
+        f"🆔 *ID Transação:* {escape_markdown(str(validador.get('gtxid', 'N/A')))}"
+    )
     keyboard = [["Confirmar"], ["Voltar"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    
     await update.message.reply_text(
         resumo_texto,
         reply_markup=reply_markup,
-        parse_mode='Markdown'
+        parse_mode='MarkdownV2'
     )
-    
     return FORMA_PAGAMENTO
 
 async def forma_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -780,255 +438,188 @@ async def forma_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     return CONFIRMAR
 
 async def confirmar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handler para confirmação final do pedido."""
     if not update or not update.message:
         return ConversationHandler.END
-    
     if update.message.text == "Voltar":
         return await forma_pagamento(update, context)
-    
-    print("🟢 [MENU] Usuário escolheu PIX")
-    
-    # Mostrar resumo final para confirmação
-    valor_sats = 0
-    valor_real = 0
-    if context and context.user_data:
-        valor_sats = get_user_data(context, 'valor_sats', 0)
-        valor_real = get_user_data(context, 'valor_real', 0)
-    
-    # Verificar se temos cotação completa
-    cotacao_completa = {}
-    if context and context.user_data:
-        cotacao_completa = get_user_data(context, 'cotacao_completa', {})
-    
-    if cotacao_completa and isinstance(cotacao_completa, dict):
-        # Usar resumo completo
-        cotacao_info = cotacao_completa.get('cotacao', {})
-        comissao_info = cotacao_completa.get('comissao', {})
-        parceiro_info = cotacao_completa.get('parceiro', {})
-        valor_recebe_info = cotacao_completa.get('valor_recebe', {})
-        limite_info = cotacao_completa.get('limite', {})
-        
-        if not isinstance(cotacao_info, dict):
-            cotacao_info = {}
-        if not isinstance(comissao_info, dict):
-            comissao_info = {}
-        if not isinstance(parceiro_info, dict):
-            parceiro_info = {}
-        if not isinstance(valor_recebe_info, dict):
-            valor_recebe_info = {}
-        if not isinstance(limite_info, dict):
-            limite_info = {}
-        
-        resumo_final = (
-            f"🎯 **Confirmação Final:**\n\n"
-            f"📋 **Resumo do Pedido:**\n"
-            f"• Moeda: {escape_markdown(str(get_user_data(context, 'moeda', 'BTC'))) if context and context.user_data else 'BTC'}\n"
-            f"• Rede: {escape_markdown(str(get_user_data(context, 'rede', 'Lightning').title())) if context and context.user_data else 'Lightning'}\n"
-            f"• Valor Investimento: R$ {escape_markdown(str(cotacao_completa.get('valor_investimento', valor_real)))}\n"
-            f"• Cotação BTC: R$ {escape_markdown(str(cotacao_info.get('preco_btc', 250000)))}\n"
-            f"• Comissão: R$ {escape_markdown(str(comissao_info.get('valor', 0)))}\n"
-            f"• Taxa Parceiro: R$ {escape_markdown(str(parceiro_info.get('valor', 0)))}\n"
-            f"• Limite Máximo: R$ {escape_markdown(str(limite_info.get('maximo', 0)))}\n"
-            f"• Você Recebe: {escape_markdown(str(valor_recebe_info.get('sats', valor_sats)))}\n"
-            f"• Valor Líquido: R$ {escape_markdown(str(valor_recebe_info.get('brl', valor_real)))}\n"
-            f"• Pagamento: PIX\n"
-            f"• ID: `{escape_markdown(str(cotacao_completa.get('gtxid', 'N/A')))}`\n\n"
-            f"⚠️ **Atenção:** Após confirmar, você receberá o QR Code PIX para pagamento."
-        )
-    else:
-        # Resumo básico
-        resumo_final = (
-            f"🎯 **Confirmação Final:**\n\n"
-            f"📋 **Resumo do Pedido:**\n"
-            f"• Moeda: {escape_markdown(str(get_user_data(context, 'moeda', 'BTC'))) if context and context.user_data else 'BTC'}\n"
-            f"• Rede: {escape_markdown(str(get_user_data(context, 'rede', 'Lightning').title())) if context and context.user_data else 'Lightning'}\n"
-            f"• Valor: {escape_markdown(str(valor_sats))}\n"
-            f"• Valor: R$ {escape_markdown(str(valor_real))}\n"
-            f"• Pagamento: PIX\n\n"
-            f"⚠️ **Atenção:** Após confirmar, você receberá o QR Code PIX para pagamento."
-        )
-    
+    validador = get_user_data(context, 'cotacao_completa', {})
+    if not validador:
+        await mostrar_erro_cotacao(update, "Dados do pedido não encontrados")
+        return FORMA_PAGAMENTO
+    valor_brl = validador.get('valor_brl', 0)
+    comissao_info = validador.get('comissao', {})
+    parceiro_info = validador.get('parceiro', {})
+    valor_recebe_info = validador.get('valor_recebe', {})
+    valor_sats = valor_recebe_info.get('sats', 0)
+    valor_liquido = valor_recebe_info.get('brl', 0)
+    resumo_final = (
+        f"🎯 *Confirmação Final:*\n\n"
+        f"📋 *Resumo do Pedido:*\n"
+        f"• Moeda: BTC\n"
+        f"• Rede: Lightning\n"
+        f"• Valor Investimento: R$ {escape_markdown(str(valor_brl))}\n"
+        f"• Comissão: R$ {escape_markdown(str(comissao_info.get('valor', 0)))} (10%)\n"
+        f"• Taxa Parceiro: R$ {escape_markdown(str(parceiro_info.get('valor', 0)))}\n"
+        f"• Você Recebe: {escape_markdown(str(valor_sats))} sats\n"
+        f"• Valor Líquido: R$ {escape_markdown(str(valor_liquido))}\n"
+        f"• Pagamento: PIX\n"
+        f"• ID: `{escape_markdown(str(validador.get('gtxid', 'N/A')))}\n\n"
+        f"⚠️ Atenção: Após confirmar, você receberá o QR Code PIX para pagamento."
+    )
     keyboard = [["Confirmar Pedido"], ["Cancelar"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    
     await update.message.reply_text(
         resumo_final,
         reply_markup=reply_markup,
-        parse_mode='Markdown'
+        parse_mode='MarkdownV2'
     )
-    
     return PAGAMENTO
 
 async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handler para criação do pagamento PIX."""
     if not update or not update.message:
         return ConversationHandler.END
-    
     if update.message.text == "Cancelar":
         return await start(update, context)
-    
-    print("🟢 [MENU] Usuário confirmou pedido - criando PIX")
-    
-    # Salvar pedido no banco e iniciar verificação
-    try:
-        if not update.effective_user:
-            await update.message.reply_text(
-                "❌ **Erro:** Usuário não encontrado.",
-                parse_mode='Markdown'
-            )
-            return ConversationHandler.END
-        
-        user_id = update.effective_user.id
-        username = update.effective_user.username or "sem_username"
-        
-        # Dados do pedido
-        cotacao_completa = {}
+    validador = get_user_data(context, 'cotacao_completa', {})
+    if not validador:
+        await mostrar_erro_cotacao(update, "Dados do pedido não encontrados")
+        return ConversationHandler.END
+    gtxid = validador.get('gtxid', str(update.effective_user.id) if update and update.effective_user else '0' + '_' + datetime.now().strftime('%Y%m%d%H%M%S'))
+    chatid = str(update.effective_user.id) if update and update.effective_user else '0'
+    moeda = get_user_data(context, 'moeda', 'BTC')
+    rede = get_user_data(context, 'rede', 'lightning')
+    amount_in_cents = validador.get('amount_in_cents', 0)
+    comissao_in_cents = validador.get('comissao', {}).get('valor_in_cents', 0)
+    parceiro_in_cents = validador.get('parceiro', {}).get('valor_in_cents', 0)
+    limites_in_cents = validador.get('limite', {}).get('maximo_in_cents', 0)
+    cotacao = validador.get('cotacao', {}).get('preco_btc', 0)
+    send = validador.get('send_in_cents', 0)
+    forma_pagamento = 'pix'
+    depix_id = ''
+    blockchainTxID = ''
+    status = 'aguardando_pagamento'
+    pagamento_verificado = 0
+    tentativas_verificacao = 0
+    criado_em = datetime.now().isoformat()
+    atualizado_em = datetime.now().isoformat()
+    lightning_address = ''
+    pedido_data = {
+        'gtxid': gtxid,
+        'chatid': chatid,
+        'moeda': moeda,
+        'rede': rede,
+        'amount_in_cents': amount_in_cents,
+        'comissao_in_cents': comissao_in_cents,
+        'parceiro_in_cents': parceiro_in_cents,
+        'limites_in_cents': limites_in_cents,
+        'cotacao': cotacao,
+        'send': send,
+        'forma_pagamento': forma_pagamento,
+        'depix_id': depix_id,
+        'blockchainTxID': blockchainTxID,
+        'status': status,
+        'pagamento_verificado': pagamento_verificado,
+        'tentativas_verificacao': tentativas_verificacao,
+        'criado_em': criado_em,
+        'atualizado_em': atualizado_em,
+        'lightning_address': lightning_address
+    }
+    print(f"🟡 [MENU] Salvando pedido no banco: {pedido_data}")
+    if pedido_manager:
+        resultado = await pedido_manager.salvar_pedido_e_verificar(pedido_data)
+    else:
+        resultado = {'success': False, 'error': 'PedidoManager não disponível'}
+    if resultado and isinstance(resultado, dict) and resultado.get('success'):
+        pedido_id = resultado.get('pedido_id', 0)
         if context and context.user_data:
-            cotacao_completa = get_user_data(context, 'cotacao_completa', {})
-        
-        pedido_data = {
-            'user_id': user_id,
-            'username': username,
-            'moeda': get_user_data(context, 'moeda', 'BTC') if context and context.user_data else 'BTC',
-            'rede': get_user_data(context, 'rede', 'lightning') if context and context.user_data else 'lightning',
-            'valor_sats': get_user_data(context, 'valor_sats', 0) if context and context.user_data else 0,
-            'valor_btc': get_user_data(context, 'valor_btc', 0) if context and context.user_data else 0,
-            'valor_real': get_user_data(context, 'valor_real', 0) if context and context.user_data else 0,
-            'cotacao': get_user_data(context, 'cotacao', {}) if context and context.user_data else {},
-            'cotacao_completa': cotacao_completa,
-            'status': 'aguardando_pagamento'
-        }
-        
-        print(f"🟡 [MENU] Salvando pedido no banco: {pedido_data}")
-        
-        # Salvar pedido e iniciar verificação
-        if pedido_manager:
-            resultado = await pedido_manager.salvar_pedido_e_verificar(pedido_data)
-        else:
-            resultado = {'success': False, 'error': 'PedidoManager não disponível'}
-        
-        if resultado and isinstance(resultado, dict) and resultado.get('success'):
-            pedido_id = resultado.get('pedido_id', 0)
-            if context and context.user_data:
-                context.user_data['pedido_id'] = pedido_id
-            
-            print(f"✅ [MENU] Pedido salvo com ID: {pedido_id}")
-            
-            # Criar pagamento PIX
-            try:
-                import requests
-                
-                pix_data = {
-                    'valor': get_user_data(context, 'valor_real', 0) if context and context.user_data else 0,
-                    'endereco': 'bouncyflight79@walletofsatoshi.com',
-                    'descricao': f'Compra {get_user_data(context, 'valor_sats', 0) if context and context.user_data else 0:,} sats - Pedido #{pedido_id}'
-                }
-                
-                response = requests.post(
-                    f"{BASE_URL}/api/bot_deposit.php",
-                    json=pix_data,
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    pix_response = response.json()
-                    
-                    if pix_response and isinstance(pix_response, dict) and pix_response.get('success'):
-                        # Mostrar QR Code
-                        pix_data_dict = pix_response.get('data', {})
-                        if not isinstance(pix_data_dict, dict):
-                            pix_data_dict = {}
-                        
-                        qr_code_url = pix_data_dict.get('qr_code', '')
-                        copia_cola = pix_data_dict.get('copia_cola', '')
-                        
-                        # Primeira mensagem com QR Code
-                        await update.message.reply_text(
-                            f"💳 **Pagamento PIX Criado!**\n\n"
-                            f"📋 **Pedido #{pedido_id}**\n"
-                            f"💰 **Valor:** R$ {escape_markdown(str(get_user_data(context, 'valor_real', 0)))}\n"
-                            f"⚡ **Valor:** {escape_markdown(str(get_user_data(context, 'valor_sats', 0)))}\n\n"
-                            f"📱 **QR Code:**",
-                            parse_mode='Markdown'
-                        )
-                        
-                        # Enviar QR Code como imagem
-                        if context and context.bot and update.effective_chat:
-                            await context.bot.send_photo(
-                                chat_id=update.effective_chat.id,
-                                photo=qr_code_url,
-                                caption="📱 Escaneie o QR Code para pagar"
-                            )
-                            
-                            # Segunda mensagem com copia e cola
-                            await context.bot.send_message(
-                                chat_id=update.effective_chat.id,
-                                text=f"📋 **Copia e Cola:**\n`{copia_cola}`\n\n"
-                                     f"💡 **Instruções:**\n"
-                                     f"1. Copie o código acima\n"
-                                     f"2. Abra seu app bancário\n"
-                                     f"3. Cole no PIX\n"
-                                     f"4. Confirme o pagamento\n\n"
-                                     f"⏰ **Tempo limite:** 30 minutos\n\n"
-                                     f"🔄 **Verificação automática ativada!**\n"
-                                     f"O sistema verificará o pagamento automaticamente.",
-                                parse_mode='Markdown'
-                            )
-                            
-                            # Botão de suporte
-                            keyboard = [
-                                ["🆘 Suporte"]
-                            ]
-                            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-                            
-                            await context.bot.send_message(
-                                chat_id=update.effective_chat.id,
-                                text="❓ **Precisa de ajuda?**\nClique no botão abaixo:",
-                                reply_markup=reply_markup,
-                                parse_mode='Markdown'
-                            )
-                        
-                        print(f"✅ [MENU] PIX criado com sucesso para pedido #{pedido_id}")
-                        
-                    else:
-                        error_msg = pix_response.get('error', 'Erro desconhecido') if pix_response and isinstance(pix_response, dict) else 'Erro desconhecido'
-                        await update.message.reply_text(
-                            f"❌ **Erro ao criar PIX:**\n{error_msg}\n\n"
-                            f"Tente novamente ou entre em contato com o suporte.",
-                            parse_mode='Markdown'
-                        )
-                else:
+            context.user_data['pedido_id'] = pedido_id
+        print(f"✅ [MENU] Pedido salvo com ID: {pedido_id}")
+        try:
+            import requests
+            pix_data = {
+                'valor': validador.get('valor_brl', 0),
+                'endereco': 'bouncyflight79@walletofsatoshi.com',
+                'descricao': f'Compra {validador.get("valor_sats", 0):,} sats - Pedido #{pedido_id}'
+            }
+            response = requests.post(
+                f"{BASE_URL}/api/bot_deposit.php",
+                json=pix_data,
+                timeout=30
+            )
+            if response.status_code == 200:
+                pix_response = response.json()
+                if pix_response and isinstance(pix_response, dict) and pix_response.get('success'):
+                    pix_data_dict = pix_response.get('data', {})
+                    if not isinstance(pix_data_dict, dict):
+                        pix_data_dict = {}
+                    qr_code_url = pix_data_dict.get('qr_code', '')
+                    copia_cola = pix_data_dict.get('copia_cola', '')
                     await update.message.reply_text(
-                        f"❌ **Erro na API:** Status {response.status_code}\n\n"
+                        f"💳 **Pagamento PIX Criado!**\n\n"
+                        f"📋 **Pedido #{pedido_id}**\n"
+                        f"💰 **Valor:** R$ {escape_markdown(str(validador.get('valor_brl', 0)))}\n"
+                        f"⚡ **Valor:** {escape_markdown(str(validador.get('valor_sats', 0)))}\n\n"
+                        f"📱 **QR Code:**",
+                        parse_mode='Markdown'
+                    )
+                    if context and context.bot and update.effective_chat:
+                        await context.bot.send_photo(
+                            chat_id=update.effective_chat.id,
+                            photo=qr_code_url,
+                            caption="📱 Escaneie o QR Code para pagar"
+                        )
+                        await context.bot.send_message(
+                            chat_id=update.effective_chat.id,
+                            text=f"📋 **Copia e Cola:**\n`{copia_cola}`\n\n"
+                                 f"💡 **Instruções:**\n"
+                                 f"1. Copie o código acima\n"
+                                 f"2. Abra seu app bancário\n"
+                                 f"3. Cole no PIX\n"
+                                 f"4. Confirme o pagamento\n\n"
+                                 f"⏰ **Tempo limite:** 30 minutos\n\n"
+                                 f"🔄 **Verificação automática ativada!**\n"
+                                 f"O sistema verificará o pagamento automaticamente.",
+                            parse_mode='Markdown'
+                        )
+                        keyboard = [
+                            ["🆘 Suporte"]
+                        ]
+                        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+                        await context.bot.send_message(
+                            chat_id=update.effective_chat.id,
+                            text="❓ **Precisa de ajuda?**\nClique no botão abaixo:",
+                            reply_markup=reply_markup,
+                            parse_mode='Markdown'
+                        )
+                    print(f"✅ [MENU] PIX criado com sucesso para pedido #{pedido_id}")
+                else:
+                    error_msg = pix_response.get('error', 'Erro desconhecido') if pix_response and isinstance(pix_response, dict) else 'Erro desconhecido'
+                    await update.message.reply_text(
+                        f"❌ **Erro ao criar PIX:**\n{error_msg}\n\n"
                         f"Tente novamente ou entre em contato com o suporte.",
                         parse_mode='Markdown'
                     )
-                    
-            except Exception as e:
-                print(f"❌ [MENU] Erro ao criar PIX: {e}")
+            else:
                 await update.message.reply_text(
-                    f"❌ **Erro ao criar PIX:**\n{str(e)}\n\n"
+                    f"❌ **Erro na API:** Status {response.status_code}\n\n"
                     f"Tente novamente ou entre em contato com o suporte.",
                     parse_mode='Markdown'
                 )
-        else:
-            error_msg = resultado.get('error', 'Erro desconhecido') if resultado and isinstance(resultado, dict) else 'Erro desconhecido'
-            print(f"❌ [MENU] Erro ao salvar pedido: {error_msg}")
+        except Exception as e:
+            print(f"❌ [MENU] Erro ao criar PIX: {e}")
             await update.message.reply_text(
-                f"❌ **Erro ao salvar pedido:**\n{error_msg}\n\n"
+                f"❌ **Erro ao criar PIX:**\n{str(e)}\n\n"
                 f"Tente novamente ou entre em contato com o suporte.",
                 parse_mode='Markdown'
             )
-            
-    except Exception as e:
-        print(f"❌ [MENU] Erro geral no pagamento: {e}")
+    else:
+        error_msg = resultado.get('error', 'Erro desconhecido') if resultado and isinstance(resultado, dict) else 'Erro desconhecido'
+        print(f"❌ [MENU] Erro ao salvar pedido: {error_msg}")
         await update.message.reply_text(
-            f"❌ **Erro inesperado:**\n{str(e)}\n\n"
+            f"❌ **Erro ao salvar pedido:**\n{error_msg}\n\n"
             f"Tente novamente ou entre em contato com o suporte.",
             parse_mode='Markdown'
         )
-    
     return ConversationHandler.END
 
 async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
