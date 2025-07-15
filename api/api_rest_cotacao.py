@@ -2,18 +2,19 @@ import json
 
 import requests
 from config.config import BASE_URL
+from typing import Optional
 
-def get_cotacao_rest(moeda: str, vs: str = "brl", valor: float = 0.0, chatid: str = None, compras: int = 0, metodo: str = "pix") -> dict:
+def get_cotacao_rest(moeda: str, vs: str = "brl", valor: float = 0.0, chatid: Optional[str] = None, compras: int = 0, metodo: str = "pix") -> dict:
     params = {
         "moeda": moeda,
         "vs": vs,  # Adicionando vs=brl por padrão
         "valor": valor,
-        "chatid": chatid or "",
+        "chatid": str(chatid) if chatid is not None else "",
         "compras": compras,
         "metodo": metodo
     }
     url = f"{BASE_URL}/api_cotacao.php"
-    response = requests.get(url, params=params)
+    response = requests.get(url, params=params, timeout=10)
     print(f"[DEBUG] Status code: {response.status_code}")
     print(f"[DEBUG] Response text: {response.text}")
     try:

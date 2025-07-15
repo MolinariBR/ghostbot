@@ -51,6 +51,19 @@ def criar_deposito_pix(gtxid: str, chatid: str, valor: float, moeda: str = "BRL"
         try:
             json_response = response.json()
             print(f"[DEBUG] JSON Response: {json.dumps(json_response, indent=2)}")
+            
+            # Log detalhado dos campos retornados
+            if 'data' in json_response and isinstance(json_response['data'], dict):
+                print("[DEBUG] Campos retornados na resposta:")
+                for key, value in json_response['data'].items():
+                    print(f"  - {key}: {value} ({type(value).__name__})")
+                    
+                # Verifica se o depix_id está presente nos dados
+                if 'depix_id' in json_response['data']:
+                    print(f"[DEBUG] depix_id encontrado: {json_response['data']['depix_id']}")
+                else:
+                    print("[DEBUG] ATENÇÃO: depix_id não encontrado na resposta da API")
+            
             return json_response
         except json.JSONDecodeError:
             print("[DEBUG] A resposta não é um JSON válido")
