@@ -205,8 +205,8 @@ if __name__ == "__main__":
                 max_keepalive_connections=20,  # Máximo de conexões keep-alive
                 max_connections=100,           # Máximo de conexões simultâneas
                 keepalive_expiry=30.0          # Expiração do keep-alive: 30 segundos
-            ),
-            retries=3  # Tentativas automáticas para falhas de rede
+            )
+            # retries=3  # Removido pois não é suportado
         )
         
         # Criar request com cliente HTTP configurado
@@ -260,11 +260,7 @@ if __name__ == "__main__":
         app.run_polling(
             poll_interval=1.0,      # Intervalo de polling: 1 segundo
             timeout=30,             # Timeout de polling: 30 segundos
-            bootstrap_retries=5,    # Tentativas de bootstrap: 5
-            read_timeout=60,        # Timeout de leitura: 60 segundos
-            write_timeout=30,       # Timeout de escrita: 30 segundos
-            connect_timeout=30,     # Timeout de conexão: 30 segundos
-            pool_timeout=30         # Timeout do pool: 30 segundos
+            bootstrap_retries=5     # Tentativas de bootstrap: 5
         )
     except KeyboardInterrupt:
         logger.info("🛑 Bot interrompido pelo usuário")
