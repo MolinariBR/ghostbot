@@ -9,7 +9,7 @@ contra spam e abuso no bot do Telegram.
 import asyncio
 import time
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 
@@ -108,7 +108,7 @@ class RateLimiter:
             
             logger.info(f"🔄 Rate limit resetado para usuário: {user_id}")
     
-    async def get_stats(self) -> Dict[str, any]:
+    async def get_stats(self) -> Dict[str, Any]:
         """
         Obtém estatísticas do RateLimiter.
         
