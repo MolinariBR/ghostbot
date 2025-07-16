@@ -667,7 +667,7 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             # Após salvar o pedido no banco, enviar para o backend PHP
             if sucesso_salvar:
                 try:
-                    registrar_url = urljoin(BASE_URL + '/', 'registrar_transacao.php')
+                    registrar_url = urljoin(BASE_URL + '/', 'api/registrar_transacao.php')
                     # Montar payload conforme schema pedidos_bot
                     payload = {
                         'gtxid': pedido_data.get('gtxid'),
