@@ -192,9 +192,9 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         print("❌ [MOEDA] Update ou message é None")
         return ConversationHandler.END
 
-    texto = update.message.text.strip() if update and update.message and update.message.text else ""
-    # Aceita tanto com quanto sem ícone
-    if texto in ["Comprar", "🛒 Comprar"]:
+    texto = update.message.text.strip().lower() if update and update.message and update.message.text else ""
+    # Aceita qualquer texto que contenha 'comprar'
+    if "comprar" in texto:
         print("🟢 [MOEDA] Usuário clicou em Comprar, mostrando menu de moeda")
         if context and context.user_data:
             context.user_data.clear()

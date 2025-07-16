@@ -1,7 +1,10 @@
 import logging
+import asyncio
 from config.config import BOT_TOKEN
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, ApplicationHandlerStop
+from telegram.request import HTTPXRequest
+import httpx
 from api.depix import pix_api, PixAPIError
 from menu.menu_compra import get_conversation_handler, ativar_aguardar_lightning_address
 from api.pedido_manager import pedido_manager
@@ -13,6 +16,84 @@ logger = logging.getLogger("ghostbot")
 
 # Variável global para armazenar a instância do bot
 bot_instance = None
+
+async def safe_send_message(bot, chat_id: int, text: str, parse_mode: str = None, max_retries: int = 3, delay: float = 1.0):
+    """
+    Envia mensagem com retry automático em caso de erro de rede.
+    
+    Args:
+        bot: Instância do bot do Telegram
+        chat_id: ID do chat para enviar a mensagem
+        text: Texto da mensagem
+        parse_mode: Modo de parsing (Markdown, HTML, etc.)
+        max_retries: Número máximo de tentativas
+        delay: Delay entre tentativas em segundos
+    
+    Returns:
+        bool: True se enviado com sucesso, False caso contrário
+    """
+    for attempt in range(max_retries):
+        try:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=parse_mode
+            )
+            return True
+            
+        except Exception as e:
+            error_msg = str(e)
+            
+            # Se for erro de rede, tentar novamente
+            if any(network_error in error_msg.lower() for network_error in [
+                'networkerror', 'httpx', 'readerror', 'timeout', 'connection'
+            ]):
+                logger.warning(f"🔄 Tentativa {attempt + 1}/{max_retries} falhou (erro de rede): {error_msg}")
+                
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(delay * (attempt + 1))  # Backoff exponencial
+                    continue
+                else:
+                    logger.error(f"❌ Falha ao enviar mensagem após {max_retries} tentativas: {error_msg}")
+                    return False
+            
+            # Se for outro tipo de erro, não tentar novamente
+            else:
+                logger.error(f"❌ Erro ao enviar mensagem: {error_msg}")
+                return False
+    
+    return False
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handler global para tratar erros do bot.
+    """
+    try:
+        # Log do erro
+        logger.error(f"⚠️ Erro no bot: {context.error}")
+        
+        # Se for um erro de rede, apenas logar (o bot vai tentar novamente automaticamente)
+        if "NetworkError" in str(context.error) or "httpx" in str(context.error):
+            logger.warning(f"🔄 Erro de rede detectado, tentando novamente: {context.error}")
+            return
+        
+        # Para outros erros, tentar enviar mensagem de erro para o usuário
+        if update and hasattr(update, 'effective_chat') and update.effective_chat:
+            try:
+                await safe_send_message(
+                    context.bot,
+                    update.effective_chat.id,
+                    "❌ **Erro inesperado ocorreu**\n\n"
+                    "🔧 Nossa equipe foi notificada.\n"
+                    "🔄 Tente novamente em alguns segundos.\n\n"
+                    "💬 Se o problema persistir, entre em contato com o suporte.",
+                    parse_mode='Markdown'
+                )
+            except Exception as send_error:
+                logger.error(f"❌ Erro ao enviar mensagem de erro: {send_error}")
+        
+    except Exception as e:
+        logger.error(f"❌ Erro no error_handler: {e}")
 
 async def pix(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -54,21 +135,25 @@ async def lightning_callback(user_id: int, pedido_id: int):
         
         print(f"🟢 [BOT] Callback Lightning ativado para usuário {user_id}, pedido {pedido_id}")
         
-        # Enviar mensagem para o usuário solicitando o endereço Lightning
-        await bot_instance.send_message(
-            chat_id=user_id,
-            text="🎉 **Pagamento PIX Confirmado!**\n\n"
-                 "✅ Seu pagamento foi recebido e confirmado!\n\n"
-                 "⚡ **Agora envie seu endereço Lightning:**\n\n"
-                 "📱 **Formatos aceitos:**\n"
-                 "• Lightning Address: `user@domain.com`\n"
-                 "• Invoice Lightning: `lnbc...`\n\n"
-                 "💡 **Exemplo:** `sua_carteira@walletofsatoshi.com`\n\n"
-                 "Envie seu endereço agora:",
+        # Enviar mensagem para o usuário solicitando o endereço Lightning com retry
+        success = await safe_send_message(
+            bot_instance,
+            user_id,
+            "🎉 **Pagamento PIX Confirmado!**\n\n"
+            "✅ Seu pagamento foi recebido e confirmado!\n\n"
+            "⚡ **Agora envie seu endereço Lightning:**\n\n"
+            "📱 **Formatos aceitos:**\n"
+            "• Lightning Address: `user@domain.com`\n"
+            "• Invoice Lightning: `lnbc...`\n\n"
+            "💡 **Exemplo:** `sua_carteira@walletofsatoshi.com`\n\n"
+            "Envie seu endereço agora:",
             parse_mode='Markdown'
         )
         
-        print(f"✅ [BOT] Mensagem de Lightning Address enviada para usuário {user_id}")
+        if success:
+            print(f"✅ [BOT] Mensagem de Lightning Address enviada para usuário {user_id}")
+        else:
+            print(f"❌ [BOT] Falha ao enviar mensagem de Lightning Address para usuário {user_id}")
         
     except Exception as e:
         print(f"❌ [BOT] Erro no callback Lightning: {e}")
@@ -105,24 +190,88 @@ async def ativar_lightning_address_handler(update: Update, context: ContextTypes
 
 if __name__ == "__main__":
     logger.info("Iniciando GhostBot...")
-    app = Application.builder().token(BOT_TOKEN).build()
+    
+    # Configuração robusta do cliente HTTP com timeout aumentado
+    try:
+        # Criar cliente HTTP com configurações robustas
+        http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(
+                connect=30.0,    # Timeout de conexão: 30 segundos
+                read=60.0,       # Timeout de leitura: 60 segundos (aumentado)
+                write=30.0,      # Timeout de escrita: 30 segundos
+                pool=30.0        # Timeout do pool: 30 segundos
+            ),
+            limits=httpx.Limits(
+                max_keepalive_connections=20,  # Máximo de conexões keep-alive
+                max_connections=100,           # Máximo de conexões simultâneas
+                keepalive_expiry=30.0          # Expiração do keep-alive: 30 segundos
+            ),
+            retries=3  # Tentativas automáticas para falhas de rede
+        )
+        
+        # Criar request com cliente HTTP configurado
+        request = HTTPXRequest(http_client=http_client)
+        
+        # Construir aplicação com configurações robustas
+        app = Application.builder().token(BOT_TOKEN).request(request).build()
+        
+        logger.info("✅ Cliente HTTP configurado com timeouts robustos")
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao configurar cliente HTTP: {e}")
+        # Fallback para configuração padrão
+        app = Application.builder().token(BOT_TOKEN).build()
+        logger.warning("⚠️ Usando configuração padrão do cliente HTTP")
+    
     # Armazenar a instância do bot globalmente
     bot_instance = app.bot
+    
+    # Adicionar error handler global
+    app.add_error_handler(error_handler)
+    logger.info("✅ Error handler global configurado")
+    
     # Configurar o callback do pedido_manager, se disponível
     if hasattr(pedido_manager, 'set_lightning_callback'):
         pedido_manager.set_lightning_callback(lightning_callback)  # type: ignore
+    
     # Adicionar o ConversationHandler do menu de compra
     conversation_handler = get_conversation_handler()
     app.add_handler(conversation_handler)
+    
     # Adicionar handler para PIX
     app.add_handler(CommandHandler("pix", pix))
+    
     # Adicionar handler para ativar Lightning Address
     app.add_handler(CommandHandler("lightning", ativar_lightning_address_handler))
+    
     # Registrar handler global para Lightning Address
     registrar_handlers_globais(app)
+    
     print("🟢 [BOT] GhostBot iniciado com sucesso!")
+    print("🟢 [BOT] Cliente HTTP configurado com timeouts robustos")
+    print("🟢 [BOT] Error handler global configurado")
     print("🟢 [BOT] ConversationHandler configurado")
     print("🟢 [BOT] Callback de Lightning Address configurado")
     print("🟢 [BOT] Handler global Lightning registrado")
     print("🟢 [BOT] Aguardando comandos...")
-    app.run_polling()
+    
+    # Iniciar polling com configurações robustas
+    try:
+        app.run_polling(
+            poll_interval=1.0,      # Intervalo de polling: 1 segundo
+            timeout=30,             # Timeout de polling: 30 segundos
+            bootstrap_retries=5,    # Tentativas de bootstrap: 5
+            read_timeout=60,        # Timeout de leitura: 60 segundos
+            write_timeout=30,       # Timeout de escrita: 30 segundos
+            connect_timeout=30,     # Timeout de conexão: 30 segundos
+            pool_timeout=30         # Timeout do pool: 30 segundos
+        )
+    except KeyboardInterrupt:
+        logger.info("🛑 Bot interrompido pelo usuário")
+    except Exception as e:
+        logger.error(f"❌ Erro fatal no polling: {e}")
+    finally:
+        # Limpar recursos
+        if 'http_client' in locals():
+            http_client.close()
+        logger.info("🧹 Recursos limpos")
