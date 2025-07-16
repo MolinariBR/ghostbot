@@ -257,7 +257,7 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         except Exception as e:
             await update.message.reply_text("Erro ao carregar a ajuda. Tente novamente mais tarde.")
         return ESCOLHER_MOEDA
-    elif texto == "Bitcoin (BTC)":
+    elif texto.strip() == "Bitcoin (BTC)" or "Bitcoin" in texto or "BTC" in texto:
         print("🟢 [MOEDA] Usuário escolheu Bitcoin, indo para escolher rede")
         if context and context.user_data:
             context.user_data['moeda'] = "BTC"
