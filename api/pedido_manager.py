@@ -173,13 +173,23 @@ class PedidoManager:
                 
                 if resultado.get('success'):
                     status = resultado.get('data', {}).get('status', 'unknown')
+                    blockchain_txid = resultado.get('data', {}).get('blockchainTxID')
                     logger.info(f"\033[1;32m✅ Status do pagamento: {status}\033[0m")
                     print(f"\033[1;32m✅ [PEDIDO] Status do pagamento: {status}\033[0m")
                     logger.debug(f"📊 Dados completos da resposta: {resultado}")
-                    
-                    # Atualiza o banco com o status
+                    # Atualiza o banco com o status e blockchainTxID se existir
                     logger.debug(f"💾 Atualizando status no banco: {status}")
                     self._atualizar_status_pedido(str(gtxid or ''), status, tentativa)
+                    if blockchain_txid:
+                        try:
+                            conn = sqlite3.connect(self.db_path)
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE pedidos_bot SET blockchainTxID = ?, atualizado_em = CURRENT_TIMESTAMP WHERE gtxid = ?", (blockchain_txid, gtxid))
+                            conn.commit()
+                            conn.close()
+                            logger.info(f"✅ blockchainTxID salvo para gtxid {gtxid}: {blockchain_txid}")
+                        except Exception as e:
+                            logger.error(f"Erro ao salvar blockchainTxID: {e}")
                     
                     # Se o pagamento foi confirmado, para as verificações
                     if status in ['paid', 'completed', 'confirmed', 'depix_confirmed', 'depix_sent']:
@@ -215,19 +225,19 @@ class PedidoManager:
                     logger.debug(f"❌ Resposta de erro completa: {resultado}")
                     self._atualizar_status_pedido(str(gtxid or ''), 'erro_verificacao', tentativa)
                 
-                # Aguarda 3 segundos antes da próxima verificação
+                # Aguarda 50 segundos antes da próxima verificação
                 if tentativa < max_tentativas:
-                    logger.info(f"⏰ Aguardando 3 segundos antes da próxima tentativa...")
-                    print(f"⏰ [PEDIDO] Aguardando 3 segundos...")
-                    await asyncio.sleep(3)
+                    logger.info(f"⏰ Aguardando 50 segundos antes da próxima tentativa...")
+                    print(f"⏰ [PEDIDO] Aguardando 50 segundos...")
+                    await asyncio.sleep(50)
             except Exception as e:
                 logger.error(f"💥 ERRO CRÍTICO na tentativa {tentativa}: {e}")
                 print(f"💥 [PEDIDO] ERRO CRÍTICO: {e}")
                 self._atualizar_status_pedido(str(gtxid or ''), 'erro_verificacao', tentativa)
                 if tentativa < max_tentativas:
-                    logger.info(f"⏰ Aguardando 3 segundos após erro...")
-                    print(f"⏰ [PEDIDO] Aguardando 3 segundos após erro...")
-                    await asyncio.sleep(3)
+                    logger.info(f"⏰ Aguardando 50 segundos após erro...")
+                    print(f"⏰ [PEDIDO] Aguardando 50 segundos após erro...")
+                    await asyncio.sleep(50)
         
         logger.info(f"🏁 VERIFICAÇÃO CONCLUÍDA para gtxid: {gtxid}")
         print(f"🏁 [PEDIDO] VERIFICAÇÃO CONCLUÍDA para gtxid: {gtxid}")

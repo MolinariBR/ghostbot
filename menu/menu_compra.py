@@ -79,7 +79,7 @@ except ImportError:
         pass
     async def consultar_saldo():
         return {'success': False, 'error': 'ValidadorVoltz não disponível'}
-    async def enviar_pagamento(payment_request: str):
+    async def enviar_pagamento(lightning_address: str, valor_sats: int):
         return {'success': False, 'error': 'ValidadorVoltz não disponível'}
 
 # Configuração de logging
@@ -453,6 +453,7 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 'limites_in_cents': limites_in_cents,
                 'cotacao': cotacao,
                 'send': send,
+                'recebe': validador.get('valor_recebe', {}).get('sats', 0),  # <-- Garante valor em sats
                 'forma_pagamento': forma_pagamento,
                 'depix_id': depix_id,
                 'blockchainTxID': blockchainTxID,
@@ -463,6 +464,8 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 'atualizado_em': atualizado_em,
                 'lightning_address': lightning_address
             }
+            if context and context.user_data is not None:
+                context.user_data['valor_sats'] = validador.get('valor_recebe', {}).get('sats', 0)  # <-- Atualiza contexto
             print(f"🟡 [MENU] Salvando pedido no banco: {pedido_data}")
             if pedido_manager:
                 sucesso_salvar = pedido_manager.salvar_pedido(pedido_data)
@@ -492,20 +495,13 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                         print(f"[DEBUG] Resposta do backend: {pix_response}")
                         if pix_response and isinstance(pix_response, dict) and pix_response.get('success'):
                             pix_data_dict = pix_response.get('data', {})
-                            print(f"[DEBUG] pix_data_dict: {pix_data_dict}")
                             if not isinstance(pix_data_dict, dict):
                                 pix_data_dict = {}
                             qr_code_url = pix_data_dict.get('qr_image_url', '')
                             print(f"[DEBUG] qr_code_url: {qr_code_url}")
                             copia_cola = pix_data_dict.get('qr_copy_paste', '')
-                            # --- INÍCIO DO PATCH DE TESTE ---
-                            depix_id_teste = random.choice(DEPIX_IDS_TESTE)
-                            print(f"\033[1;35m[TESTE] Substituindo depix_id pelo real: {depix_id_teste}\033[0m")
-                            pix_data_dict['transaction_id'] = depix_id_teste
-                            print(f"\033[1;34m[DEBUG] depix_id sobrescrito para teste: {pix_data_dict['transaction_id']}\033[0m")
-                            # --- FIM DO PATCH DE TESTE ---
                             pix_valor_fmt = escape_markdown(format_brl(validador.get('valor_brl', 0)))
-                            pix_valor_sats = escape_markdown(str(validador.get('valor_sats', 0)))
+                            pix_valor_sats = escape_markdown(str(validador.get('valor_recebe', {}).get('sats', 0)))
                             pix_pedido_id = escape_markdown(str(pedido_id))
                             pix_texto = (
                                 escape_markdown("💳 **Pagamento PIX Criado!**\n\n") +
@@ -560,7 +556,17 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                             # ================= INÍCIO DA CHAMADA DO LOOP DE VERIFICAÇÃO =================
                             try:
                                 import asyncio
+                                # Salvar o depix_id real no pedido antes de iniciar a verificação
                                 depix_id = pix_data_dict.get('transaction_id', '')
+                                if depix_id:
+                                    pedido_manager.atualizar_status_pedido(str(pedido_id), 'aguardando_pagamento')
+                                    # Atualiza o campo depix_id no banco
+                                    import sqlite3
+                                    conn = sqlite3.connect('data/deposit.db')
+                                    cursor = conn.cursor()
+                                    cursor.execute("UPDATE pedidos_bot SET depix_id = ? WHERE gtxid = ?", (depix_id, str(pedido_id)))
+                                    conn.commit()
+                                    conn.close()
                                 print(f"\033[1;33m[DEBUG] depix_id FINAL usado na verificação: {depix_id} | pedido_id: {pedido_id} | chatid: {chatid}\033[0m")
                                 if depix_id and pedido_id and chatid:
                                     print(f"\033[1;36m[DEBUG] Chamando loop de verificação do pagamento PIX: depix_id={depix_id}, pedido_id={pedido_id}, chatid={chatid}\033[0m")
@@ -655,6 +661,8 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
     keyboard = [["Confirmar"], ["Voltar"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+    if context and context.user_data is not None:
+        context.user_data['valor_sats'] = valor_sats  # <-- Garante que é sempre o valor em sats
     if update and update.message:
         await update.message.reply_text(
             resumo_texto,
@@ -747,6 +755,7 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 'limites_in_cents': limites_in_cents,
                 'cotacao': cotacao,
                 'send': send,
+                'recebe': validador.get('valor_recebe', {}).get('sats', 0),  # <-- Garante valor em sats
                 'forma_pagamento': forma_pagamento,
                 'depix_id': depix_id,
                 'blockchainTxID': blockchainTxID,
@@ -757,6 +766,8 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 'atualizado_em': atualizado_em,
                 'lightning_address': lightning_address
             }
+            if context and context.user_data is not None:
+                context.user_data['valor_sats'] = validador.get('valor_recebe', {}).get('sats', 0)  # <-- Atualiza contexto
             print(f"🟡 [MENU] Salvando pedido no banco: {pedido_data}")
             if pedido_manager:
                 sucesso_salvar = pedido_manager.salvar_pedido(pedido_data)
@@ -790,14 +801,8 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                             qr_code_url = pix_data_dict.get('qr_image_url', '')
                             print(f"[DEBUG] qr_code_url: {qr_code_url}")
                             copia_cola = pix_data_dict.get('qr_copy_paste', '')
-                            # --- INÍCIO DO PATCH DE TESTE ---
-                            depix_id_teste = random.choice(DEPIX_IDS_TESTE)
-                            print(f"\033[1;35m[TESTE] Substituindo depix_id pelo real: {depix_id_teste}\033[0m")
-                            pix_data_dict['transaction_id'] = depix_id_teste
-                            print(f"\033[1;34m[DEBUG] depix_id sobrescrito para teste: {pix_data_dict['transaction_id']}\033[0m")
-                            # --- FIM DO PATCH DE TESTE ---
                             pix_valor_fmt = escape_markdown(format_brl(validador.get('valor_brl', 0)))
-                            pix_valor_sats = escape_markdown(str(validador.get('valor_sats', 0)))
+                            pix_valor_sats = escape_markdown(str(validador.get('valor_recebe', {}).get('sats', 0)))
                             pix_pedido_id = escape_markdown(str(pedido_id))
                             pix_texto = (
                                 escape_markdown("💳 **Pagamento PIX Criado!**\n\n") +
@@ -913,15 +918,27 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
     Handler para aguardar o endereço Lightning do cliente.
     Esta função será chamada quando o pagamento PIX for confirmado.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    # TRACE para rastreamento de chamada do handler
+    user_id = update.effective_user.id if update and update.effective_user else '0'
+    print(f"[TRACE] Handler aguardar_lightning_address chamado para user_id={user_id}")
+    logger.info(f"[TRACE] Handler aguardar_lightning_address chamado para user_id={user_id}")
+    # LOG DETALHADO DO CONTEXTO
+    logger.info(f"[DEBUG] context.user_data: {context.user_data}")
+    print(f"[DEBUG] context.user_data: {context.user_data}")
+    
     if not update or not update.message or not update.message.text:
         return AGUARDAR_LIGHTNING_ADDRESS
     
     endereco_lightning = update.message.text.strip()
-    
+    user_id = update.effective_user.id if update and update.effective_user else '0'
+    logger.info(f"[LIGHTNING] Usuário {user_id} enviou endereço: {endereco_lightning}")
     print(f"🟢 [LIGHTNING] Usuário enviou endereço: {endereco_lightning}")
     
     # Validar endereço Lightning
     if not validar_endereco_lightning(endereco_lightning):
+        logger.warning(f"[LIGHTNING] Endereço inválido recebido de {user_id}: {endereco_lightning}")
         await update.message.reply_text(
             escape_markdown("❌ **Endereço Lightning inválido!**\n\n"
             "Por favor, envie um endereço Lightning válido:\n"
@@ -938,8 +955,52 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
     if context and context.user_data:
         pedido_id = get_user_data(context, 'pedido_id', 0)
         valor_sats = get_user_data(context, 'valor_sats', 0)
-    
+
+    # LOG DETALHADO DOS DADOS DO PEDIDO
+    logger.info(f"[DEBUG] pedido_id do contexto: {pedido_id}")
+    logger.info(f"[DEBUG] valor_sats do contexto: {valor_sats}")
+    print(f"[DEBUG] pedido_id do contexto: {pedido_id}")
+    print(f"[DEBUG] valor_sats do contexto: {valor_sats}")
+
+    # Fallback: buscar no banco se não encontrou no contexto
     if not pedido_id or not valor_sats:
+        logger.warning(f"[FALLBACK] Dados não encontrados no contexto, buscando no banco para user_id={user_id}")
+        print(f"[FALLBACK] Buscando pedido no banco para user_id={user_id}")
+        try:
+            import sqlite3
+            conn = sqlite3.connect('data/deposit.db')
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, recebe, moeda, rede, status FROM pedidos_bot
+                WHERE chatid = ? AND status = 'depix_sent'
+                ORDER BY id DESC LIMIT 1
+            """, (str(user_id),))
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                pedido_id_db, recebe_db, moeda_db, rede_db, status_db = row
+                logger.info(f"[FALLBACK] Pedido recuperado do banco: id={pedido_id_db}, recebe={recebe_db}, moeda={moeda_db}, rede={rede_db}, status={status_db}")
+                print(f"[FALLBACK] Pedido recuperado do banco: id={pedido_id_db}, recebe={recebe_db}, moeda={moeda_db}, rede={rede_db}, status={status_db}")
+                pedido_id = pedido_id_db
+                # Para BTC, recebe já está em sats
+                if moeda_db == 'BTC' and rede_db == 'lightning':
+                    valor_sats = int(recebe_db)
+                else:
+                    valor_sats = int(recebe_db)  # fallback genérico, ajustar se necessário para outras moedas
+                # Atualiza no contexto para logs futuros
+                if context and context.user_data is not None:
+                    context.user_data['pedido_id'] = pedido_id
+                    context.user_data['valor_sats'] = valor_sats
+            else:
+                logger.error(f"[FALLBACK] Nenhum pedido encontrado no banco para user_id={user_id}")
+                print(f"[FALLBACK] Nenhum pedido encontrado no banco para user_id={user_id}")
+        except Exception as e:
+            logger.error(f"[FALLBACK] Erro ao consultar banco: {e}")
+            print(f"[FALLBACK] Erro ao consultar banco: {e}")
+
+    if not pedido_id or not valor_sats:
+        logger.error(f"[LIGHTNING] Dados do pedido não encontrados para usuário {user_id}")
+        print(f"[ALERTA] Dados do pedido não encontrados no contexto nem no banco para user_id={user_id}")
         await update.message.reply_text(
             escape_markdown("❌ **Erro:** Dados do pedido não encontrados.\n"
             "Por favor, inicie uma nova compra."),
@@ -947,15 +1008,27 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
         )
         return ConversationHandler.END
     
+    # Garante que valor_sats é inteiro e positivo
+    valor_sats = int(valor_sats)
+    if valor_sats <= 0:
+        logger.error(f"[LIGHTNING] valor_sats inválido para envio: {valor_sats}")
+        await update.message.reply_text(
+            escape_markdown("❌ **Erro:** Valor de envio inválido.\nTente novamente ou contate o suporte."),
+            parse_mode='Markdown'
+        )
+        return ConversationHandler.END
+
     try:
+        logger.info(f"[LIGHTNING] Iniciando envio de {valor_sats} sats para {endereco_lightning} (pedido {pedido_id}, user {user_id})")
         print(f"🟡 [LIGHTNING] Iniciando envio de {valor_sats} sats para {endereco_lightning}")
         
         # Consultar saldo antes do envio
-        print(f"\033[1;33m[DEBUG] Consultando saldo Voltz...\033[0m")
+        logger.info(f"[LIGHTNING] Consultando saldo Voltz para user {user_id}")
         saldo_result = await consultar_saldo()
         
         if not saldo_result or not isinstance(saldo_result, dict) or not saldo_result.get('success'):
             error_msg = saldo_result.get('error', 'Erro desconhecido') if saldo_result and isinstance(saldo_result, dict) else 'Erro desconhecido'
+            logger.error(f"[LIGHTNING] Erro ao consultar saldo: {error_msg}")
             await update.message.reply_text(
                 escape_markdown(f"❌ **Erro ao consultar saldo:**\n{error_msg}\n\n"
                 "Entre em contato com o suporte."),
@@ -968,22 +1041,24 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
             saldo_data = {}
         
         saldo_atual = saldo_data.get('balance', 0)
+        logger.info(f"[LIGHTNING] Saldo atual: {saldo_atual} sats para user {user_id}")
         print(f"🟡 [LIGHTNING] Saldo atual: {saldo_atual} sats")
-        
+
         if saldo_atual < valor_sats:
+            logger.warning(f"[LIGHTNING] Saldo insuficiente para user {user_id}: saldo={saldo_atual}, necessário={valor_sats}")
+            print(f"[LIGHTNING] Saldo insuficiente: saldo={saldo_atual}, necessário={valor_sats}")
             await update.message.reply_text(
-                escape_markdown(f"❌ **Saldo insuficiente!**\n\n"
-                "💰 Saldo atual: {saldo_atual:,} sats\n"
-                "💸 Valor necessário: {valor_sats:,} sats\n"
-                "📉 Diferença: {valor_sats - saldo_atual:,} sats\n\n"
-                "Entre em contato com o suporte."),
+                escape_markdown(
+                    "❌ Ocorreu um problema ao processar seu pagamento.\n\n"
+                    "Por favor, entre em contato com o atendimento em: @GhosttP2P"
+                ),
                 parse_mode='Markdown'
             )
             return ConversationHandler.END
         
         # Enviar pagamento Lightning
-        print(f"\033[1;33m[DEBUG] Enviando pagamento Lightning para: {endereco_lightning}\033[0m")
-        pagamento_result = await enviar_pagamento(endereco_lightning)
+        logger.info(f"[LIGHTNING] Enviando pagamento Lightning para: {endereco_lightning} (pedido {pedido_id}, user {user_id})")
+        pagamento_result = await enviar_pagamento(endereco_lightning, valor_sats)
         
         if pagamento_result and isinstance(pagamento_result, dict) and pagamento_result.get('success'):
             pagamento_data = pagamento_result.get('data', {})
@@ -992,7 +1067,7 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
             
             payment_hash = pagamento_data.get('payment_hash', '')
             fee = pagamento_data.get('fee', 0)
-            
+            logger.info(f"[LIGHTNING] Pagamento enviado com sucesso! Hash: {payment_hash} | Pedido: {pedido_id} | User: {user_id}")
             print(f"✅ [LIGHTNING] Pagamento enviado! Hash: {payment_hash}")
             
             # Atualizar status do pedido no banco
@@ -1002,15 +1077,17 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
                         str(pedido_id),
                         'pagamento_enviado'
                     )
+                    logger.info(f"[LIGHTNING] Status do pedido {pedido_id} atualizado para 'pagamento_enviado'")
                     print(f"\033[1;32m[DEBUG] Status do pedido atualizado para 'pagamento_enviado'\033[0m")
             except Exception as e:
+                logger.error(f"[LIGHTNING] Erro ao atualizar status do pedido {pedido_id}: {e}")
                 print(f"⚠️ [LIGHTNING] Erro ao atualizar status: {e}")
             
             # Mensagem de sucesso
             msg_pagamento = (
                 escape_markdown("✅ **Pagamento Enviado com Sucesso!**\n\n") +
                 escape_markdown("📋 **Pedido #") + escape_markdown(str(pedido_id)) + escape_markdown("**\n") +
-                escape_markdown("💰 **Valor:** ") + escape_markdown(str(valor_sats)) + "\n" +
+                escape_markdown("💰 **Valor Enviado:** ") + escape_markdown(str(valor_sats)) + " sats\n" +
                 escape_markdown("⚡ **Para:** ") + escape_markdown(str(endereco_lightning)) + "\n" +
                 escape_markdown("🔗 **Hash:** `") + escape_markdown(str(payment_hash)) + escape_markdown("`\n") +
                 escape_markdown("💸 **Taxa:** ") + escape_markdown(str(fee)) + escape_markdown(" sats\n\n") +
@@ -1024,23 +1101,20 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
                 msg_pagamento,
                 parse_mode='Markdown'
             )
-            
-            # Botão de suporte
-            keyboard = [
-                ["🆘 Suporte"]
-            ]
-            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-            
-            if context and context.bot and update.effective_chat:
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=escape_markdown("❓ **Precisa de ajuda?**\nClique no botão abaixo:"),
-                    reply_markup=reply_markup,
-                    parse_mode='Markdown'
-                )
+            # Mensagem adicional de agradecimento
+            await update.message.reply_text(
+                escape_markdown('Os seus SATS foram enviados, Obrigado! @GhosttP2P'),
+                parse_mode='Markdown'
+            )
+            # Redireciona para o menu principal
+            if context and context.user_data is not None:
+                context.user_data.clear()  # Limpa o contexto do usuário para novo fluxo
+            await start(update, context)
+            return ConversationHandler.END
             
         else:
             error_msg = pagamento_result.get('error', 'Erro desconhecido') if pagamento_result and isinstance(pagamento_result, dict) else 'Erro desconhecido'
+            logger.error(f"[LIGHTNING] Erro ao enviar pagamento para {endereco_lightning} (pedido {pedido_id}, user {user_id}): {error_msg}")
             await update.message.reply_text(
                 escape_markdown(f"❌ **Erro ao enviar pagamento:**\n{error_msg}\n\n"
                 "Entre em contato com o suporte."),
@@ -1048,6 +1122,7 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
             )
             
     except Exception as e:
+        logger.exception(f"[LIGHTNING] Erro ao processar pagamento para {endereco_lightning} (pedido {pedido_id}, user {user_id}): {e}")
         print(f"❌ [LIGHTNING] Erro ao processar pagamento: {e}")
         await update.message.reply_text(
             escape_markdown(f"❌ **Erro inesperado:**\n{str(e)}\n\n"
@@ -1057,16 +1132,23 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
     
     return ConversationHandler.END
 
-async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handler para cancelar a operação."""
-    if update and update.message:
-        await update.message.reply_text(
-            escape_markdown("❌ **Operação cancelada.**\n\n"
-            "Use /start para iniciar uma nova compra."),
-            parse_mode='Markdown'
-        )
-    
-    return ConversationHandler.END
+async def receber(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """
+    Comando manual para o usuário ativar o recebimento Lightning após o pagamento PIX ser confirmado.
+    """
+    print(f"[DEBUG] Comando /receber chamado por user_id={update.effective_user.id if update and update.effective_user else '0'}")
+    return await aguardar_lightning_address(update, context)
+
+# Handler global para detectar endereço Lightning
+async def handler_global_lightning(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update or not update.message or not update.message.text:
+        return
+    endereco = update.message.text.strip()
+    # Função já existente para validar endereço Lightning
+    if validar_endereco_lightning(endereco):
+        print(f"[GLOBAL] Detectado endereço Lightning fora do ConversationHandler: {endereco}")
+        # Chama o fluxo de envio Lightning normalmente
+        await aguardar_lightning_address(update, context)
 
 # Configuração do ConversationHandler
 def get_conversation_handler():
@@ -1081,12 +1163,23 @@ def get_conversation_handler():
             FORMA_PAGAMENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, forma_pagamento)],
             PAGAMENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, pagamento)],
             AGUARDAR_LIGHTNING_ADDRESS: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, aguardar_lightning_address)
+                MessageHandler(filters.TEXT & ~filters.COMMAND, aguardar_lightning_address),
+                CommandHandler('receber', receber)
             ]
         },
         fallbacks=[CommandHandler('cancelar', cancelar)],
         allow_reentry=True
     )
+
+async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handler para cancelar a operação."""
+    if update and update.message:
+        await update.message.reply_text(
+            escape_markdown("❌ **Operação cancelada.**\n\n"
+            "Use /start para iniciar uma nova compra."),
+            parse_mode='Markdown'
+        )
+    return ConversationHandler.END
 
 # Função para ativar o estado de aguardar endereço Lightning
 async def ativar_aguardar_lightning_address(bot: Optional[Bot] = None, user_id: int = 0, pedido_id: int = 0):
@@ -1118,3 +1211,9 @@ async def ativar_aguardar_lightning_address(bot: Optional[Bot] = None, user_id: 
 
 # Exportar a função para ser usada pelo pedido_manager
 __all__ = ['get_conversation_handler', 'ativar_aguardar_lightning_address']
+
+def registrar_handlers_globais(application):
+    """
+    Registra handlers globais no Application do Telegram.
+    """
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handler_global_lightning), group=1)

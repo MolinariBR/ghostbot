@@ -5,6 +5,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from api.depix import pix_api, PixAPIError
 from menu.menu_compra import get_conversation_handler, ativar_aguardar_lightning_address
 from api.pedido_manager import pedido_manager
+from menu.menu_compra import registrar_handlers_globais  # <-- Importação adicionada
 
 # Configuração básica de logging
 logging.basicConfig(level=logging.INFO)
@@ -117,8 +118,11 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("pix", pix))
     # Adicionar handler para ativar Lightning Address
     app.add_handler(CommandHandler("lightning", ativar_lightning_address_handler))
+    # Registrar handler global para Lightning Address
+    registrar_handlers_globais(app)
     print("🟢 [BOT] GhostBot iniciado com sucesso!")
     print("🟢 [BOT] ConversationHandler configurado")
     print("🟢 [BOT] Callback de Lightning Address configurado")
+    print("🟢 [BOT] Handler global Lightning registrado")
     print("🟢 [BOT] Aguardando comandos...")
     app.run_polling()
