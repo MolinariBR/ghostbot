@@ -192,7 +192,8 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         print("❌ [MOEDA] Update ou message é None")
         return ConversationHandler.END
 
-    texto = update.message.text.strip().lower() if update and update.message and update.message.text else ""
+    texto_original = update.message.text.strip() if update and update.message and update.message.text else ""
+    texto = texto_original.lower()
     # Aceita qualquer texto que contenha 'comprar'
     if "comprar" in texto:
         print("🟢 [MOEDA] Usuário clicou em Comprar, mostrando menu de moeda")
@@ -257,7 +258,7 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         except Exception as e:
             await update.message.reply_text("Erro ao carregar a ajuda. Tente novamente mais tarde.")
         return ESCOLHER_MOEDA
-    elif texto.strip() == "Bitcoin (BTC)" or "Bitcoin" in texto or "BTC" in texto:
+    elif texto_original == "Bitcoin (BTC)" or "Bitcoin" in texto_original or "BTC" in texto_original:
         print("🟢 [MOEDA] Usuário escolheu Bitcoin, indo para escolher rede")
         if context and context.user_data:
             context.user_data['moeda'] = "BTC"
