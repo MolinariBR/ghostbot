@@ -148,21 +148,16 @@ def validar_endereco_lightning(endereco: str) -> bool:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Inicia o menu de compra."""
     print("🟢 [START] Handler start chamado")
-    print(f"🟢 [START] Usuário: {update.effective_user.id if update and update.effective_user else 'None'}")
-    
-    if not update or not update.message:
-        print("❌ [START] Update ou message é None")
-        return ConversationHandler.END
-    
-    keyboard = [["Comprar"]]
+    print(f"🟢 [START] Usuário: {update.effective_user.id if update and update.effective_user else 'N/A'}")
+    if context and context.user_data is not None:
+        context.user_data.clear()
+    keyboard = [["🛒 Comprar", "💸 Vender"], ["📄 Termos", "❓ Ajuda"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    
-    await update.message.reply_text(
-        escape_markdown("🚀 *Bem-vindo ao Ghost P2P!*\n\nEscolha uma opção:"),
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
-    
+    if update and update.message:
+        await update.message.reply_text(
+            "🚀 Bem vindo! Ao @GhosttP2P bot",
+            reply_markup=reply_markup
+        )
     print("🟢 [START] Retornando ESCOLHER_MOEDA")
     return ESCOLHER_MOEDA
 
@@ -171,48 +166,98 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     print(f"🟡 [MOEDA] Handler escolher_moeda chamado")
     print(f"🟡 [MOEDA] Texto recebido: '{update.message.text if update and update.message else 'None'}'")
     print(f"[DEBUG] context.user_data (escolher_moeda): {context.user_data}")
-    
+
     if not update or not update.message:
         print("❌ [MOEDA] Update ou message é None")
         return ConversationHandler.END
-    
-    if update.message.text == "Voltar":
-        print("🔄 [MOEDA] Usuário clicou em Voltar, voltando para start")
-        return await start(update, context)
-    
-    # Se o usuário clicou em "Comprar", mostrar menu de moeda
-    if update.message.text == "Comprar":
+
+    texto = update.message.text.strip() if update and update.message and update.message.text else ""
+    # Aceita tanto com quanto sem ícone
+    if texto in ["Comprar", "🛒 Comprar"]:
         print("🟢 [MOEDA] Usuário clicou em Comprar, mostrando menu de moeda")
         if context and context.user_data:
             context.user_data.clear()
-        
-        keyboard = [["Bitcoin (BTC)", "Voltar"]]
+        keyboard = [["Bitcoin (BTC)", "USDT", "DEPIX"], ["Voltar"]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-        
         await update.message.reply_text(
-            escape_markdown("🪙 *Escolha a moeda:*\n\nQual moeda você deseja comprar?"),
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
+            "🪙 Escolha a moeda:\n\nQual moeda você deseja comprar?",
+            reply_markup=reply_markup
         )
         print("🟢 [MOEDA] Retornando ESCOLHER_MOEDA após mostrar menu de moeda")
         return ESCOLHER_MOEDA
-    
-    # Se o usuário escolheu Bitcoin, ir para escolher rede
-    if update.message.text == "Bitcoin (BTC)":
+    elif texto in ["Vender", "💸 Vender"]:
+        await update.message.reply_text(
+            "Fale comigo em: @GhosttP2P e entre para nossa comunidade: https://t.me/ghostcomunidade"
+        )
+        return ESCOLHER_MOEDA
+    elif texto in ["Termos", "📄 Termos"]:
+        # Importa e exibe o conteúdo de termos.py
+        try:
+            import importlib.util
+            import os
+            termos_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'termos.py')
+            spec = importlib.util.spec_from_file_location("termos", termos_path)
+            if spec is not None and spec.loader is not None:
+                termos_mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(termos_mod)
+                termos_texto = getattr(termos_mod, 'termos_text', None)
+                if callable(termos_texto):
+                    termos_msg = termos_texto()
+                else:
+                    termos_msg = getattr(termos_mod, '__doc__', 'Termos indisponíveis no momento.')
+                if not isinstance(termos_msg, str):
+                    termos_msg = str(termos_msg)
+                await update.message.reply_text(termos_msg)
+            else:
+                await update.message.reply_text("Erro ao carregar os termos. Tente novamente mais tarde.")
+        except Exception as e:
+            await update.message.reply_text("Erro ao carregar os termos. Tente novamente mais tarde.")
+        return ESCOLHER_MOEDA
+    elif texto in ["Ajuda", "❓ Ajuda"]:
+        # Importa e exibe o conteúdo de ajuda.py
+        try:
+            import importlib.util
+            import os
+            ajuda_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ajuda.py')
+            spec = importlib.util.spec_from_file_location("ajuda", ajuda_path)
+            if spec is not None and spec.loader is not None:
+                ajuda_mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(ajuda_mod)
+                ajuda_texto = getattr(ajuda_mod, 'ajuda_text', None)
+                if callable(ajuda_texto):
+                    ajuda_msg = ajuda_texto()
+                else:
+                    ajuda_msg = getattr(ajuda_mod, '__doc__', 'Ajuda indisponível no momento.')
+                if not isinstance(ajuda_msg, str):
+                    ajuda_msg = str(ajuda_msg)
+                await update.message.reply_text(ajuda_msg)
+            else:
+                await update.message.reply_text("Erro ao carregar a ajuda. Tente novamente mais tarde.")
+        except Exception as e:
+            await update.message.reply_text("Erro ao carregar a ajuda. Tente novamente mais tarde.")
+        return ESCOLHER_MOEDA
+    elif texto == "Bitcoin (BTC)":
         print("🟢 [MOEDA] Usuário escolheu Bitcoin, indo para escolher rede")
         if context and context.user_data:
             context.user_data['moeda'] = "BTC"
         
-        keyboard = [["Lightning", "Voltar"]]
+        keyboard = [
+            ["Lightning", "Liquid", "Onchain"],
+            ["Voltar"]
+        ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
         
         await update.message.reply_text(
-            escape_markdown("🌐 *Escolha a rede:*\n\nQual rede você deseja usar?"),
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
+            "🌐 Escolha a rede:\n\nQual rede você deseja usar?",
+            reply_markup=reply_markup
         )
         print("🟢 [MOEDA] Retornando ESCOLHER_REDE após escolher Bitcoin")
         return ESCOLHER_REDE
+    elif texto in ["USDT", "DEPIX"]:
+        await update.message.reply_text(
+            "Para comprar USDT ou DEPIX, fale diretamente com nosso atendimento: @GhosttP2P"
+        )
+        return ESCOLHER_MOEDA
     
     print(f"⚠️ [MOEDA] Texto não reconhecido: '{update.message.text}', retornando ESCOLHER_MOEDA")
     return ESCOLHER_MOEDA
@@ -245,10 +290,8 @@ async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
         
         await update.message.reply_text(
-            escape_markdown("💰 *Escolha o valor:*\n\n"
-            "Digite um valor em reais (ex: 75.50) ou escolha uma opção:"),
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
+            "💰 Escolha o valor:\n\nDigite um valor em reais entre 10 e 4999 ou escolha uma opção:",
+            reply_markup=reply_markup
         )
         print("🟢 [REDE] Retornando ESCOLHER_VALOR após escolher Lightning")
         return ESCOLHER_VALOR
@@ -256,8 +299,7 @@ async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     # Se chegou aqui, texto inválido para este estado
     print(f"⚠️ [REDE] Texto não reconhecido: '{update.message.text}', retornando ESCOLHER_REDE")
     await update.message.reply_text(
-        escape_markdown("❌ *Opção inválida!*\n\nPor favor, escolha uma das opções do menu."),
-        parse_mode='Markdown'
+        "❌ Opção inválida!\n\nPor favor, escolha uma das opções do menu."
     )
     return ESCOLHER_REDE
 
@@ -287,10 +329,7 @@ async def escolher_valor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         else:
             if update and update.message:
                 await update.message.reply_text(
-                    escape_markdown("❌ *Valor muito baixo!*\n\n"
-                    "O valor mínimo para compra é R$ 10,00.\n"
-                    "Digite um valor maior ou escolha uma opção:"),
-                    parse_mode='Markdown'
+                    "❌ Valor muito baixo!\n\nO valor mínimo para compra é R$ 10,00.\nDigite um valor maior ou escolha uma opção:"
                 )
             return ESCOLHER_VALOR
     except ValueError:
@@ -315,9 +354,7 @@ async def escolher_valor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # Se chegou aqui, não é um valor válido
     if update and update.message:
         await update.message.reply_text(
-            escape_markdown("❌ *Valor inválido!*\n\n"
-            "Digite um valor em reais (ex: 75.50) ou escolha uma opção:"),
-            parse_mode='Markdown'
+            "❌ Valor inválido!\n\nDigite um valor em reais (ex: 75.50) ou escolha uma opção:"
         )
     return ESCOLHER_VALOR
 
@@ -358,26 +395,25 @@ async def processar_valor_personalizado(update: Update, context: ContextTypes.DE
         limite_fmt = format_brl(limite_info.get('maximo', 0))
         valor_liquido_fmt = format_brl(valor_recebe_info.get('brl', valor_brl))
         resumo_texto = (
-            escape_markdown("📋 *Resumo da Compra:*\n\n") +
-            escape_markdown("🪙 *Moeda:* ") + escape_markdown("BTC") + "\n" +
-            escape_markdown("🌐 *Rede:* ") + escape_markdown("Lightning") + "\n\n" +
-            escape_markdown("💰 *Valor do Investimento:* ") + escape_markdown(valor_brl_fmt) + "\n" +
-            escape_markdown("💱 *Cotação BTC:* ") + escape_markdown(str(cotacao_info.get('preco_btc', 0))) + "\n" +
-            escape_markdown("📊 *Fonte:* ") + escape_markdown("Python Validador") + "\n\n" +
-            escape_markdown("💸 *Comissão:* ") + escape_markdown(comissao_fmt) + " " + escape_markdown(percentual_str) + "\n" +
-            escape_markdown("🤝 *Taxa Parceiro:* ") + escape_markdown(parceiro_fmt) + "\n" +
-            escape_markdown("💰 *Limite Máximo:* ") + escape_markdown(limite_fmt) + "\n\n" +
-            escape_markdown("⚡ *Você Recebe:* ") + escape_markdown(str(valor_recebe_info.get('sats', 0))) + " sats\n" +
-            escape_markdown("💵 *Valor Líquido:* ") + escape_markdown(valor_liquido_fmt) + "\n\n" +
-            escape_markdown("🆔 *ID Transação:* ") + escape_markdown(str(validador.get('gtxid', 'N/A')))
+            "📋 Resumo da Compra\n\n" +
+            "🪙 Moeda: BTC\n" +
+            "🌐 Rede: Lightning\n" +
+            "💰 Valor do Investimento: " + valor_brl_fmt + "\n" +
+            "💱 Cotação BTC: " + str(cotacao_info.get('preco_btc', 0)) + "\n" +
+            "📊 Fonte: Coingeko/Binance\n" +
+            "💸 Comissão: " + comissao_fmt + " " + percentual_str + "\n" +
+            "🤝 Taxa Parceiro: " + parceiro_fmt + "\n" +
+            "💰 Limite Máximo: " + limite_fmt + "\n" +
+            "⚡ Você Recebe: " + str(valor_recebe_info.get('sats', 0)) + " sats\n" +
+            "💵 Valor Líquido: " + valor_liquido_fmt + "\n" +
+            "🆔 ID Transação: " + str(validador.get('gtxid', 'N/A'))
         )
         keyboard = [["Confirmar"], ["Voltar"]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
         if update and update.message:
             await update.message.reply_text(
                 resumo_texto,
-                reply_markup=reply_markup,
-                parse_mode='MarkdownV2'
+                reply_markup=reply_markup
             )
         return RESUMO
     except Exception as e:
@@ -398,10 +434,8 @@ async def mostrar_erro_cotacao(update: Update, mensagem: str):
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
     
     await update.message.reply_text(
-        escape_markdown(f"❌ *Erro:* {mensagem}\n\n") +
-        escape_markdown("Escolha um valor ou digite um valor personalizado:"),
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
+        f"❌ Erro: {mensagem}\n\nEscolha um valor ou digite um valor personalizado:",
+        reply_markup=reply_markup
     )
 
 async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -503,18 +537,20 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                             pix_valor_fmt = escape_markdown(format_brl(validador.get('valor_brl', 0)))
                             pix_valor_sats = escape_markdown(str(validador.get('valor_recebe', {}).get('sats', 0)))
                             pix_pedido_id = escape_markdown(str(pedido_id))
+                            # Novo formato de mensagem PIX criado
+                            valor_liquido = validador.get('valor_recebe', {}).get('brl', validador.get('valor_brl', 0))
+                            valor_liquido_fmt = format_brl(valor_liquido)
                             pix_texto = (
-                                escape_markdown("💳 **Pagamento PIX Criado!**\n\n") +
-                                escape_markdown("📋 **Pedido #") + pix_pedido_id + escape_markdown("**\n") +
-                                escape_markdown("💰 **Valor:** ") + pix_valor_fmt + "\n" +
-                                escape_markdown("⚡ **Valor:** ") + pix_valor_sats + "\n\n" +
-                                escape_markdown("📱 **QR Code:**")
+                                escape_markdown("💳 Pagamento PIX Criado!\n") +
+                                escape_markdown("📋 Pedido: ") + escape_markdown(str(pedido_id)) + "\n" +
+                                escape_markdown("💰 Valor: ") + escape_markdown(valor_liquido_fmt) + "\n" +
+                                escape_markdown("⚡ Recebe: ") + escape_markdown(str(validador.get('valor_recebe', {}).get('sats', 0))) + " SATS\n" +
+                                escape_markdown("📱 QR Code:")
                             )
                             print('[DEBUG] Texto enviado (PIX):', pix_texto)
                             if update and update.message:
                                 await update.message.reply_text(
-                                    pix_texto,
-                                    parse_mode='MarkdownV2'
+                                    pix_texto
                                 )
                             if context and context.bot and update and update.effective_chat:
                                 if qr_code_url:
@@ -525,21 +561,28 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                     )
                                 else:
                                     await update.message.reply_text(
-                                        escape_markdown("❌ Erro ao obter o QR Code do PIX. Tente novamente ou contate o suporte."),
-                                        parse_mode='Markdown'
+                                        escape_markdown("❌ Erro ao obter o QR Code do PIX. Tente novamente ou contate o suporte.")
                                     )
+                                # Mensagem Copia e Cola sem markdown
+                                # Garante que reply_markup está definido
+                                if 'reply_markup' not in locals():
+                                    keyboard = [["🆘 Suporte"]]
+                                    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+                                copia_cola_texto = (
+                                    "📋 Copia e Cola:\n" +
+                                    copia_cola + "\n\n" +
+                                    "💡 Instruções:\n" +
+                                    "1 Copie o código acima\n" +
+                                    "2 Abra seu app bancário\n" +
+                                    "3 Cole no PIX\n" +
+                                    "4 Confirme o pagamento\n" +
+                                    "⏰ Tempo limite: 30 minutos\n" +
+                                    "🔄 Verificação automática ativada\n"
+                                )
                                 await context.bot.send_message(
                                     chat_id=update.effective_chat.id,
-                                    text=escape_markdown("📋 **Copia e Cola:**\n`") + copia_cola + escape_markdown("`\n\n") +
-                                         escape_markdown("💡 **Instruções:**\n") +
-                                         escape_markdown("1. Copie o código acima\n") +
-                                         escape_markdown("2. Abra seu app bancário\n") +
-                                         escape_markdown("3. Cole no PIX\n") +
-                                         escape_markdown("4. Confirme o pagamento\n\n") +
-                                         escape_markdown("⏰ **Tempo limite:** 30 minutos\n\n") +
-                                         escape_markdown("🔄 **Verificação automática ativada!**\n") +
-                                         escape_markdown("O sistema verificará o pagamento automaticamente."),
-                                    parse_mode='Markdown'
+                                    text=copia_cola_texto,
+                                    reply_markup=reply_markup
                                 )
                                 keyboard = [
                                     ["🆘 Suporte"]
@@ -548,8 +591,7 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                 await context.bot.send_message(
                                     chat_id=update.effective_chat.id,
                                     text=escape_markdown("❓ **Precisa de ajuda?**\nClique no botão abaixo:"),
-                                    reply_markup=reply_markup,
-                                    parse_mode='Markdown'
+                                    reply_markup=reply_markup
                                 )
                             print(f"✅ [MENU] PIX criado com sucesso para pedido #{pedido_id}")
 
@@ -588,14 +630,12 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                 await update.message.reply_text(
                                     escape_markdown("❌ **Erro ao criar PIX:**\n") + error_msg + "\n\n" +
                                     escape_markdown("Tente novamente ou entre em contato com o suporte."),
-                                    parse_mode='Markdown'
                                 )
                     else:
                         if update and update.message:
                             await update.message.reply_text(
                                 escape_markdown("❌ **Erro na API:** Status ") + escape_markdown(str(response.status_code)) + "\n\n" +
                                 escape_markdown("Tente novamente ou entre em contato com o suporte."),
-                                parse_mode='Markdown'
                             )
                 except Exception as e:
                     print(f"❌ [MENU] Erro ao criar PIX: {e}")
@@ -603,7 +643,6 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                         await update.message.reply_text(
                             escape_markdown("❌ **Erro ao criar PIX:**\n") + escape_markdown(str(e)) + "\n\n" +
                             escape_markdown("Tente novamente ou entre em contato com o suporte."),
-                            parse_mode='Markdown'
                         )
             else:
                 error_msg = "Erro interno ao salvar pedido. Tente novamente ou contate o suporte."
@@ -612,7 +651,6 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                     await update.message.reply_text(
                         escape_markdown("❌ **Erro ao salvar pedido:**\n") + error_msg + "\n\n" +
                         escape_markdown("Tente novamente ou entre em contato com o suporte."),
-                        parse_mode='Markdown'
                     )
             return ConversationHandler.END
         else:
@@ -646,18 +684,18 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     limite_fmt = format_brl(limite_info.get('maximo', 0))
     valor_liquido_fmt = format_brl(valor_recebe_info.get('brl', valor_brl))
     resumo_texto = (
-        escape_markdown("📋 *Resumo da Compra:*\n\n") +
-        escape_markdown("🪙 *Moeda:* ") + escape_markdown("BTC") + "\n" +
-        escape_markdown("🌐 *Rede:* ") + escape_markdown("Lightning") + "\n\n" +
-        escape_markdown("💰 *Valor do Investimento:* ") + escape_markdown(valor_brl_fmt) + "\n" +
-        escape_markdown("💱 *Cotação BTC:* ") + escape_markdown(str(cotacao_info.get('preco_btc', 0))) + "\n" +
-        escape_markdown("📊 *Fonte:* ") + escape_markdown("Python Validador") + "\n\n" +
-        escape_markdown("💸 *Comissão:* ") + escape_markdown(comissao_fmt) + " " + escape_markdown(percentual_str) + "\n" +
-        escape_markdown("🤝 *Taxa Parceiro:* ") + escape_markdown(parceiro_fmt) + "\n" +
-        escape_markdown("💰 *Limite Máximo:* ") + escape_markdown(limite_fmt) + "\n\n" +
-        escape_markdown("⚡ *Você Recebe:* ") + escape_markdown(str(valor_sats)) + " sats\n" +
-        escape_markdown("💵 *Valor Líquido:* ") + escape_markdown(valor_liquido_fmt) + "\n\n" +
-        escape_markdown("🆔 *ID Transação:* ") + escape_markdown(str(validador.get('gtxid', 'N/A')))
+        "📋 Resumo da Compra\n\n" +
+        "🪙 Moeda: BTC\n" +
+        "🌐 Rede: Lightning\n" +
+        "💰 Valor do Investimento: " + valor_brl_fmt + "\n" +
+        "💱 Cotação BTC: " + str(cotacao_info.get('preco_btc', 0)) + "\n" +
+        "📊 Fonte: Coingeko/Binance\n" +
+        "💸 Comissão: " + comissao_fmt + " " + percentual_str + "\n" +
+        "🤝 Taxa Parceiro: " + parceiro_fmt + "\n" +
+        "💰 Limite Máximo: " + limite_fmt + "\n" +
+        "⚡ Você Recebe: " + str(valor_sats) + " sats\n" +
+        "💵 Valor Líquido: " + valor_liquido_fmt + "\n" +
+        "🆔 ID Transação: " + str(validador.get('gtxid', 'N/A'))
     )
     keyboard = [["Confirmar"], ["Voltar"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
@@ -666,8 +704,7 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update and update.message:
         await update.message.reply_text(
             resumo_texto,
-            reply_markup=reply_markup,
-            parse_mode='MarkdownV2'
+            reply_markup=reply_markup
         )
     return RESUMO
 
@@ -686,8 +723,7 @@ async def forma_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     await update.message.reply_text(
         escape_markdown("💳 *Forma de Pagamento:*\n\nEscolha como deseja pagar:"),
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
+        reply_markup=reply_markup
     )
     
     return PAGAMENTO
@@ -700,7 +736,6 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         if update and update.message:
             await update.message.reply_text(
                 escape_markdown("⏳ Seu pedido já está sendo processado. Aguarde a finalização antes de tentar novamente."),
-                parse_mode='Markdown'
             )
         return ConversationHandler.END
     if context and context.user_data is not None:
@@ -814,8 +849,7 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                             print('[DEBUG] Texto enviado (PIX):', pix_texto)
                             if update and update.message:
                                 await update.message.reply_text(
-                                    pix_texto,
-                                    parse_mode='MarkdownV2'
+                                    pix_texto
                                 )
                             if context and context.bot and update and update.effective_chat:
                                 if qr_code_url:
@@ -826,21 +860,29 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                     )
                                 else:
                                     await update.message.reply_text(
-                                        escape_markdown("❌ Erro ao obter o QR Code do PIX. Tente novamente ou contate o suporte."),
-                                        parse_mode='Markdown'
+                                        escape_markdown("❌ Erro ao obter o QR Code do PIX. Tente novamente ou contate o suporte.")
                                     )
+                                # Mensagem Copia e Cola sem markdown
+                                # Garante que reply_markup está definido
+                                if 'reply_markup' not in locals():
+                                    keyboard = [["🆘 Suporte"]]
+                                    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+                                copia_cola_texto = (
+                                    "📋 Copia e Cola:\n" +
+                                    copia_cola + "\n\n" +
+                                    "💡 Instruções:\n" +
+                                    "1 Copie o código acima\n" +
+                                    "2 Abra seu app bancário\n" +
+                                    "3 Cole no PIX\n" +
+                                    "4 Confirme o pagamento\n" +
+                                    "⏰ Tempo limite: 30 minutos\n" +
+                                    "🔄 Verificação automática ativada\n\n" +
+                                    "❓Precisa de ajuda?\nClique no botão abaixo:"
+                                )
                                 await context.bot.send_message(
                                     chat_id=update.effective_chat.id,
-                                    text=escape_markdown("📋 **Copia e Cola:**\n`") + copia_cola + escape_markdown("`\n\n") +
-                                         escape_markdown("💡 **Instruções:**\n") +
-                                         escape_markdown("1. Copie o código acima\n") +
-                                         escape_markdown("2. Abra seu app bancário\n") +
-                                         escape_markdown("3. Cole no PIX\n") +
-                                         escape_markdown("4. Confirme o pagamento\n\n") +
-                                         escape_markdown("⏰ **Tempo limite:** 30 minutos\n\n") +
-                                         escape_markdown("🔄 **Verificação automática ativada!**\n") +
-                                         escape_markdown("O sistema verificará o pagamento automaticamente."),
-                                    parse_mode='Markdown'
+                                    text=copia_cola_texto,
+                                    reply_markup=reply_markup
                                 )
                                 keyboard = [
                                     ["🆘 Suporte"]
@@ -849,8 +891,7 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                 await context.bot.send_message(
                                     chat_id=update.effective_chat.id,
                                     text=escape_markdown("❓ **Precisa de ajuda?**\nClique no botão abaixo:"),
-                                    reply_markup=reply_markup,
-                                    parse_mode='Markdown'
+                                    reply_markup=reply_markup
                                 )
                             print(f"✅ [MENU] PIX criado com sucesso para pedido #{pedido_id}")
 
@@ -879,14 +920,12 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                 await update.message.reply_text(
                                     escape_markdown("❌ **Erro ao criar PIX:**\n") + error_msg + "\n\n" +
                                     escape_markdown("Tente novamente ou entre em contato com o suporte."),
-                                    parse_mode='Markdown'
                                 )
                     else:
                         if update and update.message:
                             await update.message.reply_text(
                                 escape_markdown("❌ **Erro na API:** Status ") + escape_markdown(str(response.status_code)) + "\n\n" +
                                 escape_markdown("Tente novamente ou entre em contato com o suporte."),
-                                parse_mode='Markdown'
                             )
                 except Exception as e:
                     print(f"❌ [MENU] Erro ao criar PIX: {e}")
@@ -894,7 +933,6 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                         await update.message.reply_text(
                             escape_markdown("❌ **Erro ao criar PIX:**\n") + escape_markdown(str(e)) + "\n\n" +
                             escape_markdown("Tente novamente ou entre em contato com o suporte."),
-                            parse_mode='Markdown'
                         )
             else:
                 error_msg = "Erro interno ao salvar pedido. Tente novamente ou contate o suporte."
@@ -903,7 +941,6 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                     await update.message.reply_text(
                         escape_markdown("❌ **Erro ao salvar pedido:**\n") + error_msg + "\n\n" +
                         escape_markdown("Tente novamente ou entre em contato com o suporte."),
-                        parse_mode='Markdown'
                     )
             return ConversationHandler.END
         else:
@@ -945,7 +982,6 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
             "• Lightning Address (ex: user@domain.com)\n"
             "• Invoice Lightning (ex: lnbc...)\n\n"
             "Tente novamente:"),
-            parse_mode='Markdown'
         )
         return AGUARDAR_LIGHTNING_ADDRESS
     
@@ -1004,7 +1040,6 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
         await update.message.reply_text(
             escape_markdown("❌ **Erro:** Dados do pedido não encontrados.\n"
             "Por favor, inicie uma nova compra."),
-            parse_mode='Markdown'
         )
         return ConversationHandler.END
     
@@ -1014,7 +1049,6 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
         logger.error(f"[LIGHTNING] valor_sats inválido para envio: {valor_sats}")
         await update.message.reply_text(
             escape_markdown("❌ **Erro:** Valor de envio inválido.\nTente novamente ou contate o suporte."),
-            parse_mode='Markdown'
         )
         return ConversationHandler.END
 
@@ -1032,7 +1066,6 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
             await update.message.reply_text(
                 escape_markdown(f"❌ **Erro ao consultar saldo:**\n{error_msg}\n\n"
                 "Entre em contato com o suporte."),
-                parse_mode='Markdown'
             )
             return ConversationHandler.END
         
@@ -1052,7 +1085,6 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
                     "❌ Ocorreu um problema ao processar seu pagamento.\n\n"
                     "Por favor, entre em contato com o atendimento em: @GhosttP2P"
                 ),
-                parse_mode='Markdown'
             )
             return ConversationHandler.END
         
@@ -1098,13 +1130,11 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
                 escape_markdown("3. Em caso de dúvidas, contate o suporte")
             )
             await update.message.reply_text(
-                msg_pagamento,
-                parse_mode='Markdown'
+                msg_pagamento
             )
             # Mensagem adicional de agradecimento
             await update.message.reply_text(
-                escape_markdown('Os seus SATS foram enviados, Obrigado! @GhosttP2P'),
-                parse_mode='Markdown'
+                escape_markdown('Os seus SATS foram enviados, Obrigado! @GhosttP2P')
             )
             # Redireciona para o menu principal
             if context and context.user_data is not None:
@@ -1118,7 +1148,6 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
             await update.message.reply_text(
                 escape_markdown(f"❌ **Erro ao enviar pagamento:**\n{error_msg}\n\n"
                 "Entre em contato com o suporte."),
-                parse_mode='Markdown'
             )
             
     except Exception as e:
@@ -1127,7 +1156,6 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
         await update.message.reply_text(
             escape_markdown(f"❌ **Erro inesperado:**\n{str(e)}\n\n"
             "Entre em contato com o suporte."),
-            parse_mode='Markdown'
         )
     
     return ConversationHandler.END
@@ -1177,7 +1205,6 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text(
             escape_markdown("❌ **Operação cancelada.**\n\n"
             "Use /start para iniciar uma nova compra."),
-            parse_mode='Markdown'
         )
     return ConversationHandler.END
 
@@ -1202,7 +1229,6 @@ async def ativar_aguardar_lightning_address(bot: Optional[Bot] = None, user_id: 
                 "• Invoice Lightning: `lnbc...`\n\n" +
                 "💡 **Exemplo:** `sua_carteira@walletofsatoshi.com`\n\n" +
                 "Envie seu endereço agora:"),
-                parse_mode='Markdown'
             )
             print(f"✅ [LIGHTNING] Mensagem enviada para usuário {user_id}")
         
