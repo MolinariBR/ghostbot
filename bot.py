@@ -3,8 +3,6 @@ import asyncio
 from config.config import BOT_TOKEN
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, ApplicationHandlerStop
-from telegram.request import HTTPXRequest
-import httpx
 from api.depix import pix_api, PixAPIError
 from menu.menu_compra import get_conversation_handler, ativar_aguardar_lightning_address
 from api.pedido_manager import pedido_manager
@@ -191,31 +189,12 @@ async def ativar_lightning_address_handler(update: Update, context: ContextTypes
 if __name__ == "__main__":
     logger.info("Iniciando GhostBot...")
     
-    # Configuração robusta do cliente HTTP com timeout aumentado
+    # Configuração padrão do cliente HTTP (mais compatível)
     try:
-        # Criar cliente HTTP com configurações robustas
-        http_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(
-                connect=30.0,    # Timeout de conexão: 30 segundos
-                read=60.0,       # Timeout de leitura: 60 segundos (aumentado)
-                write=30.0,      # Timeout de escrita: 30 segundos
-                pool=30.0        # Timeout do pool: 30 segundos
-            ),
-            limits=httpx.Limits(
-                max_keepalive_connections=20,  # Máximo de conexões keep-alive
-                max_connections=100,           # Máximo de conexões simultâneas
-                keepalive_expiry=30.0          # Expiração do keep-alive: 30 segundos
-            )
-            # retries=3  # Removido pois não é suportado
-        )
+        # Construir aplicação com configurações básicas
+        app = Application.builder().token(BOT_TOKEN).build()
         
-        # Criar request com cliente HTTP configurado
-        request = HTTPXRequest(http_client=http_client)
-        
-        # Construir aplicação com configurações robustas
-        app = Application.builder().token(BOT_TOKEN).request(request).build()
-        
-        logger.info("✅ Cliente HTTP configurado com timeouts robustos")
+        logger.info("✅ Cliente HTTP configurado com configuração padrão")
         
     except Exception as e:
         logger.error(f"❌ Erro ao configurar cliente HTTP: {e}")
@@ -248,7 +227,7 @@ if __name__ == "__main__":
     registrar_handlers_globais(app)
     
     print("🟢 [BOT] GhostBot iniciado com sucesso!")
-    print("🟢 [BOT] Cliente HTTP configurado com timeouts robustos")
+    print("🟢 [BOT] Cliente HTTP configurado com configuração padrão")
     print("🟢 [BOT] Error handler global configurado")
     print("🟢 [BOT] ConversationHandler configurado")
     print("🟢 [BOT] Callback de Lightning Address configurado")
