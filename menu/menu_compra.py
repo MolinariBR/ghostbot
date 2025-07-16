@@ -24,6 +24,7 @@ import sys
 import os
 import random
 import traceback
+import requests
 
 # Garante que o diretório do projeto está no PYTHONPATH
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -659,6 +660,43 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                         escape_markdown("❌ **Erro ao salvar pedido:**\n") + error_msg + "\n\n" +
                         escape_markdown("Tente novamente ou entre em contato com o suporte."),
                     )
+            # Após salvar o pedido no banco, enviar para o backend PHP
+            if sucesso_salvar:
+                try:
+                    registrar_url = urljoin(BASE_URL + '/', 'registrar_transacao.php')
+                    # Montar payload conforme schema pedidos_bot
+                    payload = {
+                        'gtxid': pedido_data.get('gtxid'),
+                        'chatid': pedido_data.get('chatid'),
+                        'moeda': pedido_data.get('moeda'),
+                        'rede': pedido_data.get('rede'),
+                        'valor': pedido_data.get('amount_in_cents'),
+                        'comissao': pedido_data.get('comissao_in_cents'),
+                        'parceiro': pedido_data.get('parceiro_in_cents'),
+                        'cotacao': pedido_data.get('cotacao'),
+                        'recebe': pedido_data.get('recebe'),
+                        'forma_pagamento': pedido_data.get('forma_pagamento'),
+                        'depix_id': pedido_data.get('depix_id'),
+                        'blockchainTxID': pedido_data.get('blockchainTxID'),
+                        'status': pedido_data.get('status'),
+                        'pagamento_verificado': pedido_data.get('pagamento_verificado'),
+                        'tentativas_verificacao': pedido_data.get('tentativas_verificacao'),
+                        'criado_em': pedido_data.get('criado_em'),
+                        'atualizado_em': pedido_data.get('atualizado_em')
+                    }
+                    print(f"[DEBUG] Enviando pedido para backend registrar_transacao.php: {payload}")
+                    resp = requests.post(registrar_url, json=payload, timeout=10)
+                    print(f"[DEBUG] Resposta do backend registrar_transacao.php: {resp.status_code} {resp.text}")
+                    if resp.status_code == 200:
+                        resp_json = resp.json()
+                        if resp_json.get('success'):
+                            print(f"[DEBUG] Pedido registrado no backend com id: {resp_json.get('id')}")
+                        else:
+                            print(f"[ERRO] Falha ao registrar pedido no backend: {resp_json.get('error')}")
+                    else:
+                        print(f"[ERRO] HTTP ao registrar pedido no backend: {resp.status_code}")
+                except Exception as e:
+                    print(f"[ERRO] Exceção ao registrar pedido no backend: {e}")
             return ConversationHandler.END
         else:
             await mostrar_erro_cotacao(update, "Dados do pedido não encontrados")
