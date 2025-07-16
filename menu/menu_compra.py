@@ -154,6 +154,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     keyboard = [["🛒 Comprar", "💸 Vender"], ["📄 Termos", "❓ Ajuda"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
     if update and update.message:
+        # Envia a imagem de boas-vindas
+        try:
+            image_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'image', 'ghost.jpg')
+            with open(image_path, 'rb') as img:
+                await update.message.reply_photo(img)
+        except Exception as e:
+            print(f"[ERRO] Não foi possível enviar a imagem de boas-vindas: {e}")
         await update.message.reply_text(
             "🚀 Bem vindo! Ao @GhosttP2P bot",
             reply_markup=reply_markup
@@ -890,7 +897,7 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                 reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
                                 await context.bot.send_message(
                                     chat_id=update.effective_chat.id,
-                                    text=escape_markdown("❓ **Precisa de ajuda?**\nClique no botão abaixo:"),
+                                    text=escape_markdown("❓ Precisa de ajuda?\nClique no botão abaixo:"),
                                     reply_markup=reply_markup
                                 )
                             print(f"✅ [MENU] PIX criado com sucesso para pedido #{pedido_id}")
