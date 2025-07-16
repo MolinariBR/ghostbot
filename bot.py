@@ -7,6 +7,9 @@ from api.depix import pix_api, PixAPIError
 from menu.menu_compra import get_conversation_handler, ativar_aguardar_lightning_address
 from api.pedido_manager import pedido_manager
 from menu.menu_compra import registrar_handlers_globais  # <-- Importação adicionada
+from core.session_manager import session_manager, get_user_data, set_user_data, clear_user_data
+from core.rate_limiter import rate_limiter, rate_limit
+from core.state_validator import state_validator
 
 # Configuração básica de logging
 logging.basicConfig(level=logging.INFO)
@@ -95,6 +98,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     except Exception as e:
         logger.error(f"❌ Erro no error_handler: {e}")
 
+@rate_limit(max_requests=5, window_seconds=60, action="pix")
 async def pix(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if not context.args or len(context.args) < 2:
@@ -130,10 +134,10 @@ async def lightning_callback(user_id: int, pedido_id: int):
         global bot_instance
         
         if not bot_instance:
-            print("❌ [BOT] Instância do bot não disponível")
+            logger.error("❌ [BOT] Instância do bot não disponível")
             return
         
-        print(f"🟢 [BOT] Callback Lightning ativado para usuário {user_id}, pedido {pedido_id}")
+        logger.info(f"🟢 [BOT] Callback Lightning ativado para usuário {user_id}, pedido {pedido_id}")
         
         # Enviar mensagem para o usuário solicitando o endereço Lightning com retry
         success = await safe_send_message(
@@ -151,13 +155,14 @@ async def lightning_callback(user_id: int, pedido_id: int):
         )
         
         if success:
-            print(f"✅ [BOT] Mensagem de Lightning Address enviada para usuário {user_id}")
+            logger.info(f"✅ [BOT] Mensagem de Lightning Address enviada para usuário {user_id}")
         else:
-            print(f"❌ [BOT] Falha ao enviar mensagem de Lightning Address para usuário {user_id}")
+            logger.error(f"❌ [BOT] Falha ao enviar mensagem de Lightning Address para usuário {user_id}")
         
     except Exception as e:
-        print(f"❌ [BOT] Erro no callback Lightning: {e}")
+        logger.error(f"❌ [BOT] Erro no callback Lightning: {e}")
 
+@rate_limit(max_requests=3, window_seconds=60, action="lightning")
 async def ativar_lightning_address_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handler para ativar o estado de aguardar endereço Lightning.
@@ -176,11 +181,11 @@ async def ativar_lightning_address_handler(update: Update, context: ContextTypes
                 )
             return
         if user_id is not None:
-            print(f"🟢 [BOT] Ativando Lightning Address para usuário {user_id}, pedido {pedido_id}")
+            logger.info(f"🟢 [BOT] Ativando Lightning Address para usuário {user_id}, pedido {pedido_id}")
             # Ativar o estado de aguardar endereço Lightning
             await ativar_aguardar_lightning_address(context.bot, user_id, pedido_id)
     except Exception as e:
-        print(f"❌ [BOT] Erro ao ativar Lightning Address: {e}")
+        logger.error(f"❌ [BOT] Erro ao ativar Lightning Address: {e}")
         if update.message:
             await update.message.reply_text(
                 f"❌ **Erro inesperado:**\n{str(e)}\n\n"
@@ -211,6 +216,24 @@ if __name__ == "__main__":
     app.add_error_handler(error_handler)
     logger.info("✅ Error handler global configurado")
     
+    # Inicializar SessionManager
+    logger.info("✅ SessionManager inicializado")
+    
+    # Inicializar RateLimiter
+    logger.info("✅ RateLimiter inicializado")
+    
+    # Inicializar StateValidator
+    logger.info("✅ StateValidator inicializado")
+    
+    # Adicionar watchdog para monitorar o event loop
+    async def watchdog():
+        while True:
+            logger.info("⏳ Watchdog: loop ativo")
+            await asyncio.sleep(60)
+    
+    asyncio.create_task(watchdog())
+    logger.info("✅ Watchdog iniciado")
+    
     # Configurar o callback do pedido_manager, se disponível
     if hasattr(pedido_manager, 'set_lightning_callback'):
         pedido_manager.set_lightning_callback(lightning_callback)  # type: ignore
@@ -228,13 +251,13 @@ if __name__ == "__main__":
     # Registrar handler global para Lightning Address
     registrar_handlers_globais(app)
     
-    print("🟢 [BOT] GhostBot iniciado com sucesso!")
-    print("🟢 [BOT] Cliente HTTP configurado com configuração padrão")
-    print("🟢 [BOT] Error handler global configurado")
-    print("🟢 [BOT] ConversationHandler configurado")
-    print("🟢 [BOT] Callback de Lightning Address configurado")
-    print("🟢 [BOT] Handler global Lightning registrado")
-    print("🟢 [BOT] Aguardando comandos...")
+    logger.info("🟢 [BOT] GhostBot iniciado com sucesso!")
+    logger.info("🟢 [BOT] Cliente HTTP configurado com configuração padrão")
+    logger.info("🟢 [BOT] Error handler global configurado")
+    logger.info("🟢 [BOT] ConversationHandler configurado")
+    logger.info("🟢 [BOT] Callback de Lightning Address configurado")
+    logger.info("🟢 [BOT] Handler global Lightning registrado")
+    logger.info("🟢 [BOT] Aguardando comandos...")
     
     # Iniciar polling com configurações robustas
     try:
