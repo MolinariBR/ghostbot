@@ -25,6 +25,7 @@ import os
 import random
 import traceback
 import requests
+from telegram.error import NetworkError
 
 # Garante que o diretório do projeto está no PYTHONPATH
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -91,9 +92,9 @@ ESCOLHER_MOEDA, ESCOLHER_REDE, ESCOLHER_VALOR, RESUMO, FORMA_PAGAMENTO, CONFIRMA
 
 # Configuração do Voltz (usar as mesmas credenciais do exemplo)
 VOLTZ_CONFIG = {
-    'wallet_id': "f3c366b7fb6f43fa9467c4dccedaf824",
-    'admin_key': "8fce34f4b0f8446a990418bd167dc644", 
-    'invoice_key': "b2f68df91c8848f6a1db26f2e403321f",
+    'wallet_id': "7ea17979a63e440a82c9d1fe70c20125",
+    'admin_key': "5661f179d22c4cf6ac6585b8ede20eea",
+    'invoice_key': "dd329e1dfa2743a0b2eaaaf7ec0302f1",
     'node_url': "https://lnvoltz.com"
 }
 
@@ -145,6 +146,18 @@ def validar_endereco_lightning(endereco: str) -> bool:
             return True
     
     return False
+
+async def safe_reply_text(message_obj, text, **kwargs):
+    for attempt in range(3):
+        try:
+            await message_obj.reply_text(text, **kwargs)
+            return
+        except NetworkError as e:
+            print(f"[REDE] Falha ao enviar mensagem (tentativa {attempt+1}): {e}")
+            await asyncio.sleep(2)
+        except Exception as e:
+            print(f"[ERRO] Falha inesperada ao enviar mensagem: {e}")
+            break
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Inicia o menu de compra."""
@@ -336,9 +349,7 @@ async def escolher_valor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             return await processar_valor_personalizado(update, context, valor_digitado)
         else:
             if update and update.message:
-                await update.message.reply_text(
-                    "❌ Valor muito baixo!\n\nO valor mínimo para compra é R$ 10,00.\nDigite um valor maior ou escolha uma opção:"
-                )
+                await safe_reply_text(update.message, "❌ Valor muito baixo!\n\nO valor mínimo para compra é R$ 10,00.\nDigite um valor maior ou escolha uma opção:")
             return ESCOLHER_VALOR
     except ValueError:
         # Não é um número, verificar se é um dos valores fixos
@@ -361,9 +372,7 @@ async def escolher_valor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     # Se chegou aqui, não é um valor válido
     if update and update.message:
-        await update.message.reply_text(
-            "❌ Valor inválido!\n\nDigite um valor em reais (ex: 75.50) ou escolha uma opção:"
-        )
+        await safe_reply_text(update.message, "❌ Valor inválido!\n\nDigite um valor em reais (ex: 75.50) ou escolha uma opção:")
     return ESCOLHER_VALOR
 
 async def processar_valor_personalizado(update: Update, context: ContextTypes.DEFAULT_TYPE, valor_brl: float) -> int:
@@ -419,10 +428,7 @@ async def processar_valor_personalizado(update: Update, context: ContextTypes.DE
         keyboard = [["Confirmar"], ["Voltar"]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
         if update and update.message:
-            await update.message.reply_text(
-                resumo_texto,
-                reply_markup=reply_markup
-            )
+            await safe_reply_text(update.message, resumo_texto, reply_markup=reply_markup)
         return RESUMO
     except Exception as e:
         print(f"❌ [MENU] Erro ao processar valor: {e}")
@@ -441,10 +447,7 @@ async def mostrar_erro_cotacao(update: Update, mensagem: str):
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
     
-    await update.message.reply_text(
-        f"❌ Erro: {mensagem}\n\nEscolha um valor ou digite um valor personalizado:",
-        reply_markup=reply_markup
-    )
+    await safe_reply_text(update.message, f"❌ Erro: {mensagem}\n\nEscolha um valor ou digite um valor personalizado:", reply_markup=reply_markup)
 
 async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not update or not update.message:
