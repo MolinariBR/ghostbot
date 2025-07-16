@@ -15,7 +15,7 @@ logger = logging.getLogger("ghostbot")
 # Variável global para armazenar a instância do bot
 bot_instance = None
 
-async def safe_send_message(bot, chat_id: int, text: str, parse_mode: str = None, max_retries: int = 3, delay: float = 1.0):
+async def safe_send_message(bot, chat_id: int, text: str, parse_mode: str | None = None, max_retries: int = 3, delay: float = 1.0):
     """
     Envia mensagem com retry automático em caso de erro de rede.
     
@@ -76,19 +76,21 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
             return
         
         # Para outros erros, tentar enviar mensagem de erro para o usuário
-        if update and hasattr(update, 'effective_chat') and update.effective_chat:
-            try:
+        try:
+            # Verificar se é um Update válido e tem chat usando getattr para evitar erros de tipo
+            effective_chat = getattr(update, 'effective_chat', None) if update else None
+            if effective_chat and hasattr(effective_chat, 'id'):
                 await safe_send_message(
                     context.bot,
-                    update.effective_chat.id,
+                    effective_chat.id,
                     "❌ **Erro inesperado ocorreu**\n\n"
                     "🔧 Nossa equipe foi notificada.\n"
                     "🔄 Tente novamente em alguns segundos.\n\n"
                     "💬 Se o problema persistir, entre em contato com o suporte.",
                     parse_mode='Markdown'
                 )
-            except Exception as send_error:
-                logger.error(f"❌ Erro ao enviar mensagem de erro: {send_error}")
+        except Exception as send_error:
+            logger.error(f"❌ Erro ao enviar mensagem de erro: {send_error}")
         
     except Exception as e:
         logger.error(f"❌ Erro no error_handler: {e}")
@@ -247,6 +249,4 @@ if __name__ == "__main__":
         logger.error(f"❌ Erro fatal no polling: {e}")
     finally:
         # Limpar recursos
-        if 'http_client' in locals():
-            http_client.close()
         logger.info("🧹 Recursos limpos")
