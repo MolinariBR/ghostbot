@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script para enviar dados do banco local para o servidor de produção
-BACKEND_URL="https://useghost.squareweb.app/ghostbackend/api/registrar_transacao.php"
+BACKEND_URL="https://useghost.squareweb.app/api/registrar_transacao.php"
 DB_PATH="data/deposit.db"
 LOG_FILE="logs/envio_servidor.log"
 
