@@ -59,3 +59,4 @@ log_final/
 testpy/
 tests/
 reload_bot.sh
+data/deposit.db
