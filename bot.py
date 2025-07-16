@@ -92,7 +92,7 @@ async def ativar_lightning_address_handler(update: Update, context: ContextTypes
         if user_id is not None:
             print(f"🟢 [BOT] Ativando Lightning Address para usuário {user_id}, pedido {pedido_id}")
             # Ativar o estado de aguardar endereço Lightning
-            await ativar_aguardar_lightning_address(context, user_id, pedido_id)
+            await ativar_aguardar_lightning_address(context.bot, user_id, pedido_id)
     except Exception as e:
         print(f"❌ [BOT] Erro ao ativar Lightning Address: {e}")
         if update.message:
