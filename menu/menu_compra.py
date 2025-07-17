@@ -180,16 +180,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             reply_markup=reply_markup
         )
         regras_texto = (
-            "\nTC e USDT\n(Seguem as mesmas faixas, sem valor fixo)\n"
-            "- De 10 a 499 reais: 10%\n"
-            "- Acima de 500 até 999 reais: 6%\n"
-            "- Acima de 1000 até 4999 reais: 5%\n\n"
-            "DEPIX\n-  Taxa fixa de 1,9%\n- Não permite compra de DEPIX abaixo de 100 reais (bloqueia)\n\n"
-            "Resumo das regras:\n"
-            "- BTC: 10% (10-499), 6% (500-999), 5% (1000-4999)\n"
-            "- USDT: 10% (10-499), 5% (500-4999)\n"
-            "- DEPIX: 1,9% (a partir de 100 reais, bloqueia abaixo disso)\n\n"
-            "PARA COMPRAS ACIMA DO LIMITE DIÁRIO DE 6.000 REAIS OU CADASTRO NO MODO COMERCIANTE ENTRE EM CONTATO COM O SUPORTE PARA ANÁLISE: @GhosttP2P"
+            "Taxas de Transação para BTC e USDT\n\n"
+            "As taxas aplicáveis seguem as faixas abaixo, sem valor fixo:\n\n"
+            "Bitcoin:\n\n"
+            "• De R$ 10 a R$ 499: 10%  \n"
+            "• De R$ 500 a R$ 999: 6%  \n"
+            "• De R$ 1.000 a R$ 4.999: 5%\n\n"
+            "Usdt:\n\n"
+            "• De R$ 10 a R$ 499: 10%  \n"
+            "• De R$ 500 a R$ 4999: 5% \n\n"
+            "Taxa para DEPIX\n\n"
+            "• Taxa fixa: 1,9%  \n"
+            "• Observação: Não é permitida a compra de DEPIX para valores inferiores a R$ 100 (transações bloqueadas). \n\n"
+            "Resumo das Taxas\n\n"
+            "• BTC: 10% (R$ 10–499), 6% (R$ 500–999), 5% (R$ 1.000–4.999)  \n"
+            "• USDT: 10% (R$ 10–499), 5% (R$ 500–4.999)  \n"
+            "• DEPIX: 1,9% (mínimo de R$ 100, transações abaixo desse valor não são permitidas)\n\n"
+            "Compras Acima do Limite Diário ou Modo Comerciante\n\n"
+            "Para transações acima do limite diário de R$ 6.000 ou para cadastro no modo comerciante, entre em contato com o suporte para análise: @GhosttP2P."
         )
         await update.message.reply_text(regras_texto)
     print("🟢 [START] Retornando ESCOLHER_MOEDA")
