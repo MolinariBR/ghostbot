@@ -9,7 +9,7 @@ dos dados do usuário durante as conversas do bot.
 import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
-from core.session_manager import get_user_data, set_user_data
+from core.session_manager import get_user_data, set_user_data, clear_user_data
 
 logger = logging.getLogger(__name__)
 
@@ -266,19 +266,10 @@ class StateValidator:
     async def clear_user_state(user_id: str) -> None:
         """
         Limpa o estado do usuário de forma segura.
-        
-        Args:
-            user_id: ID do usuário
         """
         try:
-            # Lista de chaves a serem removidas
-            keys_to_remove = [
-                'pedido_id', 'valor', 'moeda', 'status', 'lightning_address',
-                'depix_id', 'blockchainTxID', 'conversation_state'
-            ]
-            
-            for key in keys_to_remove:
-                await set_user_data(user_id, key, None)
+            # Limpar toda a sessão do usuário
+            await clear_user_data(user_id)
             
             logger.info(f"🧹 Estado limpo para usuário: {user_id}")
             

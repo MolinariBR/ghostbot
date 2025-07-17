@@ -144,13 +144,13 @@ async def lightning_callback(user_id: int, pedido_id: int):
             bot_instance,
             user_id,
             "🎉 **Pagamento PIX Confirmado!**\n\n"
-            "✅ Seu pagamento foi recebido e confirmado!\n\n"
-            "⚡ **Agora envie seu endereço Lightning:**\n\n"
-            "📱 **Formatos aceitos:**\n"
-            "• Lightning Address: `user@domain.com`\n"
-            "• Invoice Lightning: `lnbc...`\n\n"
-            "💡 **Exemplo:** `sua_carteira@walletofsatoshi.com`\n\n"
-            "Envie seu endereço agora:",
+                 "✅ Seu pagamento foi recebido e confirmado!\n\n"
+                 "⚡ **Agora envie seu endereço Lightning:**\n\n"
+                 "📱 **Formatos aceitos:**\n"
+                 "• Lightning Address: `user@domain.com`\n"
+                 "• Invoice Lightning: `lnbc...`\n\n"
+                 "💡 **Exemplo:** `sua_carteira@walletofsatoshi.com`\n\n"
+                 "Envie seu endereço agora:",
             parse_mode='Markdown'
         )
         

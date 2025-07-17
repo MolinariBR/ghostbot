@@ -66,22 +66,21 @@ class SessionManager:
     async def set(self, user_id: str, key: str, value: Any) -> None:
         """
         Define um valor na sessão do usuário de forma segura.
-        
-        Args:
-            user_id: ID do usuário
-            key: Chave do valor
-            value: Valor a ser armazenado
+        Remove a chave se o valor for None.
         """
         async with self.lock:
             user_id_str = str(user_id)
-            
             # Atualizar timestamp da sessão
             self.timestamps[user_id_str] = datetime.now()
-            
-            # Armazenar valor
-            self.sessions[user_id_str][key] = value
-            
-            logger.debug(f"💾 Sessão salva: user_id={user_id}, key={key}")
+            if value is None:
+                # Remove a chave se valor for None
+                if key in self.sessions[user_id_str]:
+                    del self.sessions[user_id_str][key]
+                    logger.debug(f"🗑️ Chave removida por set: user_id={user_id}, key={key}")
+            else:
+                # Armazenar valor normalmente
+                self.sessions[user_id_str][key] = value
+                logger.debug(f"💾 Sessão salva: user_id={user_id}, key={key}")
     
     async def clear(self, user_id: str) -> None:
         """
