@@ -194,7 +194,7 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     texto_original = update.message.text.strip() if update and update.message and update.message.text else ""
     texto = texto_original.lower()
-    # Aceita qualquer texto que contenha 'comprar'
+
     if "comprar" in texto:
         print("🟢 [MOEDA] Usuário clicou em Comprar, mostrando menu de moeda")
         if context and context.user_data:
@@ -205,57 +205,50 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "🪙 Escolha a moeda:\n\nQual moeda você deseja comprar?",
             reply_markup=reply_markup
         )
-        print("🟢 [MOEDA] Retornando ESCOLHER_MOEDA após mostrar menu de moeda")
         return ESCOLHER_MOEDA
-    elif texto in ["Vender", "💸 Vender"]:
+    elif "vender" in texto:
         await update.message.reply_text(
             "Fale comigo em: @GhosttP2P e entre para nossa comunidade: https://t.me/ghostcomunidade"
         )
         return ESCOLHER_MOEDA
-    elif texto in ["Termos", "📄 Termos"]:
-        # Importa e exibe o conteúdo de termos.py
+    elif "termo" in texto:
         try:
             import importlib.util
             import os
             termos_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'termos.py')
             spec = importlib.util.spec_from_file_location("termos", termos_path)
-            if spec is not None and spec.loader is not None:
+            if spec and spec.loader:
                 termos_mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(termos_mod)
-                termos_texto = getattr(termos_mod, 'termos_text', None)
-                if callable(termos_texto):
-                    termos_msg = termos_texto()
-                else:
+                termos_msg = getattr(termos_mod, 'termos_text', None)
+                if callable(termos_msg):
+                    termos_msg = termos_msg()
+                if not termos_msg:
                     termos_msg = getattr(termos_mod, '__doc__', 'Termos indisponíveis no momento.')
-                if not isinstance(termos_msg, str):
-                    termos_msg = str(termos_msg)
-                await update.message.reply_text(termos_msg)
+                await update.message.reply_text(str(termos_msg))
             else:
                 await update.message.reply_text("Erro ao carregar os termos. Tente novamente mais tarde.")
-        except Exception as e:
+        except Exception:
             await update.message.reply_text("Erro ao carregar os termos. Tente novamente mais tarde.")
         return ESCOLHER_MOEDA
-    elif texto in ["Ajuda", "❓ Ajuda"]:
-        # Importa e exibe o conteúdo de ajuda.py
+    elif "ajuda" in texto:
         try:
             import importlib.util
             import os
             ajuda_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ajuda.py')
             spec = importlib.util.spec_from_file_location("ajuda", ajuda_path)
-            if spec is not None and spec.loader is not None:
+            if spec and spec.loader:
                 ajuda_mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(ajuda_mod)
-                ajuda_texto = getattr(ajuda_mod, 'ajuda_text', None)
-                if callable(ajuda_texto):
-                    ajuda_msg = ajuda_texto()
-                else:
+                ajuda_msg = getattr(ajuda_mod, 'ajuda_text', None)
+                if callable(ajuda_msg):
+                    ajuda_msg = ajuda_msg()
+                if not ajuda_msg:
                     ajuda_msg = getattr(ajuda_mod, '__doc__', 'Ajuda indisponível no momento.')
-                if not isinstance(ajuda_msg, str):
-                    ajuda_msg = str(ajuda_msg)
-                await update.message.reply_text(ajuda_msg)
+                await update.message.reply_text(str(ajuda_msg))
             else:
                 await update.message.reply_text("Erro ao carregar a ajuda. Tente novamente mais tarde.")
-        except Exception as e:
+        except Exception:
             await update.message.reply_text("Erro ao carregar a ajuda. Tente novamente mais tarde.")
         return ESCOLHER_MOEDA
     elif texto_original == "Bitcoin (BTC)" or "Bitcoin" in texto_original or "BTC" in texto_original:
