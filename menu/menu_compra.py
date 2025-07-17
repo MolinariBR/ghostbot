@@ -43,6 +43,7 @@ from telegram.ext import (
 from config.config import BASE_URL
 from api.pedido_manager import PedidoManager
 from urllib.parse import urljoin
+from core.async_queue import async_queue
 
 print(f"[DEBUG] __file__: {__file__}")
 print(f"[DEBUG] sys.path: {sys.path}")
@@ -454,7 +455,6 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not update or not update.message:
         return ConversationHandler.END
     if update.message.text == "Confirmar":
-        # Salvar o pedido aqui (garantindo que só salva uma vez)
         if context and context.user_data is not None and context.user_data.get('pedido_salvo'):
             print("[DEBUG] Pedido já salvo, ignorando nova tentativa.")
             return ConversationHandler.END
@@ -468,245 +468,96 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         if not validador:
             await mostrar_erro_cotacao(update, "Dados do pedido não encontrados")
             return ConversationHandler.END
-        if validador is not None:
-            gtxid = validador.get('gtxid', str(update.effective_user.id) if update and update.effective_user else '0' + '_' + datetime.now().strftime('%Y%m%d%H%M%S'))
-            chatid = str(update.effective_user.id) if update and update.effective_user else '0'
-            moeda = get_user_data(context, 'moeda', 'BTC')
-            rede = get_user_data(context, 'rede', 'lightning')
+        # Montar dados do pedido
+        gtxid = None
+        if validador and isinstance(validador, dict):
+            gtxid = validador.get('gtxid')
+        if not gtxid:
+            gtxid = str(update.effective_user.id) if update and update.effective_user and hasattr(update.effective_user, 'id') and update.effective_user.id is not None else '0_' + datetime.now().strftime('%Y%m%d%H%M%S')
+        chatid = str(update.effective_user.id) if update and update.effective_user and hasattr(update.effective_user, 'id') and update.effective_user.id is not None else '0'
+        moeda = get_user_data(context, 'moeda', 'BTC')
+        rede = get_user_data(context, 'rede', 'lightning')
+        amount_in_cents = 0
+        comissao_in_cents = 0
+        parceiro_in_cents = 0
+        limites_in_cents = 0
+        cotacao = 0
+        send = 0
+        recebe = 0
+        if validador and isinstance(validador, dict):
             amount_in_cents = validador.get('amount_in_cents', 0)
-            comissao_in_cents = validador.get('comissao', {}).get('valor_in_cents', 0)
-            parceiro_in_cents = validador.get('parceiro', {}).get('valor_in_cents', 0)
-            limites_in_cents = validador.get('limite', {}).get('maximo_in_cents', 0)
-            cotacao = validador.get('cotacao', {}).get('preco_btc', 0)
+            comissao = validador.get('comissao')
+            if comissao and isinstance(comissao, dict):
+                comissao_in_cents = comissao.get('valor_in_cents', 0)
+            parceiro = validador.get('parceiro')
+            if parceiro and isinstance(parceiro, dict):
+                parceiro_in_cents = parceiro.get('valor_in_cents', 0)
+            limite = validador.get('limite')
+            if limite and isinstance(limite, dict):
+                limites_in_cents = limite.get('maximo_in_cents', 0)
+            cotacao_dict = validador.get('cotacao')
+            if cotacao_dict and isinstance(cotacao_dict, dict):
+                cotacao = cotacao_dict.get('preco_btc', 0)
             send = validador.get('send_in_cents', 0)
-            forma_pagamento = 'pix'
-            depix_id = ''
-            blockchainTxID = ''
-            status = 'aguardando_pagamento'
-            pagamento_verificado = 0
-            tentativas_verificacao = 0
-            criado_em = datetime.now().isoformat()
-            atualizado_em = datetime.now().isoformat()
-            lightning_address = ''
-            pedido_data = {
-                'gtxid': gtxid,
-                'chatid': chatid,
-                'moeda': moeda,
-                'rede': rede,
-                'amount_in_cents': amount_in_cents,
-                'comissao_in_cents': comissao_in_cents,
-                'parceiro_in_cents': parceiro_in_cents,
-                'limites_in_cents': limites_in_cents,
-                'cotacao': cotacao,
-                'send': send,
-                'recebe': validador.get('valor_recebe', {}).get('sats', 0),  # <-- Garante valor em sats
-                'forma_pagamento': forma_pagamento,
-                'depix_id': depix_id,
-                'blockchainTxID': blockchainTxID,
-                'status': status,
-                'pagamento_verificado': pagamento_verificado,
-                'tentativas_verificacao': tentativas_verificacao,
-                'criado_em': criado_em,
-                'atualizado_em': atualizado_em,
-                'lightning_address': lightning_address
-            }
-            if context and context.user_data is not None:
-                context.user_data['valor_sats'] = validador.get('valor_recebe', {}).get('sats', 0)  # <-- Atualiza contexto
-            print(f"🟡 [MENU] Salvando pedido no banco: {pedido_data}")
-            if pedido_manager:
-                sucesso_salvar = pedido_manager.salvar_pedido(pedido_data)
-            else:
-                sucesso_salvar = False
-            if sucesso_salvar:
-                if context and context.user_data is not None:
-                    context.user_data['pedido_salvo'] = True
-                pedido_id = pedido_data.get('gtxid', 0)
-                if context and context.user_data is not None:
-                    context.user_data['pedido_id'] = pedido_id
-                print(f"✅ [MENU] Pedido salvo com ID: {pedido_id}")
-                # prossegue normalmente para gerar o PIX e enviar ao usuário
-                try:
-                    import requests
-                    pix_data = {
-                        'amount_in_cents': int(validador.get('valor_brl', 0) * 100)
-                    }
-                    url = urljoin(BASE_URL + '/', 'bot_deposit.php')
-                    response = requests.post(
-                        url,
-                        json=pix_data,
-                        timeout=30
-                    )
-                    if response.status_code == 200:
-                        pix_response = response.json()
-                        print(f"[DEBUG] Resposta do backend: {pix_response}")
-                        if pix_response and isinstance(pix_response, dict) and pix_response.get('success'):
-                            pix_data_dict = pix_response.get('data', {})
-                            if not isinstance(pix_data_dict, dict):
-                                pix_data_dict = {}
-                            qr_code_url = pix_data_dict.get('qr_image_url', '')
-                            print(f"[DEBUG] qr_code_url: {qr_code_url}")
-                            copia_cola = pix_data_dict.get('qr_copy_paste', '')
-                            pix_valor_fmt = escape_markdown(format_brl(validador.get('valor_brl', 0)))
-                            pix_valor_sats = escape_markdown(str(validador.get('valor_recebe', {}).get('sats', 0)))
-                            pix_pedido_id = escape_markdown(str(pedido_id))
-                            # Novo formato de mensagem PIX criado
-                            valor_liquido = validador.get('valor_recebe', {}).get('brl', validador.get('valor_brl', 0))
-                            valor_liquido_fmt = format_brl(valor_liquido)
-                            pix_texto = (
-                                escape_markdown("💳 Pagamento PIX Criado!\n") +
-                                escape_markdown("📋 Pedido: ") + escape_markdown(str(pedido_id)) + "\n" +
-                                escape_markdown("💰 Valor: ") + escape_markdown(valor_liquido_fmt) + "\n" +
-                                escape_markdown("⚡ Recebe: ") + escape_markdown(str(validador.get('valor_recebe', {}).get('sats', 0))) + " SATS\n" +
-                                escape_markdown("📱 QR Code:")
-                            )
-                            print('[DEBUG] Texto enviado (PIX):', pix_texto)
-                            if update and update.message:
-                                await update.message.reply_text(
-                                    pix_texto
-                                )
-                            if context and context.bot and update and update.effective_chat:
-                                if qr_code_url:
-                                    await context.bot.send_photo(
-                                        chat_id=update.effective_chat.id,
-                                        photo=qr_code_url,
-                                        caption="📱 Escaneie o QR Code para pagar"
-                                    )
-                                else:
-                                    await update.message.reply_text(
-                                        escape_markdown("❌ Erro ao obter o QR Code do PIX. Tente novamente ou contate o suporte.")
-                                    )
-                                # Mensagem Copia e Cola sem markdown
-                                # Garante que reply_markup está definido
-                                if 'reply_markup' not in locals():
-                                    keyboard = [["🆘 Suporte"]]
-                                    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-                                copia_cola_texto = (
-                                    "📋 Copia e Cola:\n" +
-                                    copia_cola + "\n\n" +
-                                    "💡 Instruções:\n" +
-                                    "1 Copie o código acima\n" +
-                                    "2 Abra seu app bancário\n" +
-                                    "3 Cole no PIX\n" +
-                                    "4 Confirme o pagamento\n" +
-                                    "⏰ Tempo limite: 30 minutos\n" +
-                                    "🔄 Verificação automática ativada\n"
-                                )
-                                await context.bot.send_message(
-                                    chat_id=update.effective_chat.id,
-                                    text=copia_cola_texto,
-                                    reply_markup=reply_markup
-                                )
-                                keyboard = [
-                                    ["🆘 Suporte"]
-                                ]
-                                reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-                                await context.bot.send_message(
-                                    chat_id=update.effective_chat.id,
-                                    text=escape_markdown("❓ **Precisa de ajuda?**\nClique no botão abaixo:"),
-                                    reply_markup=reply_markup
-                                )
-                            print(f"✅ [MENU] PIX criado com sucesso para pedido #{pedido_id}")
-
-                            # ================= INÍCIO DA CHAMADA DO LOOP DE VERIFICAÇÃO =================
-                            try:
-                                import asyncio
-                                # Salvar o depix_id real no pedido antes de iniciar a verificação
-                                depix_id = pix_data_dict.get('transaction_id', '')
-                                if depix_id:
-                                    pedido_manager.atualizar_status_pedido(str(pedido_id), 'aguardando_pagamento')
-                                    # Atualiza o campo depix_id no banco
-                                    import sqlite3
-                                    conn = sqlite3.connect('data/deposit.db')
-                                    cursor = conn.cursor()
-                                    cursor.execute("UPDATE pedidos_bot SET depix_id = ? WHERE gtxid = ?", (depix_id, str(pedido_id)))
-                                    conn.commit()
-                                    conn.close()
-                                print(f"\033[1;33m[DEBUG] depix_id FINAL usado na verificação: {depix_id} | pedido_id: {pedido_id} | chatid: {chatid}\033[0m")
-                                if depix_id and pedido_id and chatid:
-                                    print(f"\033[1;36m[DEBUG] Chamando loop de verificação do pagamento PIX: depix_id={depix_id}, pedido_id={pedido_id}, chatid={chatid}\033[0m")
-                                    asyncio.create_task(
-                                        pedido_manager.verificar_pagamento_background(
-                                            str(depix_id),
-                                            str(pedido_id),
-                                            str(chatid)
-                                        )
-                                    )
-                                else:
-                                    print(f"\033[1;31m[ERRO] Não foi possível iniciar o loop de verificação: depix_id={depix_id}, pedido_id={pedido_id}, chatid={chatid}\033[0m")
-                            except Exception as e:
-                                print(f"\033[1;31m[ERRO] Falha ao iniciar loop de verificação do pagamento PIX: {e}\033[0m")
-                            # ================= FIM DA CHAMADA DO LOOP DE VERIFICAÇÃO =================
-                        else:
-                            error_msg = pix_response.get('error', 'Erro desconhecido') if pix_response and isinstance(pix_response, dict) else 'Erro desconhecido'
-                            if update and update.message:
-                                await update.message.reply_text(
-                                    escape_markdown("❌ **Erro ao criar PIX:**\n") + error_msg + "\n\n" +
-                                    escape_markdown("Tente novamente ou entre em contato com o suporte."),
-                                )
-                    else:
-                        if update and update.message:
-                            await update.message.reply_text(
-                                escape_markdown("❌ **Erro na API:** Status ") + escape_markdown(str(response.status_code)) + "\n\n" +
-                                escape_markdown("Tente novamente ou entre em contato com o suporte."),
-                            )
-                except Exception as e:
-                    print(f"❌ [MENU] Erro ao criar PIX: {e}")
-                    if update and update.message:
-                        await update.message.reply_text(
-                            escape_markdown("❌ **Erro ao criar PIX:**\n") + escape_markdown(str(e)) + "\n\n" +
-                            escape_markdown("Tente novamente ou entre em contato com o suporte."),
-                        )
-            else:
-                error_msg = "Erro interno ao salvar pedido. Tente novamente ou contate o suporte."
-                print(f"❌ [MENU] Erro ao salvar pedido: Falha ao salvar no banco. Veja logs do PedidoManager para detalhes.")
-                if update and update.message:
-                    await update.message.reply_text(
-                        escape_markdown("❌ **Erro ao salvar pedido:**\n") + error_msg + "\n\n" +
-                        escape_markdown("Tente novamente ou entre em contato com o suporte."),
-                    )
-            # Após salvar o pedido no banco, enviar para o backend PHP
-            if sucesso_salvar:
-                try:
-                    registrar_url = urljoin(BASE_URL + '/', 'api/registrar_transacao.php')
-                    # Montar payload conforme schema pedidos_bot
-                    payload = {
-                        'gtxid': pedido_data.get('gtxid'),
-                        'chatid': pedido_data.get('chatid'),
-                        'moeda': pedido_data.get('moeda'),
-                        'rede': pedido_data.get('rede'),
-                        'valor': pedido_data.get('amount_in_cents'),
-                        'comissao': pedido_data.get('comissao_in_cents'),
-                        'parceiro': pedido_data.get('parceiro_in_cents'),
-                        'cotacao': pedido_data.get('cotacao'),
-                        'recebe': pedido_data.get('recebe'),
-                        'forma_pagamento': pedido_data.get('forma_pagamento'),
-                        'depix_id': pedido_data.get('depix_id'),
-                        'blockchainTxID': pedido_data.get('blockchainTxID'),
-                        'status': pedido_data.get('status'),
-                        'pagamento_verificado': pedido_data.get('pagamento_verificado'),
-                        'tentativas_verificacao': pedido_data.get('tentativas_verificacao'),
-                        'criado_em': pedido_data.get('criado_em'),
-                        'atualizado_em': pedido_data.get('atualizado_em')
-                    }
-                    print(f"[DEBUG] Enviando pedido para backend registrar_transacao.php: {payload}")
-                    resp = requests.post(registrar_url, json=payload, timeout=10)
-                    print(f"[DEBUG] Resposta do backend registrar_transacao.php: {resp.status_code} {resp.text}")
-                    if resp.status_code == 200:
-                        resp_json = resp.json()
-                        if resp_json.get('success'):
-                            print(f"[DEBUG] Pedido registrado no backend com id: {resp_json.get('id')}")
-                        else:
-                            print(f"[ERRO] Falha ao registrar pedido no backend: {resp_json.get('error')}")
-                    else:
-                        print(f"[ERRO] HTTP ao registrar pedido no backend: {resp.status_code}")
-                except Exception as e:
-                    print(f"[ERRO] Exceção ao registrar pedido no backend: {e}")
-            return ConversationHandler.END
+            valor_recebe = validador.get('valor_recebe')
+            if valor_recebe and isinstance(valor_recebe, dict):
+                recebe = valor_recebe.get('sats', 0)
+        forma_pagamento = 'pix'
+        depix_id = ''
+        blockchainTxID = ''
+        status = 'aguardando_pagamento'
+        pagamento_verificado = 0
+        tentativas_verificacao = 0
+        criado_em = datetime.now().isoformat()
+        atualizado_em = datetime.now().isoformat()
+        lightning_address = ''
+        pedido_data = {
+            'gtxid': gtxid,
+            'chatid': chatid,
+            'moeda': moeda,
+            'rede': rede,
+            'amount_in_cents': amount_in_cents,
+            'comissao_in_cents': comissao_in_cents,
+            'parceiro_in_cents': parceiro_in_cents,
+            'limites_in_cents': limites_in_cents,
+            'cotacao': cotacao,
+            'send': send,
+            'recebe': recebe,
+            'forma_pagamento': forma_pagamento,
+            'depix_id': depix_id,
+            'blockchainTxID': blockchainTxID,
+            'status': status,
+            'pagamento_verificado': pagamento_verificado,
+            'tentativas_verificacao': tentativas_verificacao,
+            'criado_em': criado_em,
+            'atualizado_em': atualizado_em,
+            'lightning_address': lightning_address
+        }
+        if context and context.user_data is not None:
+            context.user_data['valor_sats'] = validador.get('valor_recebe', {}).get('sats', 0)  # <-- Atualiza contexto
+        print(f"🟡 [MENU] Enviando pedido para a fila: {pedido_data}")
+        # Adicionar tarefa na fila
+        await update.message.reply_text("Seu pedido está sendo processado! Aguarde o PIX...")
+        task_id = await async_queue.add_task('processar_compra', {'pedido_data': pedido_data, 'validador': validador}, user_id)
+        # Polling para aguardar conclusão (máx 15s)
+        for _ in range(75):
+            task = await async_queue.get_task_status(task_id)
+            if task and task.status == task.status.CONCLUIDA:
+                resultado = task.resultado
+                if resultado and resultado.get('erro'):
+                    await update.message.reply_text(f"❌ {resultado.get('erro')}")
+                elif resultado:
+                    if resultado.get('pix_texto'):
+                        await update.message.reply_text(resultado['pix_texto'])
+                    if resultado.get('qr_code_url'):
+                        await update.message.reply_photo(photo=resultado['qr_code_url'], caption="📱 Escaneie o QR Code para pagar")
+                    if resultado.get('copia_cola'):
+                        await update.message.reply_text("📋 Copia e Cola:\n" + resultado['copia_cola'])
+                break
+            await asyncio.sleep(0.2)
         else:
-            await mostrar_erro_cotacao(update, "Dados do pedido não encontrados")
-            return ConversationHandler.END
-    elif update.message.text == "Voltar":
-        return ESCOLHER_VALOR
+            await update.message.reply_text("❌ O processamento do pedido demorou demais. Tente novamente.")
+        return ConversationHandler.END
     # Exibe o resumo apenas na primeira entrada
     user_id = str(update.effective_user.id) if update and update.effective_user else '0'
     validador = get_user_data(context, 'cotacao_completa', None)
@@ -718,33 +569,33 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not validador:
         await mostrar_erro_cotacao(update, "Dados do pedido não encontrados")
         return ConversationHandler.END
-    cotacao_info = validador.get('cotacao', {})
-    comissao_info = validador.get('comissao', {})
-    parceiro_info = validador.get('parceiro', {})
-    valor_recebe_info = validador.get('valor_recebe', {})
-    limite_info = validador.get('limite', {})
-    valor_brl = validador.get('valor_brl', 0)
-    valor_sats = valor_recebe_info.get('sats', 0)
-    percentual = comissao_info.get('percentual', 0)
+    cotacao_info = (validador or {}).get('cotacao', {})
+    comissao_info = (validador or {}).get('comissao', {})
+    parceiro_info = (validador or {}).get('parceiro', {})
+    valor_recebe_info = (validador or {}).get('valor_recebe', {})
+    limite_info = (validador or {}).get('limite', {})
+    valor_brl = (validador or {}).get('valor_brl', 0)
+    valor_sats = (valor_recebe_info or {}).get('sats', 0)
+    percentual = (comissao_info or {}).get('percentual', 0)
     percentual_str = f"({percentual}%)"
     valor_brl_fmt = format_brl(valor_brl)
-    comissao_fmt = format_brl(comissao_info.get('valor', 0))
-    parceiro_fmt = format_brl(parceiro_info.get('valor', 0))
-    limite_fmt = format_brl(limite_info.get('maximo', 0))
-    valor_liquido_fmt = format_brl(valor_recebe_info.get('brl', valor_brl))
+    comissao_fmt = format_brl((comissao_info or {}).get('valor', 0))
+    parceiro_fmt = format_brl((parceiro_info or {}).get('valor', 0))
+    limite_fmt = format_brl((limite_info or {}).get('maximo', 0))
+    valor_liquido_fmt = format_brl((valor_recebe_info or {}).get('brl', valor_brl))
     resumo_texto = (
         "📋 Resumo da Compra\n\n" +
         "🪙 Moeda: BTC\n" +
         "🌐 Rede: Lightning\n" +
         "💰 Valor do Investimento: " + valor_brl_fmt + "\n" +
-        "💱 Cotação BTC: " + str(cotacao_info.get('preco_btc', 0)) + "\n" +
+        "💱 Cotação BTC: " + str((cotacao_info or {}).get('preco_btc', 0)) + "\n" +
         "📊 Fonte: Coingeko/Binance\n" +
         "💸 Comissão: " + comissao_fmt + " " + percentual_str + "\n" +
         "🤝 Taxa Parceiro: " + parceiro_fmt + "\n" +
         "💰 Limite Máximo: " + limite_fmt + "\n" +
         "⚡ Você Recebe: " + str(valor_sats) + " sats\n" +
         "💵 Valor Líquido: " + valor_liquido_fmt + "\n" +
-        "🆔 ID Transação: " + str(validador.get('gtxid', 'N/A'))
+        "🆔 ID Transação: " + str((validador or {}).get('gtxid', 'N/A'))
     )
     keyboard = [["Confirmar"], ["Voltar"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
@@ -809,16 +660,18 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             await mostrar_erro_cotacao(update, "Dados do pedido não encontrados")
             return ConversationHandler.END
         if validador is not None:
-            gtxid = validador.get('gtxid', str(update.effective_user.id) if update and update.effective_user else '0' + '_' + datetime.now().strftime('%Y%m%d%H%M%S'))
-            chatid = str(update.effective_user.id) if update and update.effective_user else '0'
+            gtxid = validador.get('gtxid') if validador and isinstance(validador, dict) and 'gtxid' in validador else (
+                str(update.effective_user.id) if update and update.effective_user and hasattr(update.effective_user, 'id') else '0_' + datetime.now().strftime('%Y%m%d%H%M%S')
+            )
+            chatid = str(update.effective_user.id) if update and update.effective_user and hasattr(update.effective_user, 'id') else '0'
             moeda = get_user_data(context, 'moeda', 'BTC')
             rede = get_user_data(context, 'rede', 'lightning')
-            amount_in_cents = validador.get('amount_in_cents', 0)
-            comissao_in_cents = validador.get('comissao', {}).get('valor_in_cents', 0)
-            parceiro_in_cents = validador.get('parceiro', {}).get('valor_in_cents', 0)
-            limites_in_cents = validador.get('limite', {}).get('maximo_in_cents', 0)
-            cotacao = validador.get('cotacao', {}).get('preco_btc', 0)
-            send = validador.get('send_in_cents', 0)
+            amount_in_cents = validador.get('amount_in_cents', 0) if validador and isinstance(validador, dict) and 'amount_in_cents' in validador else 0
+            comissao_in_cents = validador.get('comissao', {}).get('valor_in_cents', 0) if validador and isinstance(validador, dict) and 'comissao' in validador and isinstance(validador.get('comissao'), dict) else 0
+            parceiro_in_cents = validador.get('parceiro', {}).get('valor_in_cents', 0) if validador and isinstance(validador, dict) and 'parceiro' in validador and isinstance(validador.get('parceiro'), dict) else 0
+            limites_in_cents = validador.get('limite', {}).get('maximo_in_cents', 0) if validador and isinstance(validador, dict) and 'limite' in validador and isinstance(validador.get('limite'), dict) else 0
+            cotacao = validador.get('cotacao', {}).get('preco_btc', 0) if validador and isinstance(validador, dict) and 'cotacao' in validador and isinstance(validador.get('cotacao'), dict) else 0
+            send = validador.get('send_in_cents', 0) if validador and isinstance(validador, dict) and 'send_in_cents' in validador else 0
             forma_pagamento = 'pix'
             depix_id = ''
             blockchainTxID = ''
@@ -828,6 +681,7 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             criado_em = datetime.now().isoformat()
             atualizado_em = datetime.now().isoformat()
             lightning_address = ''
+            recebe = validador.get('valor_recebe', {}).get('sats', 0) if validador and isinstance(validador, dict) and 'valor_recebe' in validador and isinstance(validador.get('valor_recebe'), dict) else 0
             pedido_data = {
                 'gtxid': gtxid,
                 'chatid': chatid,
@@ -839,7 +693,7 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 'limites_in_cents': limites_in_cents,
                 'cotacao': cotacao,
                 'send': send,
-                'recebe': validador.get('valor_recebe', {}).get('sats', 0),  # <-- Garante valor em sats
+                'recebe': recebe,
                 'forma_pagamento': forma_pagamento,
                 'depix_id': depix_id,
                 'blockchainTxID': blockchainTxID,
@@ -1007,7 +861,7 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
     import logging
     logger = logging.getLogger(__name__)
     # TRACE para rastreamento de chamada do handler
-    user_id = update.effective_user.id if update and update.effective_user else '0'
+    user_id = str(update.effective_user.id) if update and update.effective_user else '0'
     print(f"[TRACE] Handler aguardar_lightning_address chamado para user_id={user_id}")
     logger.info(f"[TRACE] Handler aguardar_lightning_address chamado para user_id={user_id}")
     # LOG DETALHADO DO CONTEXTO
@@ -1018,7 +872,7 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
         return AGUARDAR_LIGHTNING_ADDRESS
     
     endereco_lightning = update.message.text.strip()
-    user_id = update.effective_user.id if update and update.effective_user else '0'
+    user_id = str(update.effective_user.id) if update and update.effective_user else '0'
     logger.info(f"[LIGHTNING] Usuário {user_id} enviou endereço: {endereco_lightning}")
     print(f"🟢 [LIGHTNING] Usuário enviou endereço: {endereco_lightning}")
     
@@ -1226,6 +1080,55 @@ async def handler_global_lightning(update: Update, context: ContextTypes.DEFAULT
         print(f"[GLOBAL] Detectado endereço Lightning fora do ConversationHandler: {endereco}")
         # Chama o fluxo de envio Lightning normalmente
         await aguardar_lightning_address(update, context)
+
+# Handler da fila para processar o pedido de compra
+async def processar_compra_handler(dados, usuario_id):
+    import requests
+    from datetime import datetime
+    from urllib.parse import urljoin
+    from config.config import BASE_URL
+    from api.pedido_manager import pedido_manager
+    from menu.menu_compra import format_brl, escape_markdown
+    try:
+        pedido_data = dados['pedido_data']
+        validador = dados['validador']
+        pedido_id = pedido_data.get('gtxid', 0)
+        # Salvar pedido
+        sucesso_salvar = pedido_manager.salvar_pedido(pedido_data)
+        if not sucesso_salvar:
+            return {"erro": "Erro ao salvar pedido no banco."}
+        # Criar PIX
+        pix_data = {'amount_in_cents': int(validador.get('valor_brl', 0) * 100)}
+        url = urljoin(BASE_URL + '/', 'bot_deposit.php')
+        response = requests.post(url, json=pix_data, timeout=30)
+        if response.status_code != 200:
+            return {"erro": f"Erro na API: Status {response.status_code}"}
+        pix_response = response.json()
+        if not pix_response.get('success'):
+            return {"erro": pix_response.get('error', 'Erro desconhecido')}
+        pix_data_dict = pix_response.get('data', {})
+        qr_code_url = pix_data_dict.get('qr_image_url', '')
+        copia_cola = pix_data_dict.get('qr_copy_paste', '')
+        valor_liquido = validador.get('valor_recebe', {}).get('brl', validador.get('valor_brl', 0))
+        valor_liquido_fmt = format_brl(valor_liquido)
+        resultado = {
+            "pix_texto": (
+                escape_markdown("💳 Pagamento PIX Criado!\n") +
+                escape_markdown("📋 Pedido: ") + escape_markdown(str(pedido_id)) + "\n" +
+                escape_markdown("💰 Valor: ") + escape_markdown(valor_liquido_fmt) + "\n" +
+                escape_markdown("⚡ Recebe: ") + escape_markdown(str(validador.get('valor_recebe', {}).get('sats', 0))) + " SATS\n" +
+                escape_markdown("📱 QR Code:")
+            ),
+            "qr_code_url": qr_code_url,
+            "copia_cola": copia_cola,
+            "pedido_id": pedido_id
+        }
+        return resultado
+    except Exception as e:
+        return {"erro": f"Erro inesperado: {e}"}
+
+# Registrar handler na fila
+async_queue.register_handler('processar_compra', processar_compra_handler)
 
 # Configuração do ConversationHandler
 def get_conversation_handler():

@@ -10,6 +10,7 @@ from menu.menu_compra import registrar_handlers_globais  # <-- Importação adic
 from core.session_manager import session_manager, get_user_data, set_user_data, clear_user_data
 from core.rate_limiter import rate_limiter, rate_limit
 from core.state_validator import state_validator
+from core.async_queue import async_queue, QueueTask
 
 # Configuração básica de logging
 logging.basicConfig(level=logging.INFO)
@@ -193,64 +194,68 @@ async def ativar_lightning_address_handler(update: Update, context: ContextTypes
                 parse_mode='Markdown'
             )
 
+# Registrar handler de teste na fila
+async def eco_handler(dados, usuario_id):
+    import asyncio
+    await asyncio.sleep(1)  # Simula processamento
+    return f"Eco: {dados.get('texto', '')}"
+async_queue.register_handler('eco', eco_handler)
+
+# Handler do comando /fila para testar a fila
+async def fila_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id if update.effective_user else None
+    texto = ' '.join(context.args) if context.args else 'teste'
+    if update.message:
+        await update.message.reply_text(f"Tarefa enviada para a fila! Aguarde a resposta...")
+    if user_id is None:
+        return  # Não é possível responder
+    # Adiciona tarefa na fila
+    task_id = await async_queue.add_task('eco', {'texto': texto}, str(user_id))
+    # Polling para aguardar conclusão (máx 10s)
+    for _ in range(50):
+        task = await async_queue.get_task_status(task_id)
+        if task and task.status == task.status.CONCLUIDA:
+            # Envia resposta ao usuário
+            await context.bot.send_message(chat_id=user_id, text=f"Resultado da fila: {task.resultado}")
+            break
+        await asyncio.sleep(0.2)
+    else:
+        await context.bot.send_message(chat_id=user_id, text="Tarefa demorou demais na fila!")
+
 if __name__ == "__main__":
     logger.info("Iniciando GhostBot...")
-    
     # Configuração padrão do cliente HTTP (mais compatível)
     try:
-        # Construir aplicação com configurações básicas
         app = Application.builder().token(BOT_TOKEN).build()
-        
         logger.info("✅ Cliente HTTP configurado com configuração padrão")
-        
     except Exception as e:
         logger.error(f"❌ Erro ao configurar cliente HTTP: {e}")
-        # Fallback para configuração padrão
         app = Application.builder().token(BOT_TOKEN).build()
         logger.warning("⚠️ Usando configuração padrão do cliente HTTP")
-    
-    # Armazenar a instância do bot globalmente
     bot_instance = app.bot
-    
-    # Adicionar error handler global
     app.add_error_handler(error_handler)
     logger.info("✅ Error handler global configurado")
-    
-    # Inicializar SessionManager
     logger.info("✅ SessionManager inicializado")
-    
-    # Inicializar RateLimiter
     logger.info("✅ RateLimiter inicializado")
-    
-    # Inicializar StateValidator
     logger.info("✅ StateValidator inicializado")
-    
-    # Adicionar watchdog para monitorar o event loop
     async def watchdog():
         while True:
             logger.info("⏳ Watchdog: loop ativo")
             await asyncio.sleep(60)
-    
-    asyncio.create_task(watchdog())
+    loop = asyncio.get_event_loop()
+    loop.create_task(watchdog())
     logger.info("✅ Watchdog iniciado")
-    
-    # Configurar o callback do pedido_manager, se disponível
     if hasattr(pedido_manager, 'set_lightning_callback'):
         pedido_manager.set_lightning_callback(lightning_callback)  # type: ignore
-    
-    # Adicionar o ConversationHandler do menu de compra
     conversation_handler = get_conversation_handler()
     app.add_handler(conversation_handler)
-    
-    # Adicionar handler para PIX
     app.add_handler(CommandHandler("pix", pix))
-    
-    # Adicionar handler para ativar Lightning Address
     app.add_handler(CommandHandler("lightning", ativar_lightning_address_handler))
-    
-    # Registrar handler global para Lightning Address
+    app.add_handler(CommandHandler("fila", fila_handler))
     registrar_handlers_globais(app)
-    
+    # Inicializar a fila assíncrona ANTES do polling
+    loop.run_until_complete(async_queue.start())
+    logger.info("✅ AsyncQueue inicializada e workers rodando")
     logger.info("🟢 [BOT] GhostBot iniciado com sucesso!")
     logger.info("🟢 [BOT] Cliente HTTP configurado com configuração padrão")
     logger.info("🟢 [BOT] Error handler global configurado")
@@ -258,18 +263,17 @@ if __name__ == "__main__":
     logger.info("🟢 [BOT] Callback de Lightning Address configurado")
     logger.info("🟢 [BOT] Handler global Lightning registrado")
     logger.info("🟢 [BOT] Aguardando comandos...")
-    
-    # Iniciar polling com configurações robustas
     try:
         app.run_polling(
-            poll_interval=1.0,      # Intervalo de polling: 1 segundo
-            timeout=30,             # Timeout de polling: 30 segundos
-            bootstrap_retries=5     # Tentativas de bootstrap: 5
+            poll_interval=1.0,
+            timeout=30,
+            bootstrap_retries=5
         )
     except KeyboardInterrupt:
         logger.info("🛑 Bot interrompido pelo usuário")
     except Exception as e:
         logger.error(f"❌ Erro fatal no polling: {e}")
     finally:
-        # Limpar recursos
+        loop.run_until_complete(async_queue.stop())
+        logger.info("🧹 AsyncQueue parada e recursos limpos")
         logger.info("🧹 Recursos limpos")
