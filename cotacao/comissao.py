@@ -1,13 +1,13 @@
    # Forçar git a versionar este arquivo
-# Regras de comissão detalhadas para BTC
+# Regras de comissão detalhadas para BTC e USDT
 BTC_COMISSOES = [
     {'min': 10,    'max': 500,   'percentual': 0.10, 'fixo_in_cents': 0},
     {'min': 500.01,'max': 1000,  'percentual': 0.06, 'fixo_in_cents': 0},
-    {'min': 1000.01,'max': 6000, 'percentual': 0.05, 'fixo_in_cents': 0},
+    {'min': 1000.01,'max': 4999, 'percentual': 0.05, 'fixo_in_cents': 0},
 ]
 
-# Comissão DEPIX: a partir de 100 reais
-DEPIX_COMISSAO = {'min': 100, 'percentual': 0.019, 'fixo_in_cents': 0}
+# Comissão DEPIX: a partir de 100 reais até 4999
+DEPIX_COMISSAO = {'min': 100, 'max': 4999, 'percentual': 0.019, 'fixo_in_cents': 0}
 
 COMISSAO_MAP = {
     'btc':    BTC_COMISSOES,
