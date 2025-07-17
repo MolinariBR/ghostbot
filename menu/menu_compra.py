@@ -179,6 +179,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             "🚀 Bem vindo! Ao @GhosttP2P bot",
             reply_markup=reply_markup
         )
+        regras_texto = (
+            "\nTC e USDT\n(Seguem as mesmas faixas, sem valor fixo)\n"
+            "- De 10 a 499 reais: 10%\n"
+            "- Acima de 500 até 999 reais: 6%\n"
+            "- Acima de 1000 até 4999 reais: 5%\n\n"
+            "DEPIX\n-  Taxa fixa de 1,9%\n- Não permite compra de DEPIX abaixo de 100 reais (bloqueia)\n\n"
+            "Resumo das regras:\n"
+            "- BTC: 10% (10-499), 6% (500-999), 5% (1000-4999)\n"
+            "- USDT: 10% (10-499), 5% (500-4999)\n"
+            "- DEPIX: 1,9% (a partir de 100 reais, bloqueia abaixo disso)\n\n"
+            "PARA COMPRAS ACIMA DO LIMITE DIÁRIO DE 6.000 REAIS OU CADASTRO NO MODO COMERCIANTE ENTRE EM CONTATO COM O SUPORTE PARA ANÁLISE: @GhosttP2P"
+        )
+        await update.message.reply_text(regras_texto)
     print("🟢 [START] Retornando ESCOLHER_MOEDA")
     return ESCOLHER_MOEDA
 
