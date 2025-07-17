@@ -259,7 +259,7 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return ESCOLHER_MOEDA
     elif texto_original == "Bitcoin (BTC)" or "Bitcoin" in texto_original or "BTC" in texto_original:
         print("🟢 [MOEDA] Usuário escolheu Bitcoin, indo para escolher rede")
-        if context and context.user_data:
+        if context and context.user_data is not None:
             context.user_data['moeda'] = "BTC"
         
         keyboard = [["Lightning", "Liquid", "Onchain"], ["Voltar"]]
@@ -272,7 +272,7 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return ESCOLHER_REDE
     elif texto_original == "USDT":
         print("🟢 [MOEDA] Usuário escolheu USDT, indo para escolher rede")
-        if context and context.user_data:
+        if context and context.user_data is not None:
             context.user_data['moeda'] = "USDT"
         keyboard = [["Liquid", "Polygon"], ["Voltar"]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
@@ -283,7 +283,7 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return ESCOLHER_REDE
     elif texto_original == "DEPIX":
         print("🟢 [MOEDA] Usuário escolheu DEPIX, indo para escolher rede")
-        if context and context.user_data:
+        if context and context.user_data is not None:
             context.user_data['moeda'] = "DEPIX"
         keyboard = [["Liquid"], ["Voltar"]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
