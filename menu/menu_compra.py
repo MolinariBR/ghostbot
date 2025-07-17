@@ -631,6 +631,7 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                 if 'reply_markup' not in locals():
                                     keyboard = [["🆘 Suporte"]]
                                     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+                                copia_cola = (copia_cola or "").replace("\n", "").replace(" ", "")
                                 copia_cola_texto = (
                                     "📋 Copia e Cola:\n" +
                                     copia_cola + "\n\n" +
@@ -967,6 +968,7 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                 if 'reply_markup' not in locals():
                                     keyboard = [["🆘 Suporte"]]
                                     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+                                copia_cola = (copia_cola or "").replace("\n", "").replace(" ", "")
                                 copia_cola_texto = (
                                     "📋 Copia e Cola:\n" +
                                     copia_cola + "\n\n" +
