@@ -23,7 +23,14 @@ def validar_pedido(moeda: str, valor_brl: float, chatid: str, compras: int, meto
 
     # 2. Comissão
     comissao_info = get_comissao(moeda, valor_brl)
-    comissao_in_cents = comissao_info['comissao_in_cents'] if comissao_info else 0
+    if comissao_info is None:
+        return {
+            'erro': True,
+            'mensagem': f'Operação não permitida para {moeda.upper()} com valor de R$ {valor_brl:.2f}.',
+            'moeda': moeda,
+            'valor_brl': valor_brl
+        }
+    comissao_in_cents = comissao_info['comissao_in_cents']
 
     # 3. Limite
     limite_in_cents = get_limite_in_cents(chatid, compras)

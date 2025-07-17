@@ -445,6 +445,9 @@ async def processar_valor_personalizado(update: Update, context: ContextTypes.DE
         if not validador or not isinstance(validador, dict):
             await mostrar_erro_cotacao(update, "Erro ao validar pedido. Avise o suporte.")
             return ESCOLHER_VALOR
+        if validador.get('erro'):
+            await mostrar_erro_cotacao(update, validador.get('mensagem', 'Operação não permitida para este valor/moeda.'))
+            return ESCOLHER_VALOR
         if context and context.user_data:
             context.user_data['cotacao_completa'] = validador
             context.user_data['valor_real'] = valor_brl
@@ -457,7 +460,7 @@ async def processar_valor_personalizado(update: Update, context: ContextTypes.DE
         valor_recebe_info = validador.get('valor_recebe', {})
         limite_info = validador.get('limite', {})
         percentual = comissao_info.get('percentual', 0)
-        percentual_str = f"({percentual}%)"
+        percentual_str = f"({int(percentual*100)}%)"
         valor_brl_fmt = format_brl(valor_brl)
         comissao_fmt = format_brl(comissao_info.get('valor', 0))
         parceiro_fmt = format_brl(parceiro_info.get('valor', 0))
@@ -778,7 +781,7 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     valor_brl = validador.get('valor_brl', 0)
     valor_sats = valor_recebe_info.get('sats', 0)
     percentual = comissao_info.get('percentual', 0)
-    percentual_str = f"({percentual}%)"
+    percentual_str = f"({int(percentual*100)}%)"
     valor_brl_fmt = format_brl(valor_brl)
     comissao_fmt = format_brl(comissao_info.get('valor', 0))
     parceiro_fmt = format_brl(parceiro_info.get('valor', 0))
