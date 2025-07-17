@@ -590,6 +590,7 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                         json=pix_data,
                         timeout=30
                     )
+                    print(f"[DEBUG] Status bot_deposit.php: {response.status_code}, Content: {response.text}")
                     if response.status_code == 200:
                         pix_response = response.json()
                         print(f"[DEBUG] Resposta do backend: {pix_response}")
@@ -931,6 +932,7 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                         json=pix_data,
                         timeout=30
                     )
+                    print(f"[DEBUG] Status bot_deposit.php: {response.status_code}, Content: {response.text}")
                     if response.status_code == 200:
                         pix_response = response.json()
                         if pix_response and isinstance(pix_response, dict) and pix_response.get('success'):
@@ -1283,6 +1285,13 @@ async def handler_global_lightning(update: Update, context: ContextTypes.DEFAULT
         # Chama o fluxo de envio Lightning normalmente
         await aguardar_lightning_address(update, context)
 
+async def suporte(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if update and update.message:
+        await update.message.reply_text(
+            "Para suporte, entre em contato com @GhosttP2P ou clique no link: https://t.me/GhosttP2P"
+        )
+    return ConversationHandler.END
+
 # Configuração do ConversationHandler
 def get_conversation_handler():
     """Retorna o ConversationHandler configurado."""
@@ -1292,7 +1301,10 @@ def get_conversation_handler():
             ESCOLHER_MOEDA: [MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_moeda)],
             ESCOLHER_REDE: [MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_rede)],
             ESCOLHER_VALOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_valor)],
-            RESUMO: [MessageHandler(filters.TEXT & ~filters.COMMAND, resumo)],
+            RESUMO: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, resumo),
+                MessageHandler(filters.TEXT & filters.Regex(r"^🆘 Suporte$"), suporte),
+            ],
             FORMA_PAGAMENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, forma_pagamento)],
             PAGAMENTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, pagamento)],
             AGUARDAR_LIGHTNING_ADDRESS: [
