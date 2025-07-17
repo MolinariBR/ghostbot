@@ -204,7 +204,7 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         print("🟢 [MOEDA] Usuário clicou em Comprar, mostrando menu de moeda")
         if context and context.user_data:
             context.user_data.clear()
-        keyboard = [["Bitcoin (BTC)", "USDT", "DEPIX"], ["Voltar"]]
+        keyboard = [["Bitcoin", "USDT", "DEPIX"], ["Voltar"]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
         await update.message.reply_text(
             "🪙 Escolha a moeda:\n\nQual moeda você deseja comprar?",
@@ -604,11 +604,11 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                             valor_liquido = validador.get('valor_recebe', {}).get('brl', validador.get('valor_brl', 0))
                             valor_liquido_fmt = format_brl(valor_liquido)
                             pix_texto = (
-                                escape_markdown("💳 Pagamento PIX Criado!\n") +
-                                escape_markdown("📋 Pedido: ") + escape_markdown(str(pedido_id)) + "\n" +
-                                escape_markdown("💰 Valor: ") + escape_markdown(valor_liquido_fmt) + "\n" +
-                                escape_markdown("⚡ Recebe: ") + escape_markdown(str(validador.get('valor_recebe', {}).get('sats', 0))) + " SATS\n" +
-                                escape_markdown("📱 QR Code:")
+                                escape_markdown("Pagamento PIX Criado!\n") +
+                                escape_markdown("Pedido: ") + escape_markdown(str(pedido_id)) + "\n" +
+                                escape_markdown("Valor: ") + escape_markdown(valor_liquido_fmt) + "\n" +
+                                escape_markdown("Recebe: ") + escape_markdown(str(validador.get('valor_recebe', {}).get('sats', 0))) + " SATS\n" +
+                                escape_markdown("QR Code:")
                             )
                             print('[DEBUG] Texto enviado (PIX):', pix_texto)
                             if update and update.message:
@@ -635,12 +635,12 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                 copia_cola_texto = (
                                     "📋 Copia e Cola:\n" +
                                     copia_cola + "\n\n" +
-                                    "💡 Instruções:\n" +
+                                    "Instruções:\n" +
                                     "1 Copie o código acima\n" +
                                     "2 Abra seu app bancário\n" +
                                     "3 Cole no PIX\n" +
                                     "4 Confirme o pagamento\n" +
-                                    "⏰ Tempo limite: 30 minutos\n" +
+                                    "Tempo limite: 30 minutos\n" +
                                     "🔄 Verificação automática ativada\n"
                                 )
                                 await context.bot.send_message(
@@ -654,7 +654,7 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                 reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
                                 await context.bot.send_message(
                                     chat_id=update.effective_chat.id,
-                                    text=escape_markdown("❓ **Precisa de ajuda?**\nClique no botão abaixo:"),
+                                    text=escape_markdown("❓ Precisa de ajuda?\nClique no botão abaixo:"),
                                     reply_markup=reply_markup
                                 )
                             print(f"✅ [MENU] PIX criado com sucesso para pedido #{pedido_id}")
@@ -941,11 +941,11 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                             pix_valor_sats = escape_markdown(str(validador.get('valor_recebe', {}).get('sats', 0)))
                             pix_pedido_id = escape_markdown(str(pedido_id))
                             pix_texto = (
-                                escape_markdown("💳 **Pagamento PIX Criado!**\n\n") +
-                                escape_markdown("📋 **Pedido #") + pix_pedido_id + escape_markdown("**\n") +
-                                escape_markdown("💰 **Valor:** ") + pix_valor_fmt + "\n" +
-                                escape_markdown("⚡ **Valor:** ") + pix_valor_sats + "\n\n" +
-                                escape_markdown("📱 **QR Code:**")
+                                escape_markdown("Pagamento PIX Criado!\n\n") +
+                                escape_markdown("Pedido #") + pix_pedido_id + escape_markdown("\n") +
+                                escape_markdown("Valor:") + pix_valor_fmt + "\n" +
+                                escape_markdown("Valor:") + pix_valor_sats + "\n\n" +
+                                escape_markdown("📱 QR Code:")
                             )
                             print('[DEBUG] Texto enviado (PIX):', pix_texto)
                             if update and update.message:
@@ -1345,5 +1345,3 @@ def registrar_handlers_globais(application):
     Registra handlers globais no Application do Telegram.
     """
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handler_global_lightning), group=1)
-
-
