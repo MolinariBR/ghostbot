@@ -1,18 +1,18 @@
    # Forçar git a versionar este arquivo
 # Regras de comissão detalhadas para BTC
 BTC_COMISSOES = [
-    {'min': 10,    'max': 500,   'percentual': 0.10, 'fixo_in_cents': 100},
-    {'min': 500.01,'max': 1000,  'percentual': 0.06, 'fixo_in_cents': 100},
-    {'min': 1000.01,'max': 6000, 'percentual': 0.05, 'fixo_in_cents': 100},
+    {'min': 10,    'max': 500,   'percentual': 0.10, 'fixo_in_cents': 0},
+    {'min': 500.01,'max': 1000,  'percentual': 0.06, 'fixo_in_cents': 0},
+    {'min': 1000.01,'max': 6000, 'percentual': 0.05, 'fixo_in_cents': 0},
 ]
 
 # Comissão DEPIX: a partir de 100 reais
-DEPIX_COMISSAO = {'min': 100, 'percentual': 0.019, 'fixo_in_cents': 100}
+DEPIX_COMISSAO = {'min': 100, 'percentual': 0.019, 'fixo_in_cents': 0}
 
 COMISSAO_MAP = {
     'btc':    BTC_COMISSOES,
     'bitcoin':BTC_COMISSOES,
-    'usdt':   [{'min': 10, 'max': 6000, 'percentual': 0.05, 'fixo_in_cents': 0}],
+    'usdt':   BTC_COMISSOES,
     'depix':  [DEPIX_COMISSAO],
 }
 
@@ -21,6 +21,8 @@ COMISSAO_PADRAO = {'percentual': 0.10, 'fixo_in_cents': 0}
 
 def get_comissao(moeda: str, valor_brl: float) -> dict | None:
     moeda = moeda.lower()
+    if moeda == 'depix' and valor_brl < 100:
+        return None
     if valor_brl < 10:
         return None
     regras = COMISSAO_MAP.get(moeda)
