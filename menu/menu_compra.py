@@ -220,10 +220,9 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             if spec and spec.loader:
                 termos_mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(termos_mod)
-                termos_msg = getattr(termos_mod, 'termos_text', None)
-                if callable(termos_msg):
-                    termos_msg = termos_msg()
-                if not termos_msg:
+                if hasattr(termos_mod, 'obter_termos') and callable(termos_mod.obter_termos):
+                    termos_msg = termos_mod.obter_termos()
+                else:
                     termos_msg = getattr(termos_mod, '__doc__', 'Termos indisponíveis no momento.')
                 await update.message.reply_text(str(termos_msg))
             else:
@@ -240,10 +239,9 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             if spec and spec.loader:
                 ajuda_mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(ajuda_mod)
-                ajuda_msg = getattr(ajuda_mod, 'ajuda_text', None)
-                if callable(ajuda_msg):
-                    ajuda_msg = ajuda_msg()
-                if not ajuda_msg:
+                if hasattr(ajuda_mod, 'obter_ajuda') and callable(ajuda_mod.obter_ajuda):
+                    ajuda_msg = ajuda_mod.obter_ajuda()
+                else:
                     ajuda_msg = getattr(ajuda_mod, '__doc__', 'Ajuda indisponível no momento.')
                 await update.message.reply_text(str(ajuda_msg))
             else:
