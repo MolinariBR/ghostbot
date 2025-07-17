@@ -195,6 +195,11 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     texto_original = update.message.text.strip() if update and update.message and update.message.text else ""
     texto = texto_original.lower()
 
+    # Proteção: se o usuário enviar texto de rede aqui, apenas retorne ESCOLHER_REDE
+    if texto_original in ["Lightning", "Liquid", "Onchain", "Polygon"]:
+        print(f"⚠️ [MOEDA] Texto de rede recebido em escolher_moeda: '{texto_original}', redirecionando para escolher_rede")
+        return ESCOLHER_REDE
+
     if "comprar" in texto:
         print("🟢 [MOEDA] Usuário clicou em Comprar, mostrando menu de moeda")
         if context and context.user_data:
@@ -323,7 +328,26 @@ async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     if not isinstance(combinacoes, dict):
         combinacoes = {}
 
-    moeda_str = str(moeda) if moeda is not None else ""
+    # Normalização da moeda
+    moeda_str = str(moeda).upper() if moeda else ""
+    if "BTC" in moeda_str:
+        moeda_str = "BTC"
+    elif "USDT" in moeda_str:
+        moeda_str = "USDT"
+    elif "DEPIX" in moeda_str:
+        moeda_str = "DEPIX"
+
+    # Normalização da rede
+    rede_str = rede.strip().capitalize()
+    if rede_str.lower() == "onchain":
+        rede_str = "Onchain"
+    elif rede_str.lower() == "lightning":
+        rede_str = "Lightning"
+    elif rede_str.lower() == "liquid":
+        rede_str = "Liquid"
+    elif rede_str.lower() == "polygon":
+        rede_str = "Polygon"
+
     redes = combinacoes.get(moeda_str)
     if not isinstance(redes, list):
         redes = []
@@ -333,8 +357,8 @@ async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     else:
         user_data = {}
 
-    if moeda_str in combinacoes and rede in redes:
-        user_data['rede'] = rede.lower()
+    if moeda_str in combinacoes and rede_str in redes:
+        user_data['rede'] = rede_str.lower()
         keyboard = [
             ["R$ 10,00", "R$ 25,00", "R$ 50,00"],
             ["R$ 100,00", "R$ 250,00", "R$ 500,00"],
@@ -345,7 +369,7 @@ async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             "💰 Escolha o valor:\n\nDigite um valor em reais entre 10 e 4999 ou escolha uma opção:",
             reply_markup=reply_markup
         )
-        print(f"🟢 [REDE] Usuário escolheu {rede} para {moeda_str}, indo para escolher valor")
+        print(f"🟢 [REDE] Usuário escolheu {rede_str} para {moeda_str}, indo para escolher valor")
         return ESCOLHER_VALOR
     else:
         await update.message.reply_text(
