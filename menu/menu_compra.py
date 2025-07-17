@@ -722,7 +722,7 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             # Após salvar o pedido no banco, enviar para o backend PHP
             if sucesso_salvar:
                 try:
-                    registrar_url = urljoin(BASE_URL + '/', 'api/registrar_transacao.php')
+                    registrar_url = urljoin(BASE_URL + '/', 'registrar_transacao.php')
                     # Montar payload conforme schema pedidos_bot
                     payload = {
                         'gtxid': pedido_data.get('gtxid'),
@@ -760,8 +760,8 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         else:
             await mostrar_erro_cotacao(update, "Dados do pedido não encontrados")
             return ConversationHandler.END
-    elif update.message.text == "Voltar":
-        return ESCOLHER_VALOR
+    elif update.message.text == "Cancelar":
+        return await cancelar(update, context)
     # Exibe o resumo apenas na primeira entrada
     user_id = str(update.effective_user.id) if update and update.effective_user else '0'
     validador = context.user_data.get('cotacao_completa') if context and context.user_data else None
