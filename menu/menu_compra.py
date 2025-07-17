@@ -404,18 +404,18 @@ async def processar_valor_personalizado(update: Update, context: ContextTypes.DE
         limite_fmt = format_brl(limite_info.get('maximo', 0))
         valor_liquido_fmt = format_brl(valor_recebe_info.get('brl', valor_brl))
         resumo_texto = (
-            "📋 Resumo da Compra\n\n" +
-            "🪙 Moeda: BTC\n" +
-            "🌐 Rede: Lightning\n" +
-            "💰 Valor do Investimento: " + valor_brl_fmt + "\n" +
-            "💱 Cotação BTC: " + str(cotacao_info.get('preco_btc', 0)) + "\n" +
-            "📊 Fonte: Coingeko/Binance\n" +
-            "💸 Comissão: " + comissao_fmt + " " + percentual_str + "\n" +
-            "🤝 Taxa Parceiro: " + parceiro_fmt + "\n" +
-            "💰 Limite Máximo: " + limite_fmt + "\n" +
-            "⚡ Você Recebe: " + str(valor_recebe_info.get('sats', 0)) + " sats\n" +
-            "💵 Valor Líquido: " + valor_liquido_fmt + "\n" +
-            "🆔 ID Transação: " + str(validador.get('gtxid', 'N/A'))
+            "Resumo da Compra\n\n" +
+            "Moeda: BTC\n" +
+            "Rede: Lightning\n" +
+            "Valor do Investimento: " + valor_brl_fmt + "\n" +
+            "Cotação BTC: " + str(cotacao_info.get('preco_btc', 0)) + "\n" +
+            "Fonte: Coingeko/Binance\n" +
+            "Comissão: " + comissao_fmt + " " + percentual_str + "\n" +
+            "Taxa Parceiro: " + parceiro_fmt + "\n" +
+            "Limite Máximo: " + limite_fmt + "\n" +
+            "Você Recebe: " + str(valor_recebe_info.get('sats', 0)) + " sats\n" +
+            "Valor Líquido: " + valor_liquido_fmt + "\n" +
+            "ID Transação: " + str(validador.get('gtxid', 'N/A'))
         )
         keyboard = [["Confirmar"], ["Voltar"]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
@@ -724,18 +724,18 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     limite_fmt = format_brl(limite_info.get('maximo', 0))
     valor_liquido_fmt = format_brl(valor_recebe_info.get('brl', valor_brl))
     resumo_texto = (
-        "📋 Resumo da Compra\n\n" +
-        "🪙 Moeda: BTC\n" +
-        "🌐 Rede: Lightning\n" +
-        "💰 Valor do Investimento: " + valor_brl_fmt + "\n" +
-        "💱 Cotação BTC: " + str(cotacao_info.get('preco_btc', 0)) + "\n" +
-        "📊 Fonte: Coingeko/Binance\n" +
-        "💸 Comissão: " + comissao_fmt + " " + percentual_str + "\n" +
-        "🤝 Taxa Parceiro: " + parceiro_fmt + "\n" +
-        "💰 Limite Máximo: " + limite_fmt + "\n" +
-        "⚡ Você Recebe: " + str(valor_sats) + " sats\n" +
-        "💵 Valor Líquido: " + valor_liquido_fmt + "\n" +
-        "🆔 ID Transação: " + str(validador.get('gtxid', 'N/A'))
+        "Resumo da Compra\n\n" +
+        "Moeda: BTC\n" +
+        "Rede: Lightning\n" +
+        "Valor do Investimento: " + valor_brl_fmt + "\n" +
+        "Cotação BTC: " + str(cotacao_info.get('preco_btc', 0)) + "\n" +
+        "Fonte: Coingeko/Binance\n" +
+        "Comissão: " + comissao_fmt + " " + percentual_str + "\n" +
+        "Taxa Parceiro: " + parceiro_fmt + "\n" +
+        "Limite Máximo: " + limite_fmt + "\n" +
+        "Você Recebe: " + str(valor_sats) + " sats\n" +
+        "Valor Líquido: " + valor_liquido_fmt + "\n" +
+        "ID Transação: " + str(validador.get('gtxid', 'N/A'))
     )
     keyboard = [["Confirmar"], ["Voltar"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
@@ -910,14 +910,14 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                 copia_cola_texto = (
                                     "📋 Copia e Cola:\n" +
                                     copia_cola + "\n\n" +
-                                    "💡 Instruções:\n" +
+                                    "Instruções:\n" +
                                     "1 Copie o código acima\n" +
                                     "2 Abra seu app bancário\n" +
                                     "3 Cole no PIX\n" +
                                     "4 Confirme o pagamento\n" +
-                                    "⏰ Tempo limite: 30 minutos\n" +
-                                    "🔄 Verificação automática ativada\n\n" +
-                                    "❓Precisa de ajuda?\nClique no botão abaixo:"
+                                    "Tempo limite: 30 minutos\n" +
+                                    "Verificação automática ativada\n\n" +
+                                    "Precisa de ajuda?\nClique no botão abaixo:"
                                 )
                                 await context.bot.send_message(
                                     chat_id=update.effective_chat.id,
@@ -1157,14 +1157,14 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
             
             # Mensagem de sucesso
             msg_pagamento = (
-                escape_markdown("✅ **Pagamento Enviado com Sucesso!**\n\n") +
-                escape_markdown("📋 **Pedido #") + escape_markdown(str(pedido_id)) + escape_markdown("**\n") +
-                escape_markdown("💰 **Valor Enviado:** ") + escape_markdown(str(valor_sats)) + " sats\n" +
-                escape_markdown("⚡ **Para:** ") + escape_markdown(str(endereco_lightning)) + "\n" +
-                escape_markdown("🔗 **Hash:** `") + escape_markdown(str(payment_hash)) + escape_markdown("`\n") +
-                escape_markdown("💸 **Taxa:** ") + escape_markdown(str(fee)) + escape_markdown(" sats\n\n") +
-                escape_markdown("🎉 **Seus satoshis foram enviados!**\n\n") +
-                escape_markdown("📱 **Próximos passos:**\n") +
+                escape_markdown("Pagamento Enviado com Sucesso!\n\n") +
+                escape_markdown("Pedido #") + escape_markdown(str(pedido_id)) + escape_markdown("\n") +
+                escape_markdown("Valor Enviado:") + escape_markdown(str(valor_sats)) + " sats\n" +
+                escape_markdown("Para:") + escape_markdown(str(endereco_lightning)) + "\n" +
+                escape_markdown("Hash:") + escape_markdown(str(payment_hash)) + escape_markdown("`\n") +
+                escape_markdown("Taxa:") + escape_markdown(str(fee)) + escape_markdown(" sats\n\n") +
+                escape_markdown("Seus satoshis foram enviados!**\n\n") +
+                escape_markdown("Próximos passos:**\n") +
                 escape_markdown("1. Verifique seu app Lightning\n") +
                 escape_markdown("2. Confirme o recebimento\n") +
                 escape_markdown("3. Em caso de dúvidas, contate o suporte")
@@ -1174,7 +1174,7 @@ async def aguardar_lightning_address(update: Update, context: ContextTypes.DEFAU
             )
             # Mensagem adicional de agradecimento
             await update.message.reply_text(
-                escape_markdown('Os seus SATS foram enviados, Obrigado! @GhosttP2P')
+                escape_markdown('Os SATS foram enviados, Obrigado! @GhosttP2P')
             )
             # Redireciona para o menu principal
             if context and context.user_data is not None:

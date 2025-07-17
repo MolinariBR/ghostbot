@@ -10,7 +10,7 @@ def obter_ajuda() -> str:
         str: Texto formatado em Markdown com as informações de ajuda e contatos.
     """
     ajuda_texto = """
-🤖 Central de Ajuda do Ghost Bot 🤖
+Central de Ajuda do Ghost Bot
 
 Bem-vindo à central de ajuda! Aqui você encontra informações sobre como utilizar nossos serviços e como entrar em contato conosco.
 
@@ -20,13 +20,11 @@ Bem-vindo à central de ajuda! Aqui você encontra informações sobre como util
 - Para vender criptomoedas, clique em 💰 Vender
 - Consulte os termos de uso em *📜 Termos*
 
-📞 Atendimento ao Cliente
+Atendimento ao Cliente
 Estamos disponíveis para te ajudar com qualquer dúvida ou problema.
 
-📧 E-mail: suporte@ghostbot.com.br  
-📱 Telefone/WhatsApp: +55 (11) 91234-5678  
-🌐 Site: [www.ghostbot.com.br](https://www.ghostbot.com.br)  
-✉️ Telegram: @suportegb  
+Twitter: https://x.com/GHOST_P2P  
+Telegram: @GhosttP2P
 
 🕒 Horário de Atendimento:
 Segunda a Sexta: 9h às 18h  
