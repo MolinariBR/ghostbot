@@ -9,10 +9,13 @@ BTC_COMISSOES = [
 # Comissão DEPIX: a partir de 100 reais até 4999
 DEPIX_COMISSAO = {'min': 100, 'max': 4999, 'percentual': 0.019, 'fixo_in_cents': 0}
 
+# Comissão USDT: taxa fixa de 5% para qualquer valor entre 10 e 4999 reais
+USDT_COMISSAO = [{'min': 10, 'max': 4999, 'percentual': 0.05, 'fixo_in_cents': 0}]
+
 COMISSAO_MAP = {
     'btc':    BTC_COMISSOES,
     'bitcoin':BTC_COMISSOES,
-    'usdt':   BTC_COMISSOES,
+    'usdt':   USDT_COMISSAO,
     'depix':  [DEPIX_COMISSAO],
 }
 
