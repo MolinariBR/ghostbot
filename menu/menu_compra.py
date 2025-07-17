@@ -249,22 +249,43 @@ async def escolher_moeda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         except Exception:
             await update.message.reply_text("Erro ao carregar a ajuda. Tente novamente mais tarde.")
         return ESCOLHER_MOEDA
+    elif "suporte" in texto:
+        await update.message.reply_text("Fale com @GhosttP2P!")
+        return ESCOLHER_MOEDA
     elif texto_original == "Bitcoin (BTC)" or "Bitcoin" in texto_original or "BTC" in texto_original:
         print("🟢 [MOEDA] Usuário escolheu Bitcoin, indo para escolher rede")
         if context and context.user_data:
             context.user_data['moeda'] = "BTC"
         
-        keyboard = [
-            ["Lightning", "Liquid", "Onchain"],
-            ["Voltar"]
-        ]
+        keyboard = [["Lightning", "Liquid", "Onchain"], ["Voltar"]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
         
         await update.message.reply_text(
             "🌐 Escolha a rede:\n\nQual rede você deseja usar?",
             reply_markup=reply_markup
         )
-        print("🟢 [MOEDA] Retornando ESCOLHER_REDE após escolher Bitcoin")
+        return ESCOLHER_REDE
+    elif texto_original == "USDT":
+        print("🟢 [MOEDA] Usuário escolheu USDT, indo para escolher rede")
+        if context and context.user_data:
+            context.user_data['moeda'] = "USDT"
+        keyboard = [["Liquid", "Polygon"], ["Voltar"]]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+        await update.message.reply_text(
+            "🌐 Escolha a rede:\n\nQual rede você deseja usar?",
+            reply_markup=reply_markup
+        )
+        return ESCOLHER_REDE
+    elif texto_original == "DEPIX":
+        print("🟢 [MOEDA] Usuário escolheu DEPIX, indo para escolher rede")
+        if context and context.user_data:
+            context.user_data['moeda'] = "DEPIX"
+        keyboard = [["Liquid"], ["Voltar"]]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+        await update.message.reply_text(
+            "🌐 Escolha a rede:\n\nQual rede você deseja usar?",
+            reply_markup=reply_markup
+        )
         return ESCOLHER_REDE
     elif texto in ["USDT", "DEPIX"]:
         await update.message.reply_text(
@@ -284,38 +305,53 @@ async def escolher_rede(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     if not update or not update.message:
         print("❌ [REDE] Update ou message é None")
         return ConversationHandler.END
-    
+
     if update.message.text == "Voltar":
         print("🔄 [REDE] Usuário clicou em Voltar, voltando para escolher_moeda")
         return await escolher_moeda(update, context)
-    
-    # Se o usuário escolheu Lightning, ir para escolher valor
-    if update.message.text == "Lightning":
-        print("🟢 [REDE] Usuário escolheu Lightning, indo para escolher valor")
-        if context and context.user_data:
-            context.user_data['rede'] = "lightning"
-        
+
+    moeda = context.user_data.get('moeda') if context and context.user_data else None
+    rede = update.message.text.strip() if update and update.message and update.message.text else ""
+
+    # Validação das combinações permitidas
+    combinacoes_validas = {
+        "BTC": ["Lightning", "Liquid", "Onchain"],
+        "USDT": ["Liquid", "Polygon"],
+        "DEPIX": ["Liquid"]
+    }
+    combinacoes = combinacoes_validas or {}
+    if not isinstance(combinacoes, dict):
+        combinacoes = {}
+
+    moeda_str = str(moeda) if moeda is not None else ""
+    redes = combinacoes.get(moeda_str)
+    if not isinstance(redes, list):
+        redes = []
+
+    if isinstance(context.user_data, dict):
+        user_data = context.user_data
+    else:
+        user_data = {}
+
+    if moeda_str in combinacoes and rede in redes:
+        user_data['rede'] = rede.lower()
         keyboard = [
             ["R$ 10,00", "R$ 25,00", "R$ 50,00"],
             ["R$ 100,00", "R$ 250,00", "R$ 500,00"],
             ["Voltar"]
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-        
         await update.message.reply_text(
             "💰 Escolha o valor:\n\nDigite um valor em reais entre 10 e 4999 ou escolha uma opção:",
             reply_markup=reply_markup
         )
-        print("🟢 [REDE] Retornando ESCOLHER_VALOR após escolher Lightning")
+        print(f"🟢 [REDE] Usuário escolheu {rede} para {moeda_str}, indo para escolher valor")
         return ESCOLHER_VALOR
-    
-    # Se chegou aqui, texto inválido para este estado
-    print(f"⚠️ [REDE] Texto não reconhecido: '{update.message.text}', retornando ESCOLHER_REDE")
-    await update.message.reply_text(
-        "❌ Opção inválida!\n\nPor favor, escolha uma das opções do menu."
-    )
-    return ESCOLHER_REDE
-
+    else:
+        await update.message.reply_text(
+            "❌ Combinação de moeda e rede não permitida. Fale com o suporte: @GhosttP2P"
+        )
+        return ESCOLHER_REDE
 async def escolher_valor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Handler para escolha de valor."""
     print(f"[DEBUG] context.user_data (escolher_valor): {context.user_data}")
@@ -450,7 +486,7 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             print("[DEBUG] Pedido já salvo, ignorando nova tentativa.")
             return ConversationHandler.END
         user_id = str(update.effective_user.id) if update and update.effective_user else '0'
-        validador = get_user_data(context, 'cotacao_completa', None)
+        validador = context.user_data.get('cotacao_completa') if context and context.user_data else None
         if not validador:
             validador = ULTIMOS_PEDIDOS.get(user_id)
             if validador:
@@ -700,7 +736,7 @@ async def resumo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return ESCOLHER_VALOR
     # Exibe o resumo apenas na primeira entrada
     user_id = str(update.effective_user.id) if update and update.effective_user else '0'
-    validador = get_user_data(context, 'cotacao_completa', None)
+    validador = context.user_data.get('cotacao_completa') if context and context.user_data else None
     if not validador:
         validador = ULTIMOS_PEDIDOS.get(user_id)
         if validador:
@@ -790,7 +826,7 @@ async def pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             print("[DEBUG] Pedido já salvo, ignorando nova tentativa.")
             return ConversationHandler.END
         user_id = str(update.effective_user.id) if update and update.effective_user else '0'
-        validador = get_user_data(context, 'cotacao_completa', None)
+        validador = context.user_data.get('cotacao_completa') if context and context.user_data else None
         if not validador:
             validador = ULTIMOS_PEDIDOS.get(user_id)
             if validador:
@@ -1283,3 +1319,5 @@ def registrar_handlers_globais(application):
     Registra handlers globais no Application do Telegram.
     """
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handler_global_lightning), group=1)
+
+
