@@ -88,7 +88,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Estados da conversa
-ESCOLHER_MOEDA, ESCOLHER_REDE, ESCOLHER_VALOR, RESUMO, FORMA_PAGAMENTO, CONFIRMAR, PAGAMENTO, AGUARDAR_LIGHTNING_ADDRESS = range(8)
+ESCOLHER_MOEDA, ESCOLHER_REDE, ESCOLHER_VALOR, ESCOLHER_CUPOM, RESUMO, FORMA_PAGAMENTO, CONFIRMAR, PAGAMENTO, AGUARDAR_LIGHTNING_ADDRESS = range(9)
 
 # Configuração do Voltz (usar as mesmas credenciais do exemplo)
 VOLTZ_CONFIG = {
@@ -473,43 +473,221 @@ async def processar_valor_personalizado(update: Update, context: ContextTypes.DE
             context.user_data['cotacao_completa'] = validador
             context.user_data['valor_real'] = valor_brl
             context.user_data['valor_sats'] = validador.get('valor_recebe', {}).get('sats', 0)
+        
         # Salva o último pedido válido do usuário
         ULTIMOS_PEDIDOS[user_id] = validador
+        
+        # Agora vai para a tela de cupom em vez de ir direto para o resumo
+        keyboard = [
+            ["Ghost10%"],
+            ["Pular Cupom"],
+            ["Voltar"]
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+        await update.message.reply_text(
+            "🎟️ **Cupom de Desconto**\n\n"
+            "Você tem algum cupom de desconto?\n\n"
+            "💡 **Dica:** O cupom 'Ghost10%' oferece 10% de desconto na comissão!\n\n"
+            "Digite o código do cupom ou escolha uma opção:",
+            reply_markup=reply_markup
+        )
+        return ESCOLHER_CUPOM
+    except Exception as e:
+        print(f"❌ [MENU] Erro ao processar valor personalizado: {e}")
+        await mostrar_erro_cotacao(update, f"Erro interno: {str(e)}")
+        return ESCOLHER_VALOR
+
+async def escolher_cupom(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handler para escolha de cupom de desconto."""
+    print(f"🟡 [CUPOM] Handler escolher_cupom chamado")
+    print(f"🟡 [CUPOM] Texto recebido: '{update.message.text if update and update.message else 'None'}'")
+    
+    if not update or not update.message:
+        print("❌ [CUPOM] Update ou message é None")
+        return ConversationHandler.END
+
+    texto = update.message.text.strip() if update.message.text else ""
+    
+    if texto == "Voltar":
+        print("🔄 [CUPOM] Usuário clicou em Voltar, voltando para escolher_valor")
+        return await escolher_valor(update, context)
+    
+    if texto == "Pular Cupom":
+        print("⏭️ [CUPOM] Usuário optou por pular o cupom")
+        if context and context.user_data:
+            context.user_data['cupom_codigo'] = None
+        return await mostrar_resumo_final(update, context)
+    
+    # Se chegou aqui, o usuário digitou um código de cupom
+    cupom_codigo = texto.lower().strip()
+    print(f"🎟️ [CUPOM] Validando cupom: {cupom_codigo}")
+    
+    # Validar cupom via API
+    try:
+        import requests
+        from urllib.parse import urljoin
+        
+        # Chamar API de validação do cupom
+        url = urljoin(BASE_URL + '/', 'api/validar_cupom.php')
+        response = requests.get(url, params={'codigo': cupom_codigo}, timeout=10)
+        
+        if response.status_code == 200:
+            resultado = response.json()
+            
+            if resultado.get('success'):
+                cupom_info = resultado.get('cupom', {})
+                print(f"✅ [CUPOM] Cupom válido: {cupom_info}")
+                
+                if context and context.user_data:
+                    context.user_data['cupom_codigo'] = cupom_codigo
+                    context.user_data['cupom_info'] = cupom_info
+                
+                # Reprocessar o pedido com o cupom
+                await reprocessar_com_cupom(update, context, cupom_codigo)
+                return await mostrar_resumo_final(update, context)
+                
+            else:
+                print(f"❌ [CUPOM] Cupom inválido: {cupom_codigo}")
+                await update.message.reply_text(
+                    f"❌ **Cupom inválido!**\n\n"
+                    f"O cupom '{cupom_codigo}' não foi encontrado ou está expirado.\n\n"
+                    f"💡 Tente 'Ghost10%' ou clique em 'Pular Cupom'.",
+                    reply_markup=ReplyKeyboardMarkup([
+                        ["Ghost10%"],
+                        ["Pular Cupom"],
+                        ["Voltar"]
+                    ], resize_keyboard=True, one_time_keyboard=True)
+                )
+                return ESCOLHER_CUPOM
+        else:
+            print(f"❌ [CUPOM] Erro na API: {response.status_code}")
+            await update.message.reply_text(
+                "❌ **Erro ao validar cupom**\n\n"
+                "Tente novamente ou pule o cupom.",
+                reply_markup=ReplyKeyboardMarkup([
+                    ["Pular Cupom"],
+                    ["Voltar"]
+                ], resize_keyboard=True, one_time_keyboard=True)
+            )
+            return ESCOLHER_CUPOM
+            
+    except Exception as e:
+        print(f"❌ [CUPOM] Erro ao validar cupom: {e}")
+        await update.message.reply_text(
+            "❌ **Erro interno**\n\n"
+            "Não foi possível validar o cupom. Pule esta etapa.",
+            reply_markup=ReplyKeyboardMarkup([
+                ["Pular Cupom"],
+                ["Voltar"]
+            ], resize_keyboard=True, one_time_keyboard=True)
+        )
+        return ESCOLHER_CUPOM
+
+async def reprocessar_com_cupom(update: Update, context: ContextTypes.DEFAULT_TYPE, cupom_codigo: str):
+    """Reprocessa o pedido aplicando o cupom de desconto."""
+    print(f"🔄 [CUPOM] Reprocessando pedido com cupom: {cupom_codigo}")
+    
+    if not validar_pedido:
+        return
+    
+    try:
+        user_id = str(update.effective_user.id) if update and update.effective_user else '0'
+        valor_brl = context.user_data.get('valor_real', 0) if context and context.user_data else 0
+        moeda = 'btc'
+        compras = 0
+        metodo = 'pix'
+        rede = 'lightning'
+        
+        # Chamar validador com cupom
+        print(f"[DEBUG] Reprocessando com cupom - valor_brl: {valor_brl}, cupom: {cupom_codigo}")
+        validador = validar_pedido(moeda, valor_brl, user_id, compras, metodo, rede, cupom_codigo)
+        
+        if validador and not validador.get('erro'):
+            if context and context.user_data:
+                context.user_data['cotacao_completa'] = validador
+            ULTIMOS_PEDIDOS[user_id] = validador
+            print(f"✅ [CUPOM] Pedido reprocessado com cupom aplicado")
+        else:
+            print(f"❌ [CUPOM] Erro ao reprocessar com cupom: {validador}")
+            
+    except Exception as e:
+        print(f"❌ [CUPOM] Erro ao reprocessar pedido: {e}")
+
+async def mostrar_resumo_final(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Mostra o resumo final da compra com ou sem cupom aplicado."""
+    print(f"📋 [RESUMO] Mostrando resumo final")
+    
+    try:
+        user_id = str(update.effective_user.id) if update and update.effective_user else '0'
+        validador = context.user_data.get('cotacao_completa') if context and context.user_data else None
+        
+        if not validador:
+            validador = ULTIMOS_PEDIDOS.get(user_id)
+            if validador and context and context.user_data is not None:
+                context.user_data['cotacao_completa'] = validador
+        
+        if not validador:
+            await mostrar_erro_cotacao(update, "Dados do pedido não encontrados")
+            return ConversationHandler.END
+        
+        # Extrair informações do validador
         cotacao_info = validador.get('cotacao', {})
         comissao_info = validador.get('comissao', {})
         parceiro_info = validador.get('parceiro', {})
         valor_recebe_info = validador.get('valor_recebe', {})
         limite_info = validador.get('limite', {})
+        cupom_info = validador.get('cupom')
+        
+        valor_brl = context.user_data.get('valor_real', 0) if context and context.user_data else 0
         percentual = comissao_info.get('percentual', 0)
         percentual_str = f"({int(percentual*100)}%)"
+        
+        # Formatação dos valores
         valor_brl_fmt = format_brl(valor_brl)
         comissao_fmt = format_brl(comissao_info.get('valor', 0))
         parceiro_fmt = format_brl(parceiro_info.get('valor', 0))
         limite_fmt = format_brl(limite_info.get('maximo', 0))
         valor_liquido_fmt = format_brl(valor_recebe_info.get('brl', valor_brl))
+        
+        # Construir texto do resumo
         resumo_texto = (
-            "Resumo da Compra\n\n" +
-            "Moeda: BTC\n" +
-            "Rede: Lightning\n" +
-            "Valor do Investimento: " + valor_brl_fmt + "\n" +
-            "Cotação BTC: " + str(cotacao_info.get('preco_btc', 0)) + "\n" +
-            "Fonte: Coingeko/Binance\n" +
-            "Comissão: " + comissao_fmt + " " + percentual_str + "\n" +
-            "Taxa Parceiro: " + parceiro_fmt + "\n" +
-            "Limite Máximo: " + limite_fmt + "\n" +
-            "Você Recebe: " + str(valor_recebe_info.get('sats', 0)) + " sats\n" +
-            "Valor Líquido: " + valor_liquido_fmt + "\n" +
-            "ID Transação: " + str(validador.get('gtxid', 'N/A'))
+            "📋 **Resumo da Compra**\n\n" +
+            "💰 **Moeda:** BTC\n" +
+            "🌐 **Rede:** Lightning\n" +
+            "💵 **Valor do Investimento:** " + valor_brl_fmt + "\n" +
+            "📊 **Cotação BTC:** " + str(cotacao_info.get('preco_btc', 0)) + "\n" +
+            "🔗 **Fonte:** Coingeko/Binance\n" +
+            "💸 **Comissão:** " + comissao_fmt + " " + percentual_str + "\n"
         )
+        
+        # Adicionar informações do cupom se aplicado
+        if cupom_info:
+            desconto_fmt = format_brl(cupom_info.get('desconto_aplicado', 0))
+            resumo_texto += (
+                "🎟️ **Cupom:** " + cupom_info.get('codigo', '').upper() + "\n" +
+                "💚 **Desconto:** " + desconto_fmt + "\n"
+            )
+        
+        resumo_texto += (
+            "🏦 **Taxa Parceiro:** " + parceiro_fmt + "\n" +
+            "🎯 **Limite Máximo:** " + limite_fmt + "\n" +
+            "⚡ **Você Recebe:** " + str(valor_recebe_info.get('sats', 0)) + " sats\n" +
+            "💎 **Valor Líquido:** " + valor_liquido_fmt + "\n" +
+            "🆔 **ID Transação:** " + str(validador.get('gtxid', 'N/A'))
+        )
+        
         keyboard = [["Confirmar"], ["Voltar"]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+        
         if update and update.message:
             await safe_reply_text(update.message, resumo_texto, reply_markup=reply_markup)
+        
         return RESUMO
+        
     except Exception as e:
-        print(f"❌ [MENU] Erro ao processar valor: {e}")
+        print(f"❌ [RESUMO] Erro ao mostrar resumo final: {e}")
         await mostrar_erro_cotacao(update, f"Erro inesperado: {str(e)}")
-    return ESCOLHER_VALOR
+        return ESCOLHER_VALOR
 
 async def mostrar_erro_cotacao(update: Update, mensagem: str):
     """Mostra erro de cotação e volta para escolha de valor."""
@@ -1322,6 +1500,7 @@ def get_conversation_handler():
             ESCOLHER_MOEDA: [MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_moeda)],
             ESCOLHER_REDE: [MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_rede)],
             ESCOLHER_VALOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_valor)],
+            ESCOLHER_CUPOM: [MessageHandler(filters.TEXT & ~filters.COMMAND, escolher_cupom)],
             RESUMO: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, resumo),
                 MessageHandler(filters.TEXT & filters.Regex(r"^🆘 Suporte$"), suporte),
